@@ -60,7 +60,6 @@ function render(g) {
       <div>
         <h2 class="app-title" id="sheet-title">${circled(g.no)} ${esc(g.title)}</h2>
         <p class="app-genre">${esc(g.genre)}</p>
-        <p class="app-origin">${isAsset ? '原作' : '元ネタ'}：${esc(g.origin)}</p>
       </div>
     </div>
 
