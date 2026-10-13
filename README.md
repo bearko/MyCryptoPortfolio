@@ -12,15 +12,15 @@
 | # | 作品 | ジャンル | URL |
 |---|---|---|---|
 | ⓪ | mycryptoheroes | アセットデータベース（運営会社の許諾済み） | https://github.com/bearko/mycryptoheroes |
-| ① | MyCryptoTactics | デッキ構築型ローグライク | https://mycryptotactics.vercel.app/ |
-| ② | MyCryptoFactory | 経営シミュレーション | https://mycryptofactory.vercel.app/ |
-| ③ | MyCryptoSurvivor | サバイバルアクション | https://my-crypto-survivor.vercel.app/ |
-| ④ | MyCryptoTCG（開発中） | カードゲーム | https://my-crypto-tcg.vercel.app/ |
-| ⑤ | MyCryptoEducation | 教育クイズ | https://my-crypto-education.vercel.app/ |
-| ⑥ | MyCryptoWorkshop | 経営シミュ × インクリメンタル | https://my-crypto-workshop.vercel.app/ |
-| ⑦ | MyCryptoFortress | タワーディフェンス × インクリメンタル | https://mycryptofortress.vercel.app/ |
-| ⑧ | 10 buy year！ | 育成シミュ × インクリメンタル | https://10buy-year.vercel.app/ |
-| ⑨ | MyCryptoDeckBattle | デッキ構築型RPG | https://mycryptodeckbattle.vercel.app/ |
+| ① | MyCryptoTactics | デッキ構築型ローグライク | https://tactics.bearko.games/ |
+| ② | MyCryptoFactory | 経営シミュレーション | https://factory.bearko.games/ |
+| ③ | MyCryptoSurvivor | サバイバルアクション | https://survivor.bearko.games/ |
+| ④ | MyCryptoTCG（開発中） | カードゲーム | https://tcg.bearko.games/ |
+| ⑤ | MyCryptoEducation | 教育クイズ | https://education.bearko.games/ |
+| ⑥ | MyCryptoWorkshop | 経営シミュ × インクリメンタル | https://workshop.bearko.games/ |
+| ⑦ | MyCryptoFortress | タワーディフェンス × インクリメンタル | https://fortress.bearko.games/ |
+| ⑧ | 10 buy year！ | 育成シミュ × インクリメンタル | https://10-buy-year.bearko.games/ |
+| ⑨ | MyCryptoDeckBattle | デッキ構築型RPG | https://deckbattle.bearko.games/ |
 
 文言・リンクは `js/games.js` の台帳1か所にまとまっています。作品を足すときはここに1件足し、
 `assets/thumbs/<id>.webp` と `assets/shots/<id>-1..3.webp` を置いてください。
