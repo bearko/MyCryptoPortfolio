@@ -1,0 +1,182 @@
+{
+  "tactics": {
+    "accent": "#a78bfa",
+    "bg": "2605.png",
+    "genre": "DECK-BUILDING ROGUELIKE",
+    "logo": "https://raw.githubusercontent.com/bearko/mycryptotactics/main/prototype/MCT_logo.png",
+    "sub": "デッキ構築型ローグライク",
+    "copy": "カードを組んで、<br><em>ボス</em>まで登りきれ。",
+    "tags": [
+      "デッキ構築",
+      "ローグライク",
+      "ターン制バトル"
+    ],
+    "shot": "tactics-1",
+    "sprites": [
+      "Image/Heroes/1003.png",
+      "Image/Heroes/1002.png"
+    ]
+  },
+  "factory": {
+    "accent": "#fbbf24",
+    "bg": "2301.png",
+    "genre": "MANAGEMENT SIM",
+    "title": "MyCrypto<br><b>Factory</b>",
+    "sub": "マイクリ工房の経営シミュレーション",
+    "copy": "作って、売って、投資して。<br><em>8年で世界一</em>の工房へ。",
+    "tags": [
+      "経営シミュ",
+      "クラフト",
+      "マーケット"
+    ],
+    "shot": "factory-1",
+    "sprites": [
+      "Image/Heroes/1001.png",
+      "Image/Heroes/1006.png"
+    ]
+  },
+  "survivor": {
+    "accent": "#f472b6",
+    "bg": "2205.png",
+    "genre": "SURVIVOR ACTION",
+    "logo": "https://raw.githubusercontent.com/bearko/MyCryptoSurvivor/main/assets/logo.png",
+    "sub": "サバイバルアクション",
+    "copy": "逃げて、倒して、<br><em>強化しろ！</em>",
+    "tags": [
+      "オートアタック",
+      "レベルアップ",
+      "ランキング"
+    ],
+    "shot": "survivor-2",
+    "sprites": [
+      "Image/Heroes/1002.png"
+    ]
+  },
+  "tcg": {
+    "accent": "#facc15",
+    "bg": "2505.png",
+    "genre": "CARD BATTLE",
+    "wip": "開発中",
+    "title": "MyCrypto<br><b>TCG</b>",
+    "sub": "MCHヒーローで戦うカードゲーム",
+    "copy": "5〜10ターンで決着する、<br><em>高速カードバトル</em>。",
+    "tags": [
+      "カードゲーム",
+      "召喚",
+      "CPU対戦"
+    ],
+    "shot": "tcg-1",
+    "sprites": [
+      "Image/Heroes/1003.png",
+      "Image/Heroes/1001.png"
+    ]
+  },
+  "education": {
+    "accent": "#60a5fa",
+    "bg": "1041.png",
+    "genre": "QUIZ RPG",
+    "title": "MyCrypto<br><b>Education</b>",
+    "sub": "世界の教室 ― 英雄と旅する教育クイズ",
+    "copy": "小1から駆け上がれ。<br><em>世界の教室</em>へ。",
+    "tags": [
+      "クイズRPG",
+      "義務教育9年分",
+      "6教科"
+    ],
+    "shot": "education-1",
+    "sprites": [
+      "Image/Heroes/1006.png",
+      "Image/Heroes/1001.png"
+    ]
+  },
+  "deckbattle": {
+    "accent": "#fde047",
+    "bg": "2105.png",
+    "genre": "AUTO BATTLER",
+    "title": "マイクリ<br><b>デッキバトル</b>",
+    "sub": "デッキ構築型RPG × オートバトル",
+    "copy": "集めて、合成して、<br><em>10勝</em>をつかめ。",
+    "tags": [
+      "オートバトル",
+      "ヒーロー合成",
+      "パーティ編成"
+    ],
+    "shot": "deckbattle-1",
+    "sprites": [
+      "Image/Characters/chris_04_guts_pose.png|tall"
+    ]
+  },
+  "heroes": {
+    "accent": "#22d3ee",
+    "bg": "2805.png",
+    "genre": "ASSET DATABASE",
+    "logo": "https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_logo_horizontal.png",
+    "sub": "全作品を支える素材リポジトリ",
+    "copy": "ヒーロー <em>402</em><br>エクステ <em>1,797</em> ・ 敵 <em>932</em>",
+    "tags": [
+      "画像",
+      "マスタデータ",
+      "BGM・SE"
+    ],
+    "foot": "© MCH Co., Ltd. ― 運営会社の許諾のもとで利用",
+    "mosaic": [
+      3022,
+      2029,
+      3042,
+      4057,
+      2003,
+      2009,
+      4026,
+      2015,
+      3034,
+      4038,
+      2005,
+      4018,
+      2046,
+      1010,
+      2013,
+      3054,
+      3048,
+      2008,
+      3001,
+      2014,
+      4030,
+      3049,
+      2006,
+      4033,
+      2022,
+      2049,
+      4052,
+      4051,
+      5024,
+      5011,
+      4036,
+      5005,
+      5031,
+      5029,
+      2048,
+      2002,
+      4031,
+      2025,
+      3014,
+      5017,
+      2027,
+      4027,
+      2021,
+      4035,
+      3018,
+      4032,
+      2038,
+      2017,
+      4037,
+      4048,
+      2040,
+      3036,
+      5026,
+      4029,
+      2007,
+      5010
+    ],
+    "logoInvert": true
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>portfolio og</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@800;900&family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* このポートフォリオ自体の OGP（1200×630）。全作品のサムネイルを敷きつめる */
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; background: #0b0d14; font-family: "M PLUS 1p", sans-serif; color: #fff; }
+  .wall { position: absolute; left: -60px; top: -90px; display: grid; grid-template-columns: repeat(4, 360px); gap: 14px;
+    transform: rotate(-7deg); }
+  .wall img { width: 360px; height: 189px; border-radius: 12px; display: block; }
+  .shade { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 52%, rgba(8,10,18,.94) 30%, rgba(8,10,18,.45) 75%); }
+  .t { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .k { font-family: "DotGothic16"; font-size: 26px; letter-spacing: .14em; color: #a78bfa; }
+  h1 { font-size: 92px; font-weight: 900; line-height: 1.05; margin: 8px 0 14px; }
+  p { font-size: 30px; font-weight: 800; color: #dfe2ec; }
+  p b { color: #fde047; }
+</style>
+</head>
+<body>
+<div class="wall" id="wall"></div>
+<div class="shade"></div>
+<div class="t">
+  <div class="k">bearko / GAME PORTFOLIO</div>
+  <h1>MyCrypto Games</h1>
+  <p>マイクリのアセットで作ったブラウザゲーム <b>9</b> 本</p>
+</div>
+<script>
+  const ids = ['tactics','factory','survivor','tcg','education','workshop','fortress','tenbuy','deckbattle','heroes'];
+  document.getElementById('wall').innerHTML = [...ids, ...ids].slice(0, 16)
+    .map(id => `<img src="../../assets/thumbs/${id}.webp">`).join('');
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>thumbnail template</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;800;900&family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* 1200×630 の OGP サムネイル。設定は location.hash の JSON で受け取る（make-thumbs.mjs が渡す） */
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; background: #0b0d14; }
+  body { font-family: "M PLUS 1p", sans-serif; color: #fff; }
+  .card { position: relative; width: 1200px; height: 630px; overflow: hidden; }
+  .bg { position: absolute; inset: -20px; background-size: cover; background-position: center; filter: saturate(1.1) brightness(.55); }
+  .shade { position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(8,10,18,.96) 0%, rgba(8,10,18,.86) 42%, rgba(8,10,18,.25) 72%, rgba(8,10,18,.55) 100%); }
+  .glow { position: absolute; width: 760px; height: 760px; right: -120px; top: -80px; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 62%); opacity: .38; }
+  .grid { position: absolute; inset: 0; opacity: .08;
+    background-image: linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px);
+    background-size: 40px 40px; }
+  .left { position: absolute; left: 64px; top: 56px; width: 620px; }
+  .chip { display: inline-block; font-family: "DotGothic16"; font-size: 22px; letter-spacing: .08em;
+    color: #0b0d14; background: var(--accent); padding: 6px 16px; border-radius: 6px; }
+  .chip.wip { background: transparent; color: var(--accent); border: 2px solid var(--accent); margin-left: 10px; }
+  .logo { display: block; max-width: 560px; max-height: 150px; margin: 26px 0 6px; image-rendering: auto; }
+  .title { font-weight: 900; font-size: 74px; line-height: 1.02; letter-spacing: -.01em; margin: 26px 0 8px;
+    text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+  .title b { color: var(--accent); }
+  .sub { font-weight: 800; font-size: 30px; color: #e8e8f0; margin-bottom: 18px; }
+  .copy { font-weight: 900; font-size: 46px; line-height: 1.22; margin: 14px 0 22px; text-shadow: 0 3px 0 rgba(0,0,0,.4); }
+  .copy em { font-style: normal; color: var(--accent); }
+  .tags { display: flex; flex-wrap: wrap; gap: 10px; }
+  .tags span { font-weight: 800; font-size: 22px; padding: 6px 14px; border-radius: 999px;
+    border: 2px solid rgba(255,255,255,.35); background: rgba(255,255,255,.08); }
+  .foot { position: absolute; left: 64px; bottom: 34px; font-family: "DotGothic16"; font-size: 19px; color: rgba(255,255,255,.62); letter-spacing: .04em; }
+  .phone { position: absolute; right: 120px; top: 34px; width: 300px; height: 533px; border-radius: 34px;
+    background: #050608; padding: 10px; transform: rotate(4deg);
+    box-shadow: 0 30px 60px rgba(0,0,0,.6), 0 0 0 3px rgba(255,255,255,.18), 0 0 60px var(--accent); }
+  .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 26px; display: block; }
+  .sprites { position: absolute; right: 20px; bottom: 6px; display: flex; align-items: flex-end; gap: 0; }
+  .sprites img { width: 192px; height: 192px; image-rendering: pixelated; filter: drop-shadow(0 8px 6px rgba(0,0,0,.6)); margin-left: -54px; }
+  .sprites img.flip { transform: scaleX(-1); }
+  .sprites img.tall { width: auto; height: 230px; }
+  .mosaic { position: absolute; right: 0; top: 0; width: 560px; height: 630px; display: grid;
+    grid-template-columns: repeat(7, 80px); grid-auto-rows: 80px; transform: rotate(-8deg) translate(40px,-40px) scale(1.15); }
+  .mosaic img { width: 80px; height: 80px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div class="card" id="card"></div>
+<script>
+  const MCH = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
+  const c = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+  document.documentElement.style.setProperty('--accent', c.accent);
+  const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+  const sprite = s => {
+    const [path, cls] = s.split('|');
+    return `<img class="${cls || ''}" src="${path.startsWith('http') ? path : MCH + path}">`;
+  };
+  document.getElementById('card').innerHTML = `
+    <div class="bg" style="background-image:url('${MCH}Image/Backgrounds/${c.bg}')"></div>
+    <div class="glow"></div><div class="grid"></div><div class="shade"></div>
+    ${c.mosaic ? `<div class="mosaic">${c.mosaic.map(id => `<img src="${MCH}Image/Heroes/${id}.png">`).join('')}</div>` : ''}
+    ${c.shot ? `<div class="phone"><img src="../../assets/shots/${c.shot}.webp"></div>` : ''}
+    <div class="sprites">${(c.sprites || []).map(sprite).join('')}</div>
+    <div class="left">
+      <span class="chip">${esc(c.genre)}</span>${c.wip ? `<span class="chip wip">${esc(c.wip)}</span>` : ''}
+      ${c.logo ? `<img class="logo" src="${c.logo}" style="${c.logoInvert ? 'filter:invert(1)' : ''}">` : `<div class="title">${c.title}</div>`}
+      <div class="sub">${esc(c.sub)}</div>
+      <div class="copy">${c.copy}</div>
+      <div class="tags">${c.tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>
+    </div>
+    <div class="foot">${esc(c.foot || 'My Crypto Heroes 二次創作 ・ ブラウザで無料プレイ')}</div>`;
+</script>
+</body>
+</html>
