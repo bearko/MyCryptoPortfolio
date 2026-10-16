@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>マイページ — MyCrypto Games</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/account.css">
+</head>
+<body>
+<main class="card">
+  <a href="../" class="muted">← ゲーム一覧</a>
+  <h1>マイページ</h1>
+
+  <section id="loading"><p class="muted">読み込み中…</p></section>
+
+  <section id="guest" hidden>
+    <p class="lead">ログインすると、bearko.games のすべてのゲームのランキング・トロフィーに参加できます。ログインしなくても、ゲームは最後まで遊べます。</p>
+    <p class="note" id="guest-note" hidden>この端末に、まだ登録していない記録があります。ログインすると、まとめてアカウントに登録されます。</p>
+    <button class="primary" id="login" type="button">Google でログイン</button>
+  </section>
+
+  <section id="member" hidden>
+    <p class="lead"><b id="who"></b> さんとしてログイン中です。</p>
+
+    <h2>表示名</h2>
+    <form id="name-form" class="row">
+      <input id="name" maxlength="16" autocomplete="nickname" placeholder="表示名（16 文字まで）" required>
+      <button class="secondary" type="submit">変更</button>
+    </form>
+    <p class="note" id="name-msg"></p>
+
+    <h2>トロフィー・記録</h2>
+    <p class="muted">トロフィー・総合スコア・RTA は、これから順に対応します。</p>
+
+    <div class="actions">
+      <button class="secondary" id="logout" type="button">ログアウト</button>
+    </div>
+
+    <hr>
+    <h2>退会</h2>
+    <p class="note">アカウントと、すべてのゲームの記録を消します。元に戻せません。</p>
+    <button class="danger" id="withdraw" type="button">退会する</button>
+  </section>
+
+  <p class="error" id="error" hidden></p>
+</main>
+
+<script src="../sdk/v1.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var BG = window.BearkoGames;
+
+  function render() {
+    var user = BG.getUser();
+    $('loading').hidden = true;
+    $('guest').hidden = !!user;
+    $('member').hidden = !user;
+    $('guest-note').hidden = !BG.hasGuest();
+    if (user) {
+      $('who').textContent = user.name || '（名前未設定）';
+      if (document.activeElement !== $('name')) $('name').value = user.name || '';
+    }
+  }
+  function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
+
+  BG.onChange(render);
+  BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
+    if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
+    render();
+  });
+
+  $('login').addEventListener('click', function () {
+    fail('');
+    BG.login().then(function (r) { if (!r.ok && r.error !== 'closed') fail('ログインできませんでした。'); });
+  });
+  $('logout').addEventListener('click', function () { BG.logout(); });
+  $('name-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    BG.setName($('name').value).then(function (r) {
+      $('name-msg').textContent = r.ok ? '変更しました。' : 'その名前は使えません。';
+    });
+  });
+  $('withdraw').addEventListener('click', function () {
+    if (!confirm('本当に退会しますか？ すべてのゲームの記録が消え、元に戻せません。')) return;
+    fetch('/api/me', { method: 'DELETE', credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) return fail('退会できませんでした。');
+      return BG.init({ game: 'portal', apiBase: location.origin }).then(render);
+    }).catch(function () { fail('通信できませんでした。'); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,14 @@
 node_modules
 .git
+.github
+.wrangler
 docs
 tools
+platform
+migrations
 README.md
+package.json
+package-lock.json
+wrangler.jsonc
 vercel.json
 .vercelignore
