@@ -78,6 +78,11 @@
           var name = document.createElement('b'); name.textContent = d.name;
           var desc = document.createElement('span'); desc.textContent = d.description;
           li.appendChild(name); li.appendChild(desc);
+          if (d.nameFrom) {
+            var from = document.createElement('small');
+            from.textContent = '名前の由来：' + d.nameFrom;
+            li.appendChild(from);
+          }
           if (owned[d.id]) {
             var at = document.createElement('small');
             at.textContent = new Date(owned[d.id].at).toLocaleDateString('ja-JP') + ' 獲得';

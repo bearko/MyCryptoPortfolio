@@ -257,7 +257,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/trophies') {
       const res = reply(req, 200, {
         games: GAME_NAMES,
-        trophies: TROPHIES.map(({ id, game, name, description, clear }) => ({ id, game, name, description, clear: !!clear })),
+        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear })),
       });
       res.headers.set('Cache-Control', 'public, max-age=300');
       return res;
