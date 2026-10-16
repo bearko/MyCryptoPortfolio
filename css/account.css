@@ -67,3 +67,14 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 .error { color: var(--danger); margin: 12px 0 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0 0; }
+
+/* トロフィー一覧 */
+h3.game { font-size: .9rem; margin: 16px 0 6px; color: var(--muted); }
+ul.trophies { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ul.trophies li { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+ul.trophies li b { font-size: .95rem; }
+ul.trophies li span, ul.trophies li small { font-size: .8rem; color: var(--muted); }
+ul.trophies li.got { border-color: rgba(167, 139, 250, .55); }
+ul.trophies li.got b::before { content: "★ "; color: var(--accent); }
+ul.trophies li.not { opacity: .55; }
+ul.trophies li.not b::before { content: "☆ "; }

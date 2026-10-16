@@ -48,6 +48,7 @@
   var ret = params.get('return');
   try { ret = ret && ORIGIN_RE.test(new URL(ret).origin) ? ret : null; } catch (e) { ret = null; }
   var user = null;
+  var merged = 0;
 
   var $ = function (id) { return document.getElementById(id); };
   function show(step) {
@@ -58,11 +59,11 @@
   // ゲームに戻る：ポップアップなら知らせて閉じる。移動で来たなら元のページへ
   function finish() {
     if (opener && window.opener) {
-      try { window.opener.postMessage({ type: 'bearko-games:login', user: user }, opener); } catch (e) {}
+      try { window.opener.postMessage({ type: 'bearko-games:login', user: user, mergedTrophies: merged }, opener); } catch (e) {}
       window.close();
     }
     if (ret) { location.href = ret; return; }
-    $('done-text').textContent = (user && user.name ? user.name + ' さん、' : '') + 'ログインしました。';
+    $('done-text').textContent = (user && user.name ? user.name + ' さん、' : '') + 'ログインしました。' + (merged ? 'この端末のトロフィー ' + merged + ' 個を登録しました。' : '');
     show('step-done');
   }
 
@@ -76,6 +77,7 @@
     post('/api/auth/google', { credential: res.credential }).then(function (r) {
       if (!r.ok) return fail('ログインできませんでした。もう一度お試しください。');
       user = r.data.user;
+      merged = r.data.mergedTrophies || 0;
       if (!user.name) { show('step-name'); $('name').focus(); } else finish();
     }).catch(function () { fail('通信できませんでした。電波のよいところでもう一度お試しください。'); });
   }

@@ -7,10 +7,15 @@
 //   POST   /api/auth/logout    この端末のログインを終える
 //   POST   /api/me/name        { name } 表示名を変える
 //   DELETE /api/me             退会（アカウントと記録をすべて消す）
+//   GET    /api/trophies       トロフィーの定義 { games, trophies }
+//   GET    /api/me/trophies    { account: 'login'|'guest'|null, trophies: [{id, at}] }
+//   POST   /api/trophies/unlock { id } 獲得（未ログインなら仮アカウントに貯める）→ { account, unlocked, total }
 //
 // Cookie（どちらも Domain=.bearko.games・HttpOnly・Secure・SameSite=Lax）：
 //   bg_session … ログイン（180 日）  bg_guest … 仮アカウント（最後に使ってから 90 日）
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
+
+import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from './trophies.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
 export const GUEST_TTL = 90 * 86400e3;
@@ -18,7 +23,7 @@ const DAY = 86400e3;
 const NAME_MAX = 16;
 
 // 段階 2 以降で増える「user_id を持つ表」。仮アカウントの記録を移す・退会で消すときに使う
-export const USER_TABLES = [];
+export const USER_TABLES = ['user_trophies'];
 
 const ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
 
@@ -121,6 +126,48 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     await db.batch(stmts);
   }
 
+  async function createGuest() {
+    const id = randomToken().slice(0, 32);
+    await db.prepare('INSERT INTO users (id, google_sub, name, created_at, last_seen) VALUES (?1, NULL, NULL, ?2, ?2)').bind(id, now()).run();
+    return { id, cookie: cookie('bg_guest', await newSession(id, 'guest', GUEST_TTL), GUEST_TTL) };
+  }
+
+  // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）
+  async function accountFor(req) {
+    const s = await login(req);
+    if (s) return { userId: s.userId, kind: 'login', cookies: [] };
+    const g = await guest(req);
+    if (g) return { userId: g.userId, kind: 'guest', cookies: [] };
+    const created = await createGuest();
+    return { userId: created.id, kind: 'guest', cookies: [created.cookie] };
+  }
+
+  async function trophyIds(userId) {
+    const { results } = await db.prepare('SELECT trophy_id FROM user_trophies WHERE user_id = ?1').bind(userId).all();
+    return results.map((r) => r.trophy_id);
+  }
+
+  async function grant(userId, id) {
+    const row = await db
+      .prepare('INSERT INTO user_trophies (user_id, trophy_id, unlocked_at) VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING RETURNING trophy_id')
+      .bind(userId, id, now())
+      .first();
+    return !!row;
+  }
+
+  // 横断トロフィーを判定し直し、新しく得たものを記録して返す
+  async function grantCross(userId) {
+    const out = [];
+    for (const id of crossTrophiesFor(await trophyIds(userId))) if (await grant(userId, id)) out.push(id);
+    return out;
+  }
+
+  // ゲームの Origin が、そのトロフィーのタイトルのサブドメインか
+  const fromGame = (req, game) => {
+    const origin = req.headers.get('origin') || '';
+    return origin === `https://${GAME_HOSTS[game]}` || extraOrigins.includes(origin);
+  };
+
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null });
@@ -155,10 +202,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (await login(req)) return reply(req, 409, { error: 'logged_in' });
       const g = await guest(req);
       if (g) return reply(req, 200, { guest: { id: g.userId } });
-      const id = randomToken().slice(0, 32);
-      await db.prepare('INSERT INTO users (id, google_sub, name, created_at, last_seen) VALUES (?1, NULL, NULL, ?2, ?2)').bind(id, now()).run();
-      const token = await newSession(id, 'guest', GUEST_TTL);
-      return reply(req, 200, { guest: { id } }, [cookie('bg_guest', token, GUEST_TTL)]);
+      const created = await createGuest();
+      return reply(req, 200, { guest: { id: created.id } }, [created.cookie]);
     }
 
     if (method === 'POST' && path === '/api/auth/google') {
@@ -173,12 +218,18 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       }
       const cookies = [];
       const g = await guest(req);
-      if (g && g.userId !== user.id) await mergeGuest(g.userId, user.id);
+      let mergedTrophies = 0;
+      if (g && g.userId !== user.id) {
+        const before = (await trophyIds(user.id)).length;
+        await mergeGuest(g.userId, user.id);
+        await grantCross(user.id);
+        mergedTrophies = (await trophyIds(user.id)).length - before;
+      }
       if (g) cookies.push(cookie('bg_guest', '', 0));
       const old = await login(req);
       if (old) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(old.hash).run();
       cookies.push(cookie('bg_session', await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
-      return reply(req, 200, { user: { id: user.id, name: user.name ?? null }, created, merged: !!g }, cookies);
+      return reply(req, 200, { user: { id: user.id, name: user.name ?? null }, created, merged: !!g, mergedTrophies }, cookies);
     }
 
     if (method === 'POST' && path === '/api/auth/logout') {
@@ -201,6 +252,33 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!s) return reply(req, 401, { error: 'login' });
       await deleteUser(s.userId);
       return reply(req, 200, { ok: true }, [cookie('bg_session', '', 0)]);
+    }
+
+    if (method === 'GET' && path === '/api/trophies') {
+      const res = reply(req, 200, {
+        games: GAME_NAMES,
+        trophies: TROPHIES.map(({ id, game, name, description, clear }) => ({ id, game, name, description, clear: !!clear })),
+      });
+      res.headers.set('Cache-Control', 'public, max-age=300');
+      return res;
+    }
+
+    if (method === 'GET' && path === '/api/me/trophies') {
+      const s = (await login(req)) || (await guest(req));
+      if (!s) return reply(req, 200, { account: null, trophies: [] });
+      const { results } = await db.prepare('SELECT trophy_id, unlocked_at FROM user_trophies WHERE user_id = ?1 ORDER BY unlocked_at').bind(s.userId).all();
+      return reply(req, 200, { account: s.sub ? 'login' : 'guest', trophies: results.map((r) => ({ id: r.trophy_id, at: r.unlocked_at })) });
+    }
+
+    if (method === 'POST' && path === '/api/trophies/unlock') {
+      const t = TROPHY_BY_ID[body.id];
+      if (!t || t.game === 'cross') return reply(req, 400, { error: 'trophy' });
+      if (!fromGame(req, t.game)) return reply(req, 403, { error: 'game' });
+      const acc = await accountFor(req);
+      const unlocked = [];
+      if (await grant(acc.userId, t.id)) unlocked.push(t.id, ...(await grantCross(acc.userId)));
+      const total = (await trophyIds(acc.userId)).length;
+      return reply(req, 200, { account: acc.kind, unlocked, total }, acc.cookies);
     }
 
     return reply(req, 404, { error: 'not_found' });
