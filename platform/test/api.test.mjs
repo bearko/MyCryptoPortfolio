@@ -135,7 +135,7 @@ test('掃除：90 日使われていない仮アカウントと、期限切れ�
   t += GUEST_TTL + 86400e3;
   const fresh = browser(api);
   await fresh.call('POST', '/api/guest', {});
-  assert.deepEqual(await api.cleanup(), { guests: 1 });
+  assert.deepEqual(await api.cleanup(), { guests: 1, recomputed: 0 });
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users WHERE google_sub IS NULL').get().n, 1, '新しい仮アカウントは残る');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users WHERE google_sub = ?').get('keep').n, 1, '本アカウントは消さない');
   assert.ok((await fresh.call('GET', '/api/me')).body.guest);

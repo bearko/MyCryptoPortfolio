@@ -17,6 +17,10 @@
 //   POST   /api/rta/abort      { runId } 中断
 //   GET    /api/rta/ranking?regulation=  ランキング（ログインした人の、参考記録でない自己ベスト）
 //   GET    /api/me/rta         自分の記録（参考記録も含む）
+//   GET    /api/score/games    総合スコアの対象タイトル（SPEC-002）
+//   POST   /api/score/submit   { game, metrics, version } 成績を送る → { score, best, improved, total }
+//   GET    /api/score/ranking  総合ランキング（?game= でタイトル別）
+//   GET    /api/me/scores      自分のタイトルスコアと総合スコア
 //
 // Cookie（どちらも Domain=.bearko.games・HttpOnly・Secure・SameSite=Lax）：
 //   bg_session … ログイン（180 日）  bg_guest … 仮アカウント（最後に使ってから 90 日）
@@ -24,6 +28,7 @@
 
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from './trophies.js';
 import { REGULATION_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, RANKING_LIMIT } from './rta.js';
+import { SCORERS, PLANNED } from './scoring/index.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
 export const GUEST_TTL = 90 * 86400e3;
@@ -31,7 +36,10 @@ const DAY = 86400e3;
 const NAME_MAX = 16;
 
 // 段階 2 以降で増える「user_id を持つ表」。仮アカウントの記録を移す・退会で消すときに使う
-export const USER_TABLES = ['user_trophies', 'rta_runs'];
+export const USER_TABLES = ['user_trophies', 'rta_runs', 'plays', 'title_scores'];
+const PLAY_TTL = 90 * DAY; // 自己ベストのもとになっていない生の成績は 90 日で消す（SPEC-001 11 章）
+const METRICS_MAX = 4096; // 成績の JSON の大きさの上限（バイト）
+const SCORE_GAMES = Object.keys(SCORERS).map((g) => `'${g}'`).join(', '); // SQL に埋める（定数だけ）
 const RTA_STALE = 2 * DAY; // これより前に始めて終わっていない計測は掃除で消す
 
 const ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
@@ -121,7 +129,19 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   // 仮アカウントの記録を本アカウントへ移し、仮アカウントを消す（SPEC-001 4.6）
   async function mergeGuest(guestId, userId) {
-    const stmts = USER_TABLES.map((t) => db.prepare(`UPDATE OR IGNORE ${t} SET user_id = ?1 WHERE user_id = ?2`).bind(userId, guestId));
+    // タイトルスコアは高いほうを残す（まとめる前に、仮アカウントの自己ベストを上書きで入れる）
+    const stmts = [
+      db
+        .prepare(
+          `INSERT INTO title_scores (user_id, game, score, milestone, performance, formula, play_id, updated_at)
+           SELECT ?1, game, score, milestone, performance, formula, play_id, updated_at FROM title_scores WHERE user_id = ?2 AND true
+           ON CONFLICT (user_id, game) DO UPDATE SET score = excluded.score, milestone = excluded.milestone, performance = excluded.performance,
+             formula = excluded.formula, play_id = excluded.play_id, updated_at = excluded.updated_at
+           WHERE excluded.score > title_scores.score`,
+        )
+        .bind(userId, guestId),
+    ];
+    for (const t of USER_TABLES) stmts.push(db.prepare(`UPDATE OR IGNORE ${t} SET user_id = ?1 WHERE user_id = ?2`).bind(userId, guestId));
     for (const t of USER_TABLES) stmts.push(db.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(guestId));
     stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(guestId));
     stmts.push(db.prepare('DELETE FROM users WHERE id = ?1 AND google_sub IS NULL').bind(guestId));
@@ -244,6 +264,92 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     return reply(req, 200, out);
   }
 
+  // ---------------------------------------------------------------- 総合スコア（SPEC-002）
+  const totalOf = async (userId) =>
+    (await db.prepare(`SELECT COALESCE(SUM(score), 0) AS t FROM title_scores WHERE user_id = ?1 AND game IN (${SCORE_GAMES})`).bind(userId).first())?.t ?? 0;
+
+  // 総合ランキングの母集団：ログインした人（仮アカウントは出さない）
+  const TOTALS = `SELECT ts.user_id, u.name, SUM(ts.score) AS total, MAX(ts.updated_at) AS at FROM title_scores ts JOIN users u ON u.id = ts.user_id
+    WHERE u.google_sub IS NOT NULL AND ts.game IN (${SCORE_GAMES}) GROUP BY ts.user_id`;
+
+  async function scoreSubmit(req, body) {
+    const sc = SCORERS[body.game];
+    if (!sc) return reply(req, 400, { error: 'game' });
+    if (!fromGame(req, body.game)) return reply(req, 403, { error: 'game' });
+    const metrics = body.metrics;
+    const json = metrics && typeof metrics === 'object' && !Array.isArray(metrics) ? JSON.stringify(metrics) : null;
+    if (!json || json.length > METRICS_MAX) return reply(req, 400, { error: 'metrics' });
+    const r = sc.score(metrics);
+    if (!r) return reply(req, 400, { error: 'metrics' });
+    const acc = await accountFor(req);
+    const at = now();
+    const gameVersion = typeof body.version === 'string' ? body.version.slice(0, 32) : null;
+    const play = await db
+      .prepare('INSERT INTO plays (user_id, game, metrics, game_version, formula, score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id')
+      .bind(acc.userId, body.game, json, gameVersion, sc.version, r.score, at)
+      .first();
+    const prev = await db.prepare('SELECT score FROM title_scores WHERE user_id = ?1 AND game = ?2').bind(acc.userId, body.game).first();
+    const improved = !prev || r.score > prev.score;
+    const stmts = [];
+    if (improved) {
+      stmts.push(
+        db
+          .prepare(
+            `INSERT INTO title_scores (user_id, game, score, milestone, performance, formula, play_id, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT (user_id, game) DO UPDATE SET score = excluded.score, milestone = excluded.milestone, performance = excluded.performance,
+               formula = excluded.formula, play_id = excluded.play_id, updated_at = excluded.updated_at`,
+          )
+          .bind(acc.userId, body.game, r.score, r.milestone, r.performance, sc.version, play.id, at),
+      );
+    }
+    // 積み上げのタイトルは、いまの値と自己ベストのもとだけ残す（行を増やさない）
+    if (sc.kind === 'progress') {
+      stmts.push(
+        db
+          .prepare('DELETE FROM plays WHERE user_id = ?1 AND game = ?2 AND id <> ?3 AND id NOT IN (SELECT play_id FROM title_scores WHERE user_id = ?1 AND game = ?2)')
+          .bind(acc.userId, body.game, play.id),
+      );
+    }
+    if (stmts.length) await db.batch(stmts);
+    return reply(
+      req,
+      200,
+      { account: acc.kind, game: body.game, score: r.score, milestone: r.milestone, performance: r.performance, best: improved ? r.score : prev.score, improved, total: await totalOf(acc.userId) },
+      acc.cookies,
+    );
+  }
+
+  // 計算式の版が変わったタイトルの自己ベストを、保存してある生の成績から計算し直す（SPEC-001 8.4）
+  async function recompute(limit = 200) {
+    let done = 0;
+    for (const [game, sc] of Object.entries(SCORERS)) {
+      const { results } = await db.prepare('SELECT user_id FROM title_scores WHERE game = ?1 AND formula <> ?2 LIMIT ?3').bind(game, sc.version, limit).all();
+      for (const { user_id } of results) {
+        const plays = await db.prepare('SELECT id, metrics FROM plays WHERE user_id = ?1 AND game = ?2').bind(user_id, game).all();
+        let best = null;
+        const stmts = [];
+        for (const p of plays.results) {
+          const r = sc.score(JSON.parse(p.metrics));
+          if (!r) continue;
+          stmts.push(db.prepare('UPDATE plays SET score = ?2, formula = ?3 WHERE id = ?1').bind(p.id, r.score, sc.version));
+          if (!best || r.score > best.score) best = { ...r, id: p.id };
+        }
+        if (best) {
+          stmts.push(
+            db
+              .prepare('UPDATE title_scores SET score = ?3, milestone = ?4, performance = ?5, formula = ?6, play_id = ?7 WHERE user_id = ?1 AND game = ?2')
+              .bind(user_id, game, best.score, best.milestone, best.performance, sc.version, best.id),
+          );
+        } else {
+          stmts.push(db.prepare('DELETE FROM title_scores WHERE user_id = ?1 AND game = ?2').bind(user_id, game));
+        }
+        await db.batch(stmts);
+        done++;
+      }
+    }
+    return done;
+  }
+
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null });
@@ -357,6 +463,75 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       return reply(req, 200, { account: acc.kind, unlocked, total }, acc.cookies);
     }
 
+    if (method === 'GET' && path === '/api/score/games') {
+      const games = [
+        ...Object.entries(SCORERS).map(([id, sc]) => ({ id, name: GAME_NAMES[id] || id, kind: sc.kind, formula: sc.version, status: 'live' })),
+        ...PLANNED.map((id) => ({ id, name: GAME_NAMES[id] || id, status: 'planned' })),
+      ];
+      const res = reply(req, 200, { games });
+      res.headers.set('Cache-Control', 'public, max-age=300');
+      return res;
+    }
+
+    if (method === 'POST' && path === '/api/score/submit') return scoreSubmit(req, body);
+
+    if (method === 'GET' && path === '/api/score/ranking') {
+      const s = await login(req);
+      const game = url.searchParams.get('game');
+      if (game) {
+        if (!SCORERS[game]) return reply(req, 400, { error: 'game' });
+        const { results } = await db
+          .prepare('SELECT ts.user_id, u.name, ts.score, ts.updated_at AS at FROM title_scores ts JOIN users u ON u.id = ts.user_id WHERE u.google_sub IS NOT NULL AND ts.game = ?1 ORDER BY ts.score DESC, ts.updated_at LIMIT ?2')
+          .bind(game, RANKING_LIMIT)
+          .all();
+        let rank = 0;
+        let prev = null;
+        const entries = results.map((r, i) => {
+          if (r.score !== prev) rank = i + 1;
+          prev = r.score;
+          return { rank, name: r.name ?? null, score: r.score, at: r.at, me: !!s && s.userId === r.user_id };
+        });
+        return reply(req, 200, { game, entries });
+      }
+      const { results } = await db.prepare(`${TOTALS} ORDER BY total DESC, at LIMIT ?1`).bind(RANKING_LIMIT).all();
+      const parts = await db
+        .prepare(`SELECT user_id, game, score FROM title_scores WHERE game IN (${SCORE_GAMES}) AND user_id IN (SELECT user_id FROM (${TOTALS} ORDER BY total DESC, at LIMIT ?1))`)
+        .bind(RANKING_LIMIT)
+        .all();
+      const byUser = {};
+      for (const p of parts.results) (byUser[p.user_id] ||= {})[p.game] = p.score;
+      let rank = 0;
+      let prev = null;
+      const entries = results.map((r, i) => {
+        if (r.total !== prev) rank = i + 1;
+        prev = r.total;
+        return { rank, name: r.name ?? null, total: r.total, titles: byUser[r.user_id] || {}, at: r.at, me: !!s && s.userId === r.user_id };
+      });
+      let me = null;
+      if (s) {
+        const total = await totalOf(s.userId);
+        if (total > 0) {
+          const above = await db.prepare(`SELECT COUNT(*) AS n FROM (${TOTALS}) WHERE total > ?1`).bind(total).first();
+          me = { rank: (above?.n ?? 0) + 1, total };
+        }
+      }
+      return reply(req, 200, { entries, me });
+    }
+
+    if (method === 'GET' && path === '/api/me/scores') {
+      const s = (await login(req)) || (await guest(req));
+      if (!s) return reply(req, 200, { account: null, total: 0, titles: [] });
+      const { results } = await db
+        .prepare(`SELECT game, score, milestone, performance, updated_at FROM title_scores WHERE user_id = ?1 AND game IN (${SCORE_GAMES}) ORDER BY score DESC`)
+        .bind(s.userId)
+        .all();
+      return reply(req, 200, {
+        account: s.sub ? 'login' : 'guest',
+        total: results.reduce((a, r) => a + r.score, 0),
+        titles: results.map((r) => ({ game: r.game, score: r.score, milestone: r.milestone, performance: r.performance, at: r.updated_at })),
+      });
+    }
+
     if (method === 'GET' && path === '/api/rta/regulations') {
       const res = reply(req, 200, { games: GAME_NAMES, regulations: publicRegulations() });
       res.headers.set('Cache-Control', 'public, max-age=300');
@@ -454,7 +629,10 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       db.prepare(`DELETE FROM rta_splits WHERE run_id IN (${stale})`).bind(now() - RTA_STALE),
       db.prepare(`DELETE FROM rta_runs WHERE id IN (${stale})`).bind(now() - RTA_STALE),
     ]);
-    return { guests: results.length };
+    // 自己ベストのもとになっていない、90 日より古い生の成績
+    await db.prepare('DELETE FROM plays WHERE created_at < ?1 AND id NOT IN (SELECT play_id FROM title_scores)').bind(now() - PLAY_TTL).run();
+    const recomputed = await recompute();
+    return { guests: results.length, recomputed };
   }
 
   return {
