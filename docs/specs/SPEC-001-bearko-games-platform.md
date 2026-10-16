@@ -172,7 +172,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 
 | タイトル | 区切り | チェックポイント候補 | 総合スコアの元にする成績（候補） |
 |---|---|---|---|
-| Tactics | ◎ 明確 | 第 1〜3 章クリア（`stage`）、全章クリア（`clear`） | クリアした章、ターン数、残り HP |
+| Tactics | ◎ 明確 | 第 1〜5 章クリア（`stage`）、全章クリア（`clear`） | クリアした章、ターン数、残り HP |
 | Survivor | ◎ 明確 | 各ステージのボス撃破（`stage`）、全ステージクリア（`clear`） | 撃破数、到達 Lv、取得エクステ数、クリアの有無（ゲーム内に計算式あり） |
 | Fortress | ◎ 明確 | レベル 01〜09 クリア（`stage`）、全レベルクリア（`clear`） | 到達ウェーブ、クリアしたレベル |
 | DeckBattle | ◎ 明確 | ストーリーのエリアクリア（`stage`）、クエストクリア（`clear`） | クリアしたエリア、ボス撃破 |
@@ -254,7 +254,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 |---|---|---|---|
 | `tactics.ch1` | Tactics | 第 1 章踏破 | 第 1 章のボスを倒す |
 | `tactics.ch2` | Tactics | 第 2 章踏破 | 第 2 章のボスを倒す |
-| `tactics.clear` | Tactics | 時の旅人 | 全章クリア（クリア） |
+| `tactics.clear` | Tactics | 時の旅人 | 全 5 章クリア（クリア） |
 | `survivor.stage1` | Survivor | 雪原を越えて | 最初のステージのボスを倒す |
 | `survivor.clear` | Survivor | 生還者 | 全 3 ステージクリア（クリア） |
 | `fortress.level01` | Fortress | 初陣の守り | レベル 01 をクリア |

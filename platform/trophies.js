@@ -31,7 +31,7 @@ export const GAME_NAMES = {
 export const TROPHIES = [
   { id: 'tactics.ch1', game: 'tactics', name: '第 1 章踏破', description: '第 1 章のボスを倒す' },
   { id: 'tactics.ch2', game: 'tactics', name: '第 2 章踏破', description: '第 2 章のボスを倒す' },
-  { id: 'tactics.clear', game: 'tactics', name: '時の旅人', description: '全章をクリアする', clear: true },
+  { id: 'tactics.clear', game: 'tactics', name: '時の旅人', description: '全 5 章をクリアする', clear: true },
 
   { id: 'survivor.stage1', game: 'survivor', name: '雪原を越えて', description: '最初のステージのボスを倒す' },
   { id: 'survivor.clear', game: 'survivor', name: '生還者', description: '全 3 ステージをクリアする', clear: true },
