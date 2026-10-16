@@ -1,4 +1,5 @@
 // トロフィーの定義（SPEC-001 9 章）。名前・説明はあとから変えてよいが、ID は変えない。
+// 名前は、条件に合うマイクリのヒーローのパッシブスキル名・エクステンションのスキル名を優先する（nameFrom に由来）。
 //   game：タイトル ID（GAME_HOSTS のキー）か 'cross'（横断。共通基盤が判定する）
 //   clear：ゲームクリアのトロフィー（横断トロフィー「全制覇」の判定に使う）
 
@@ -29,23 +30,23 @@ export const GAME_NAMES = {
 };
 
 export const TROPHIES = [
-  { id: 'tactics.ch1', game: 'tactics', name: '第 1 章踏破', description: '第 1 章のボスを倒す' },
-  { id: 'tactics.ch2', game: 'tactics', name: '第 2 章踏破', description: '第 2 章のボスを倒す' },
-  { id: 'tactics.clear', game: 'tactics', name: '時の旅人', description: '全 5 章をクリアする', clear: true },
+  { id: 'tactics.ch1', game: 'tactics', name: '兵は詭道なり', nameFrom: '孫子のパッシブスキル', description: '第 1 章のボスを倒す' },
+  { id: 'tactics.ch2', game: 'tactics', name: '二天一流', nameFrom: '宮本武蔵のパッシブスキル', description: '第 2 章のボスを倒す' },
+  { id: 'tactics.clear', game: 'tactics', name: '天下布武', nameFrom: '織田信長のパッシブスキル', description: '全 5 章をクリアする', clear: true },
 
-  { id: 'survivor.stage1', game: 'survivor', name: '雪原を越えて', description: '最初のステージのボスを倒す' },
-  { id: 'survivor.clear', game: 'survivor', name: '生還者', description: '全 3 ステージをクリアする', clear: true },
+  { id: 'survivor.stage1', game: 'survivor', name: 'スノーフォール', nameFrom: 'エクステンション「雪だるま」のスキル', description: '最初のステージのボスを倒す' },
+  { id: 'survivor.clear', game: 'survivor', name: '幻の生存者', nameFrom: 'アナスタシアのパッシブスキル', description: '全 3 ステージをクリアする', clear: true },
 
-  { id: 'fortress.level01', game: 'fortress', name: '初陣の守り', description: 'レベル 01 をクリアする' },
-  { id: 'fortress.level05', game: 'fortress', name: '中盤の砦', description: 'レベル 05 をクリアする' },
-  { id: 'fortress.clear', game: 'fortress', name: '不落の城塞', description: 'レベル 09 までクリアする', clear: true },
+  { id: 'fortress.level01', game: 'fortress', name: '天地開闢の守護', nameFrom: 'エクステンション「アメノミナカヌシ」のスキル', description: 'レベル 01 をクリアする' },
+  { id: 'fortress.level05', game: 'fortress', name: '過五関斬六将', nameFrom: '関羽のパッシブスキル', description: 'レベル 05 をクリアする' },
+  { id: 'fortress.clear', game: 'fortress', name: '毘沙門天の化身', nameFrom: '上杉謙信のパッシブスキル', description: 'レベル 09 までクリアする', clear: true },
 
-  { id: 'deckbattle.area1', game: 'deckbattle', name: '旅立ち', description: '最初のエリアをクリアする' },
-  { id: 'deckbattle.clear', game: 'deckbattle', name: '伝説の冒険者', description: 'ストーリーを最後までクリアする', clear: true },
+  { id: 'deckbattle.area1', game: 'deckbattle', name: '開拓者の一歩', nameFrom: 'エクステンション「大西部のブーツ」のスキル', description: '最初のエリアをクリアする' },
+  { id: 'deckbattle.clear', game: 'deckbattle', name: '十二の功業', nameFrom: 'エクステンション「キングヘラクレス」のスキル', description: 'ストーリーを最後までクリアする', clear: true },
 
-  { id: 'cross.two', game: 'cross', name: 'シリーズの入り口', description: '2 タイトルでトロフィーを獲得する', titles: 2 },
-  { id: 'cross.four', game: 'cross', name: '渡り歩く者', description: '4 タイトルでトロフィーを獲得する', titles: 4 },
-  { id: 'cross.allclear', game: 'cross', name: '全制覇', description: '対応しているすべてのタイトルで、クリアのトロフィーを獲得する', allClear: true },
+  { id: 'cross.two', game: 'cross', name: '二倍楽しむ、猫型バーガー！', nameFrom: 'エクステンション「ダブルにゃんバーガー」のスキル', description: '2 タイトルでトロフィーを獲得する', titles: 2 },
+  { id: 'cross.four', game: 'cross', name: 'おくのほそ道', nameFrom: '松尾芭蕉のパッシブスキル', description: '4 タイトルでトロフィーを獲得する', titles: 4 },
+  { id: 'cross.allclear', game: 'cross', name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', description: '対応しているすべてのタイトルで、クリアのトロフィーを獲得する', allClear: true },
 ];
 
 export const TROPHY_BY_ID = Object.fromEntries(TROPHIES.map((t) => [t.id, t]));
