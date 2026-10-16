@@ -9,6 +9,7 @@
  *   await BearkoGames.rta.start({ regulation: 'survivor-normal' });   // RTA の計測を始める
  *   await BearkoGames.rta.checkpoint('stage1', { igtMs: 240000 });     // 区切り。最後の区切りで終わる
  *   BearkoGames.rta.abort();                                           // 中断（ゲームオーバーなど）
+ *   await BearkoGames.submitScore({ stagesCleared: 3, ... });          // 総合スコアの成績を送る（SPEC-002）
  *
  * 守ること：SDK が読めない・通信に失敗しても、ゲームは最後まで遊べる。
  * どの関数も例外を投げず、失敗は { ok: false, error } で返す。
@@ -291,9 +292,44 @@
     formatTime: fmt,
   };
 
+  var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
+
   var api = {
-    version: '1.2.0',
+    version: '1.3.0',
     rta: rtaApi,
+
+    /**
+     * 総合スコアの成績を送る（SPEC-002）。計算はサーバー。自己ベストを更新したら通知を出す
+     * （積み上げのタイトルなど、こまめに送るときは { quiet: true } で通知を出さない）。
+     * → { ok, score, best, improved, total, account }
+     */
+    submitScore: function (metrics, opts) {
+      opts = opts || {};
+      return call('POST', '/api/score/submit', { game: state.game, version: state.version, metrics: metrics }).then(function (r) {
+        if (!r.ok) return r;
+        if (r.account === 'guest') state.guest = state.guest || { id: null };
+        if (r.improved && !opts.quiet) {
+          toast({
+            kicker: 'タイトルスコア 自己ベスト',
+            title: nf(r.score),
+            time: true,
+            lines: ['総合スコア ' + nf(r.total) + (r.account === 'guest' ? '（ログインすると総合ランキングに載ります）' : '')],
+            link: { text: '総合ランキング', href: state.base + '/score/' },
+            button: r.account === 'guest' ? { text: 'ログインして登録', onClick: function () { api.login(); } } : null,
+          }, 7000);
+        }
+        return r;
+      });
+    },
+
+    /** 自分のタイトルスコアと総合スコア → { ok, account, total, titles: [{ game, score, milestone, performance, at }] } */
+    getScores: function () { return call('GET', '/api/me/scores'); },
+
+    /** 総合ランキング（game を渡すとタイトル別） */
+    getScoreRanking: function (game) { return call('GET', '/api/score/ranking' + (game ? '?game=' + encodeURIComponent(game) : '')); },
+
+    /** 総合スコアの対象タイトル → { ok, games: [{ id, name, kind, status }] } */
+    getScoreGames: function () { return call('GET', '/api/score/games'); },
 
     /** 最初に 1 回。{ game, version, apiBase? }。ログイン状態を読みに行く */
     init: function (opts) {

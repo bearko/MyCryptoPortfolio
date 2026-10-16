@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>総合スコア — MyCrypto Games</title>
+<meta name="description" content="bearko.games のゲームの総合スコアランキング">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/account.css">
+</head>
+<body>
+<main class="card wide">
+  <a href="../" class="muted">← ゲーム一覧</a>
+  <h1>総合スコア</h1>
+
+  <nav class="tabs" id="tabs" aria-label="ランキングの種類"></nav>
+  <p class="note" id="mine" hidden></p>
+
+  <section id="loading"><p class="muted">読み込み中…</p></section>
+  <ol class="ranking" id="ranking" hidden></ol>
+  <p class="muted" id="empty" hidden>まだ記録がありません。</p>
+
+  <h2>しくみ</h2>
+  <ul class="note rules">
+    <li>総合スコアは、各ゲームの自己ベスト（タイトルスコア）の合計です。上限はありません。</li>
+    <li>タイトルスコアは「節目の点」（ステージクリアなどで決まった点。最初の節目で 1,000、ゲームクリアで 5,000）と「成績の点」（ゲーム内の成績 × 係数）の合計です。ふつうにクリアすると約 10,000 になるように合わせています。</li>
+    <li>ゲームのバランスが変わったときは係数を見直し、記録を新しい計算で並べ直します。</li>
+    <li>ランキングには、ログインした人だけが載ります。ログインせずに遊んだ記録も、あとでログインすると載ります。</li>
+  </ul>
+  <p class="note" id="planned"></p>
+  <p class="note"><a href="../me/">マイページで自分の内訳を見る</a></p>
+
+  <p class="error" id="error" hidden></p>
+</main>
+
+<script src="../sdk/v1.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var BG = window.BearkoGames;
+  var games = [];
+  var names = {};
+  var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
+
+  function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
+
+  function show(game) {
+    Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', b.dataset.id === (game || '') ? 'true' : 'false'); });
+    $('loading').hidden = false;
+    $('ranking').hidden = true;
+    $('empty').hidden = true;
+    BG.getScoreRanking(game).then(function (r) {
+      $('loading').hidden = true;
+      if (!r.ok) return fail('ランキングを読み込めませんでした。時間をおいて開き直してください。');
+      var ol = $('ranking');
+      ol.textContent = '';
+      r.entries.forEach(function (e) {
+        var li = document.createElement('li');
+        if (e.me) li.className = 'me';
+        var rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = e.rank;
+        var name = document.createElement('span'); name.className = 'name'; name.textContent = e.name || '名無し';
+        var pts = document.createElement('span'); pts.className = 'time'; pts.textContent = nf(game ? e.score : e.total);
+        var sub = document.createElement('small');
+        sub.textContent = game
+          ? new Date(e.at).toLocaleDateString('ja-JP')
+          : Object.keys(e.titles).sort(function (a, b) { return e.titles[b] - e.titles[a]; }).map(function (g) { return (names[g] || g) + ' ' + nf(e.titles[g]); }).join(' ／ ');
+        li.appendChild(rank); li.appendChild(name); li.appendChild(pts); li.appendChild(sub);
+        ol.appendChild(li);
+      });
+      ol.hidden = !r.entries.length;
+      $('empty').hidden = !!r.entries.length;
+      $('mine').hidden = !(r.me && !game);
+      if (r.me && !game) $('mine').textContent = 'あなたの総合スコア：' + nf(r.me.total) + '（' + r.me.rank + ' 位）';
+    });
+  }
+
+  function tab(id, label) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.id = id;
+    b.textContent = label;
+    b.addEventListener('click', function () {
+      history.replaceState(null, '', id ? '?game=' + encodeURIComponent(id) : location.pathname);
+      show(id);
+    });
+    $('tabs').appendChild(b);
+  }
+
+  BG.init({ game: 'portal', apiBase: location.origin }).then(function () { return BG.getScoreGames(); }).then(function (r) {
+    games = r.games || [];
+    games.forEach(function (g) { names[g.id] = g.name; });
+    tab('', '総合');
+    games.filter(function (g) { return g.status === 'live'; }).forEach(function (g) { tab(g.id, g.name.replace(/^MyCrypto/, '')); });
+    var planned = games.filter(function (g) { return g.status === 'planned'; }).map(function (g) { return g.name; });
+    $('planned').textContent = planned.length ? '対応予定：' + planned.join('、') : '';
+    show(new URLSearchParams(location.search).get('game') || '');
+  });
+})();
+</script>
+</body>
+</html>

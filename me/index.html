@@ -20,7 +20,7 @@
 
   <section id="guest" hidden>
     <p class="lead">ログインすると、bearko.games のすべてのゲームのランキング・トロフィーに参加できます。ログインしなくても、ゲームは最後まで遊べます。</p>
-    <p class="note" id="guest-note" hidden>この端末に、まだ登録していないトロフィーが <b id="guest-count">0</b> 個あります。ログインすると、トロフィーと RTA の記録がまとめてアカウントに登録されます。</p>
+    <p class="note" id="guest-note" hidden>この端末に、まだ登録していないトロフィーが <b id="guest-count">0</b> 個あります。ログインすると、トロフィー・総合スコア・RTA の記録がまとめてアカウントに登録されます。</p>
     <button class="primary" id="login" type="button">Google でログイン</button>
   </section>
 
@@ -44,6 +44,12 @@
     <button class="danger" id="withdraw" type="button">退会する</button>
   </section>
 
+  <section id="scores" hidden>
+    <h2>総合スコア <span class="muted" id="score-total"></span></h2>
+    <ul class="runs" id="score-list"></ul>
+    <p class="note"><a href="../score/">総合ランキングを見る</a>。各ゲームの自己ベストの合計です。</p>
+  </section>
+
   <section id="trophies" hidden>
     <h2>トロフィー <span class="muted" id="trophy-count"></span></h2>
     <div id="trophy-list"></div>
@@ -53,7 +59,7 @@
     <h2>RTA の記録</h2>
     <ul class="runs" id="run-list"></ul>
     <p class="muted" id="run-empty" hidden>まだ記録がありません。</p>
-    <p class="note"><a href="../rta/">RTA ランキングを見る</a>。「参考記録」は 15 分以上操作がなかった記録で、ランキングには載りません。総合スコアは、これから対応します。</p>
+    <p class="note"><a href="../rta/">RTA ランキングを見る</a>。「参考記録」は 15 分以上操作がなかった記録で、ランキングには載りません。</p>
   </section>
 
   <p class="error" id="error" hidden></p>
@@ -105,6 +111,36 @@
     });
   }
 
+  function renderScores() {
+    Promise.all([BG.getScoreGames(), BG.getScores()]).then(function (x) {
+      var games = x[0].ok ? x[0].games : [];
+      var mine = {};
+      (x[1].ok ? x[1].titles : []).forEach(function (t) { mine[t.game] = t; });
+      var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
+      var ul = $('score-list');
+      ul.textContent = '';
+      games.forEach(function (g) {
+        var t = mine[g.id];
+        var li = document.createElement('li');
+        if (!t) li.style.opacity = '.55';
+        var head = document.createElement('div');
+        var name = document.createElement('b'); name.textContent = g.name + '　';
+        var pts = document.createElement('span'); pts.className = 'time';
+        pts.textContent = g.status === 'planned' ? '対応予定' : t ? nf(t.score) : '—';
+        head.appendChild(name); head.appendChild(pts);
+        li.appendChild(head);
+        if (t) {
+          var sub = document.createElement('small');
+          sub.textContent = '節目 ' + nf(t.milestone) + ' ＋ 成績 ' + nf(t.performance) + ' ・ ' + new Date(t.at).toLocaleDateString('ja-JP');
+          li.appendChild(sub);
+        }
+        ul.appendChild(li);
+      });
+      $('score-total').textContent = x[1].ok ? nf(x[1].total) + ' 点' + (x[1].account === 'guest' ? '（未登録）' : '') : '';
+      $('scores').hidden = false;
+    });
+  }
+
   function renderRuns() {
     Promise.all([BG.rta.getRegulations(), BG.rta.getMyRuns()]).then(function (x) {
       var regs = {};
@@ -149,10 +185,11 @@
   }
   function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
 
-  BG.onChange(function () { render(); renderTrophies(); renderRuns(); });
+  BG.onChange(function () { render(); renderScores(); renderTrophies(); renderRuns(); });
   BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
     if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
     render();
+    renderScores();
     renderTrophies();
     renderRuns();
   });
