@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RTA ランキング — MyCrypto Games</title>
+<meta name="description" content="bearko.games のゲームの RTA（リアルタイムアタック）ランキング">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/account.css">
+</head>
+<body>
+<main class="card wide">
+  <a href="../" class="muted">← ゲーム一覧</a>
+  <h1>RTA ランキング</h1>
+
+  <nav class="tabs" id="tabs" aria-label="レギュレーション"></nav>
+  <p class="note" id="rule"></p>
+  <p class="note" id="mine" hidden></p>
+
+  <section id="loading"><p class="muted">読み込み中…</p></section>
+  <ol class="ranking" id="ranking" hidden></ol>
+  <p class="muted" id="empty" hidden>まだ記録がありません。最初の記録を作りましょう。</p>
+
+  <p><a class="primary" id="play" href="#" hidden>このゲームで RTA に挑戦</a></p>
+
+  <h2>ルール</h2>
+  <ul class="note rules">
+    <li>ゲームの中の「RTA で始める」から計測します。公式タイムは、サーバーが受け取った時刻の差です。</li>
+    <li>15 分以上操作がなかった記録は <b>参考記録</b> です。ランキングには載りませんが、マイページに残ります。</li>
+    <li>ランキングには、ログインした人の自己ベストが 1 人 1 件載ります。ログインせずに走った記録も、あとでログインすると載ります。</li>
+  </ul>
+  <p class="note"><a href="../me/">マイページで自分の記録を見る</a></p>
+
+  <p class="error" id="error" hidden></p>
+</main>
+
+<script src="../sdk/v1.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var BG = window.BearkoGames;
+  var HOSTS = { survivor: 'https://survivor.bearko.games/' };
+  var regs = [];
+
+  function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
+
+  function show(regId) {
+    var reg = regs.filter(function (r) { return r.id === regId; })[0] || regs[0];
+    if (!reg) return;
+    Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', b.dataset.id === reg.id ? 'true' : 'false'); });
+    $('rule').textContent = reg.rule;
+    $('play').hidden = !HOSTS[reg.game];
+    if (HOSTS[reg.game]) $('play').href = HOSTS[reg.game];
+    $('loading').hidden = false;
+    $('ranking').hidden = true;
+    $('empty').hidden = true;
+    BG.rta.getRanking(reg.id).then(function (r) {
+      $('loading').hidden = true;
+      if (!r.ok) return fail('ランキングを読み込めませんでした。時間をおいて開き直してください。');
+      var ol = $('ranking');
+      ol.textContent = '';
+      r.entries.forEach(function (e) {
+        var li = document.createElement('li');
+        if (e.me) li.className = 'me';
+        var rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = e.rank;
+        var name = document.createElement('span'); name.className = 'name'; name.textContent = e.name || '名無し';
+        var time = document.createElement('span'); time.className = 'time'; time.textContent = BG.rta.formatTime(e.timeMs);
+        var at = document.createElement('small'); at.textContent = new Date(e.at).toLocaleDateString('ja-JP');
+        li.appendChild(rank); li.appendChild(name); li.appendChild(time); li.appendChild(at);
+        ol.appendChild(li);
+      });
+      ol.hidden = !r.entries.length;
+      $('empty').hidden = !!r.entries.length;
+      $('mine').hidden = !r.me;
+      if (r.me) $('mine').textContent = 'あなたの自己ベスト：' + BG.rta.formatTime(r.me.timeMs) + '（' + r.me.rank + ' 位）';
+    });
+  }
+
+  BG.init({ game: 'portal', apiBase: location.origin }).then(function () { return BG.rta.getRegulations(); }).then(function (r) {
+    regs = r.regulations || [];
+    if (!regs.length) { $('loading').hidden = true; return fail('レギュレーションを読み込めませんでした。'); }
+    regs.forEach(function (reg) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.id = reg.id;
+      b.textContent = reg.name;
+      b.addEventListener('click', function () {
+        history.replaceState(null, '', '?regulation=' + encodeURIComponent(reg.id));
+        show(reg.id);
+      });
+      $('tabs').appendChild(b);
+    });
+    show(new URLSearchParams(location.search).get('regulation'));
+  });
+})();
+</script>
+</body>
+</html>

@@ -233,3 +233,170 @@ test('退会でトロフィーも消える', async () => {
   await b.call('DELETE', '/api/me');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM user_trophies').get().n, 0);
 });
+
+// ---------------------------------------------------------------- RTA（SPEC-001 6 章）
+import { REGULATION_BY_ID, judgeActivity, IDLE_LIMIT_MS } from '../rta.js';
+
+const SURVIVOR = 'https://survivor.bearko.games';
+const MIN = 60e3;
+
+// 時計を進められる環境。b.call の既定の Origin は Survivor
+function rtaSetup() {
+  let t = Date.parse('2026-10-16T00:00:00Z');
+  const { db, api } = setup(() => t);
+  const mk = () => {
+    const b = browser(api);
+    const call = b.call;
+    b.call = (m, p, body, opt = {}) => call(m, p, body, { origin: SURVIVOR, ...opt });
+    return b;
+  };
+  return { db, api, mk, tick: (ms) => (t += ms) };
+}
+
+// 3 つの区切りを、間隔 ms ずつ（途中で「操作あり」を送りながら）通る
+async function runThrough(b, tick, gaps = [4.2 * MIN, 4.5 * MIN, 4.4 * MIN]) {
+  const start = await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' });
+  const runId = start.body.runId;
+  const out = [];
+  for (const [i, cp] of ['stage1', 'stage2', 'clear'].entries()) {
+    tick(gaps[i] / 2);
+    await b.call('POST', '/api/rta/ping', { runId, idleMs: 1000 });
+    tick(gaps[i] / 2);
+    out.push((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: cp, igtMs: 240e3 * (i + 1), idleMs: 2000 })).body);
+  }
+  return { runId, start: start.body, last: out.at(-1), out };
+}
+
+test('RTA：未ログインで走ると仮アカウントに残り、ログインするとランキングに出る', async () => {
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  const r = await runThrough(b, tick);
+  assert.equal(r.start.account, 'guest');
+  assert.deepEqual(r.out.map((x) => x.splitMs), [252e3, 522e3, 786e3], '区間はサーバーの時刻で、開始からの経過');
+  assert.equal(r.last.finished, true);
+  assert.equal(r.last.timeMs, 786e3);
+  assert.equal(r.last.reference, false);
+  assert.equal(r.last.best, true);
+  assert.equal(r.last.rank, null, '仮アカウントには順位を付けない');
+  assert.deepEqual((await b.call('GET', '/api/rta/ranking?regulation=survivor-normal')).body.entries, [], '仮アカウントはランキングに出ない');
+
+  const mine = await b.call('GET', '/api/me/rta');
+  assert.equal(mine.body.account, 'guest');
+  assert.equal(mine.body.runs.length, 1);
+  assert.deepEqual(mine.body.runs[0].splits.map((s) => s.checkpoint), ['stage1', 'stage2', 'clear']);
+
+  await b.call('POST', '/api/auth/google', { credential: 'ok:runner' });
+  await b.call('POST', '/api/me/name', { name: 'くま' });
+  const ranking = await b.call('GET', '/api/rta/ranking?regulation=survivor-normal');
+  assert.deepEqual(ranking.body.entries.map((e) => [e.rank, e.name, e.timeMs, e.me]), [[1, "くま", 786e3, true]]);
+  assert.deepEqual(ranking.body.me, { rank: 1, timeMs: 786e3 });
+});
+
+test('RTA：1 人 1 件（自己ベスト）で並び、同じタイムは同じ順位', async () => {
+  const { mk, tick } = rtaSetup();
+  const a = mk();
+  const c = mk();
+  const d = mk();
+  await a.call('POST', '/api/auth/google', { credential: 'ok:a' });
+  await c.call('POST', '/api/auth/google', { credential: 'ok:c' });
+  await d.call('POST', '/api/auth/google', { credential: 'ok:d' });
+  const slow = await runThrough(a, tick, [5 * MIN, 5 * MIN, 5 * MIN]);
+  assert.equal(slow.last.rank, 1);
+  const fast = await runThrough(a, tick, [4 * MIN, 4 * MIN, 4 * MIN]);
+  assert.equal(fast.last.best, true);
+  const notBest = await runThrough(a, tick, [4.5 * MIN, 4.5 * MIN, 4.5 * MIN]);
+  assert.equal(notBest.last.best, false);
+  assert.equal((await runThrough(c, tick, [4 * MIN, 4 * MIN, 4 * MIN])).last.rank, 1, '同じタイムは同じ順位');
+  assert.equal((await runThrough(d, tick, [4.1 * MIN, 4.1 * MIN, 4.1 * MIN])).last.rank, 3);
+  const e = (await a.call('GET', '/api/rta/ranking?regulation=survivor-normal')).body.entries;
+  assert.deepEqual(e.map((x) => [x.rank, x.timeMs]), [[1, 12 * MIN], [1, 12 * MIN], [3, 12.3 * MIN]]);
+});
+
+test('RTA：15 分以上操作がないと参考記録（SDK の申告・サーバーの間隔のどちらでも）', async () => {
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  await b.call('POST', '/api/auth/google', { credential: 'ok:idle' });
+
+  // SDK が「16 分操作がなかった」と申告
+  let runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' })).body.runId;
+  tick(4.5 * MIN);
+  await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1', idleMs: 1000 });
+  tick(4.5 * MIN);
+  await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage2', idleMs: 1000 });
+  tick(17 * MIN);
+  assert.equal((await b.call('POST', '/api/rta/ping', { runId, idleMs: 16 * MIN })).body.reference, true);
+  const r1 = (await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'clear', idleMs: 16 * MIN })).body;
+  assert.equal(r1.reference, true);
+  assert.equal(r1.rank, null);
+  assert.equal(r1.best, false, '参考記録は自己ベストにしない');
+
+  // 申告はないが、サーバーが 20 分を超えて何も受け取らなかった（ブラウザが止まっていたなど）
+  runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' })).body.runId;
+  tick(21 * MIN);
+  const r2 = (await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1', idleMs: 0 })).body;
+  assert.equal(r2.reference, true);
+
+  assert.deepEqual((await b.call('GET', '/api/rta/ranking?regulation=survivor-normal')).body.entries, [], '参考記録はランキングに出ない');
+  const mine = (await b.call('GET', '/api/me/rta')).body.runs;
+  assert.equal(mine.length, 1, '完了した参考記録は個人記録に残る');
+  assert.equal(mine[0].reference, true);
+
+  // 純関数：申告は開始からの経過を超えない
+  const run = { started_at: 0, last_active: 0, max_idle_ms: 0, reference: 0 };
+  assert.deepEqual(judgeActivity(run, 5 * MIN, IDLE_LIMIT_MS), { reference: false, maxIdleMs: 5 * MIN });
+});
+
+test('RTA：順番どおりでない区切り・最短時間より速い記録・他人の計測・他のゲームからは受けない', async () => {
+  const { db, mk, tick } = rtaSetup();
+  const b = mk();
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' })).body.runId;
+  tick(5 * MIN);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage2' })).status, 409, '飛ばせない');
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1' }, { origin: 'https://tactics.bearko.games' })).status, 403);
+  assert.equal((await mk().call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1' })).status, 401, 'Cookie のない人');
+  const other = mk();
+  await other.call('POST', '/api/guest', {});
+  assert.equal((await other.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1' })).status, 404, '他人の計測');
+  assert.equal((await b.call('POST', '/api/rta/start', { regulation: 'nope' })).status, 400);
+  assert.equal((await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' }, { origin: 'https://tactics.bearko.games' })).status, 403);
+
+  // 最短時間（ステージ 1 は 3 分 55 秒）より速い
+  const cheat = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' })).body.runId;
+  assert.equal(db.sqlite.prepare('SELECT status FROM rta_runs WHERE id = ?').get(runId).status, 'abandoned', '新しく始めると、前の計測は中断');
+  tick(1 * MIN);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId: cheat, checkpoint: 'stage1' })).body.rejected, true);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId: cheat, checkpoint: 'stage2' })).status, 409, '無効にした計測は続けられない');
+  assert.deepEqual((await b.call('GET', '/api/me/rta')).body.runs, [], '無効・中断は個人記録にも出さない');
+});
+
+test('RTA：中断・退会・掃除', async () => {
+  const { db, api, mk, tick } = rtaSetup();
+  const b = mk();
+  await b.call('POST', '/api/auth/google', { credential: 'ok:bye-rta' });
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal' })).body.runId;
+  assert.equal((await b.call('POST', '/api/rta/abort', { runId })).status, 200);
+  assert.equal((await b.call('POST', '/api/rta/ping', { runId })).status, 409, '中断した計測には送れない');
+  await runThrough(b, tick);
+  const stuck = mk();
+  await stuck.call('POST', '/api/rta/start', { regulation: 'survivor-normal' }); // 走ったまま放置
+  tick(3 * 86400e3);
+  await api.cleanup();
+  assert.deepEqual(
+    db.sqlite.prepare('SELECT status FROM rta_runs ORDER BY status').all().map((r) => r.status),
+    ['finished'],
+    '中断と、2 日以上終わっていない計測は消える。完了は残る',
+  );
+  await b.call('DELETE', '/api/me');
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_runs').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_splits').get().n, 0);
+});
+
+test('RTA：レギュレーションの定義', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'survivor-normal');
+  assert.deepEqual(reg.checkpoints.map((c) => c.id), ['stage1', 'stage2', 'clear']);
+  assert.equal(reg.checkpoints[0].minMs, undefined, '最短時間は公開しない');
+  const def = REGULATION_BY_ID['survivor-normal'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
+});

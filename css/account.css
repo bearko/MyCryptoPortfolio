@@ -78,3 +78,24 @@ ul.trophies li.got { border-color: rgba(167, 139, 250, .55); }
 ul.trophies li.got b::before { content: "★ "; color: var(--accent); }
 ul.trophies li.not { opacity: .55; }
 ul.trophies li.not b::before { content: "☆ "; }
+
+/* RTA ランキング・記録 */
+.card.wide { max-width: 560px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.tabs button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.tabs button[aria-current="true"] { background: var(--accent); color: #140f24; border-color: var(--accent); }
+ol.ranking { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 4px; }
+ol.ranking li { display: grid; grid-template-columns: 2.5em 1fr auto; align-items: baseline; column-gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+ol.ranking li.me { border-color: rgba(167, 139, 250, .7); }
+ol.ranking .rank { font-weight: 900; color: var(--accent); text-align: right; }
+ol.ranking .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ol.ranking .time, .runs .time { font-variant-numeric: tabular-nums; font-weight: 700; }
+ol.ranking small { grid-column: 2 / -1; color: var(--muted); font-size: .75rem; }
+ul.rules { padding-left: 1.2em; margin: 0; }
+ul.runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ul.runs li { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+ul.runs li small { font-size: .8rem; color: var(--muted); }
+.badge { display: inline-block; font-size: .7rem; font-weight: 700; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+.badge.ref { border: 1px solid var(--muted); color: var(--muted); }
+.badge.best { background: var(--accent); color: #140f24; }
+a.primary { margin-top: 8px; }
