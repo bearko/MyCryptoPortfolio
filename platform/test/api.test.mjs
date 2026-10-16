@@ -169,3 +169,67 @@ test('Google の ID トークン：署名・aud・iss・期限を確かめる', 
   assert.equal(await verify(t.slice(0, -4) + 'AAAA'), null, '署名が違う');
   assert.equal(await verify('not.a.token'), null);
 });
+
+import { crossTrophiesFor, TROPHIES } from '../trophies.js';
+
+test('トロフィー：未ログインなら仮アカウントに貯まり、ログインでまとめて本アカウントへ', async () => {
+  const { db, api } = setup();
+  const b = browser(api);
+  const first = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body, { account: 'guest', unlocked: ['tactics.ch1'], total: 1 });
+  assert.ok(b.jar.bg_guest, '仮アカウントがこのとき作られる');
+  const again = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+  assert.deepEqual(again.body.unlocked, [], '同じトロフィーは 1 つ');
+  await b.call('POST', '/api/trophies/unlock', { id: 'tactics.clear' });
+  assert.deepEqual((await b.call('GET', '/api/me/trophies')).body.trophies.map((t) => t.id), ['tactics.ch1', 'tactics.clear']);
+
+  // 別の端末で、すでに同じアカウントに ch1 を持っている
+  const other = browser(api);
+  await other.call('POST', '/api/auth/google', { credential: 'ok:sub-t' });
+  await other.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+
+  const login = await b.call('POST', '/api/auth/google', { credential: 'ok:sub-t' });
+  assert.equal(login.body.mergedTrophies, 1, '重なった ch1 は 1 つにまとまり、clear だけ増える');
+  const mine = await b.call('GET', '/api/me/trophies');
+  assert.equal(mine.body.account, 'login');
+  assert.deepEqual(mine.body.trophies.map((t) => t.id).sort(), ['tactics.ch1', 'tactics.clear']);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users WHERE google_sub IS NULL').get().n, 0, '仮アカウントは消える');
+});
+
+test('トロフィー：そのゲームのサブドメインからしか受け付けず、横断トロフィーは送れない', async () => {
+  const b = browser(setup().api);
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'fortress.level01' })).status, 403, 'tactics から fortress のトロフィーは送れない');
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'fortress.level01' }, { origin: 'https://fortress.bearko.games' })).status, 200);
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'cross.two' })).status, 400);
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'nope' })).status, 400);
+});
+
+test('横断トロフィー：2 タイトルで「シリーズの入り口」、クリアがそろうと「全制覇」', async () => {
+  const b = browser(setup().api);
+  await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+  const r = await b.call('POST', '/api/trophies/unlock', { id: 'survivor.stage1' }, { origin: 'https://survivor.bearko.games' });
+  assert.deepEqual(r.body.unlocked, ['survivor.stage1', 'cross.two']);
+
+  const clears = TROPHIES.filter((t) => t.clear).map((t) => t.id);
+  assert.deepEqual(crossTrophiesFor(clears.slice(0, -1)).includes('cross.allclear'), false);
+  assert.deepEqual(crossTrophiesFor(clears).sort(), ['cross.allclear', 'cross.four', 'cross.two']);
+  assert.deepEqual(crossTrophiesFor([...clears, 'cross.two', 'cross.four', 'cross.allclear']), [], '持っているものは返さない');
+});
+
+test('トロフィーの定義：ID が重ならず、タイトルが登録済み', async () => {
+  const ids = TROPHIES.map((t) => t.id);
+  assert.equal(new Set(ids).size, ids.length);
+  const res = await browser(setup().api).call('GET', '/api/trophies');
+  assert.equal(res.body.trophies.length, TROPHIES.length);
+  for (const t of res.body.trophies) assert.ok(res.body.games[t.game], t.id);
+});
+
+test('退会でトロフィーも消える', async () => {
+  const { db, api } = setup();
+  const b = browser(api);
+  await b.call('POST', '/api/auth/google', { credential: 'ok:bye' });
+  await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+  await b.call('DELETE', '/api/me');
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM user_trophies').get().n, 0);
+});

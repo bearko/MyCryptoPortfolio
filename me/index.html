@@ -20,7 +20,7 @@
 
   <section id="guest" hidden>
     <p class="lead">ログインすると、bearko.games のすべてのゲームのランキング・トロフィーに参加できます。ログインしなくても、ゲームは最後まで遊べます。</p>
-    <p class="note" id="guest-note" hidden>この端末に、まだ登録していない記録があります。ログインすると、まとめてアカウントに登録されます。</p>
+    <p class="note" id="guest-note" hidden>この端末に、まだ登録していないトロフィーが <b id="guest-count">0</b> 個あります。ログインすると、まとめてアカウントに登録されます。</p>
     <button class="primary" id="login" type="button">Google でログイン</button>
   </section>
 
@@ -34,9 +34,6 @@
     </form>
     <p class="note" id="name-msg"></p>
 
-    <h2>トロフィー・記録</h2>
-    <p class="muted">トロフィー・総合スコア・RTA は、これから順に対応します。</p>
-
     <div class="actions">
       <button class="secondary" id="logout" type="button">ログアウト</button>
     </div>
@@ -45,6 +42,12 @@
     <h2>退会</h2>
     <p class="note">アカウントと、すべてのゲームの記録を消します。元に戻せません。</p>
     <button class="danger" id="withdraw" type="button">退会する</button>
+  </section>
+
+  <section id="trophies" hidden>
+    <h2>トロフィー <span class="muted" id="trophy-count"></span></h2>
+    <div id="trophy-list"></div>
+    <p class="note">総合スコア・RTA は、これから順に対応します。</p>
   </section>
 
   <p class="error" id="error" hidden></p>
@@ -57,12 +60,45 @@
   var $ = function (id) { return document.getElementById(id); };
   var BG = window.BearkoGames;
 
+  function renderTrophies() {
+    Promise.all([BG.getTrophyDefinitions(), BG.getTrophies(), fetch('/api/trophies').then(function (r) { return r.json(); })]).then(function (x) {
+      var defs = x[0].trophies || [], mine = x[1].ok ? x[1].trophies : [], games = x[2].games || {};
+      var owned = {};
+      mine.forEach(function (t) { owned[t.id] = t; });
+      var list = $('trophy-list');
+      list.textContent = '';
+      var order = [];
+      defs.forEach(function (d) { if (order.indexOf(d.game) < 0) order.push(d.game); });
+      order.forEach(function (game) {
+        var h = document.createElement('h3'); h.className = 'game'; h.textContent = games[game] || game;
+        var ul = document.createElement('ul'); ul.className = 'trophies';
+        defs.filter(function (d) { return d.game === game; }).forEach(function (d) {
+          var li = document.createElement('li');
+          li.className = owned[d.id] ? 'got' : 'not';
+          var name = document.createElement('b'); name.textContent = d.name;
+          var desc = document.createElement('span'); desc.textContent = d.description;
+          li.appendChild(name); li.appendChild(desc);
+          if (owned[d.id]) {
+            var at = document.createElement('small');
+            at.textContent = new Date(owned[d.id].at).toLocaleDateString('ja-JP') + ' 獲得';
+            li.appendChild(at);
+          }
+          ul.appendChild(li);
+        });
+        list.appendChild(h); list.appendChild(ul);
+      });
+      $('trophy-count').textContent = mine.length + ' / ' + defs.length;
+      $('guest-count').textContent = String(mine.length);
+      $('guest-note').hidden = !(x[1].account === 'guest' && mine.length);
+      $('trophies').hidden = false;
+    });
+  }
+
   function render() {
     var user = BG.getUser();
     $('loading').hidden = true;
     $('guest').hidden = !!user;
     $('member').hidden = !user;
-    $('guest-note').hidden = !BG.hasGuest();
     if (user) {
       $('who').textContent = user.name || '（名前未設定）';
       if (document.activeElement !== $('name')) $('name').value = user.name || '';
@@ -70,10 +106,11 @@
   }
   function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
 
-  BG.onChange(render);
+  BG.onChange(function () { render(); renderTrophies(); });
   BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
     if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
     render();
+    renderTrophies();
   });
 
   $('login').addEventListener('click', function () {
