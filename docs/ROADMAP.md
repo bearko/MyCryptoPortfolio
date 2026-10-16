@@ -64,7 +64,7 @@
 | タイトル | 状態 | PR |
 |---|---|---|
 | Survivor | **完了（v1.0.0、2026-10-16）**。親 Issue MyCryptoSurvivor#51 | #59〜#65（SPEC-042〜047） |
-| Tactics | 未着手 | — |
+| Tactics | **完了（v1.3.0、2026-10-16）**。親 Issue mycryptotactics#127。憲章の改定（localStorage `mct.*`・ja/en・見出しと数字の Web フォント・軽い演出）と MIT LICENSE は作者の決定 | #136〜#149（SPEC-010〜014） |
 | Workshop | 未着手 | — |
 | Education | #1 の決定待ち | — |
 | Factory | #94 の決定待ち | — |
@@ -76,3 +76,4 @@
 |---|---|
 | 2026-10-16 | 初版（6 タイトルの調査と優先順位、UI/UX の共通の基準） |
 | 2026-10-16 | Survivor を v1.0.0 に（遊び方・UI の土台・設定・戦闘の手ごたえ・結果の見せ方・公開版）。次は Tactics |
+| 2026-10-16 | Tactics を v1.3.0 に（憲章の改定・LICENSE・テストと CI・UI の土台・設定・演出・はじめての案内・公開版）。次は Workshop |
