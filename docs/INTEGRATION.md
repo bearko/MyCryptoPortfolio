@@ -87,7 +87,8 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 1. 何もしなくても、`init()` のあとに画面の右下へ 💬 が出る（読むだけなら未ログインでも。話すにはログインして名前を決める）
 2. 置き場所を変える：`init({ chat: { position: 'top-right', offset: { x: 16, y: 56 } } })`。通知・RTA の時計・マインちゃんの帯と重ならない隅を選ぶ（SPEC-004 6 章の表）
 3. 遊びの最中は隠す：画面を切り替える関数から `BearkoGames.chat.setVisible(false)` / `setVisible(true)` を呼ぶ（Survivor なら `startBattle` / `returnToTitle`）
-4. 出さない：`init({ chat: false })`。自前の窓を作る（10 buy year! の横のボタン）：`init({ chat: { ui: false } })` のうえで `chat.connect()` / `chat.send(text)` / `chat.onMessage(fn)` / `chat.getMessages()`
+4. 出さない：`init({ chat: false })`。💬 を出さずにゲームのボタンから開く（10 buy year! の横のボタン）：`init({ chat: { button: false } })` のうえで `chat.open()`（SDK 1.6.1）。窓まで自前にする：`{ ui: false }` のうえで `chat.connect()` / `chat.send(text)` / `chat.onMessage(fn)` / `chat.getMessages()`
+4a. 窓を開いているあいだ時間を止める（Factory）：`chat.onToggle((open) => open ? pauseTime() : resumeTime())`（SDK 1.6.1。解除する関数を返す）
 5. 部屋は Durable Object「ChatRoom」（`platform/chat.js`。`wrangler.jsonc` の `durable_objects` と `migrations`）。プレビュー（本番以外のブランチ）には binding が無いので `/api/chat/*` は 503 になる（ゲームは遊べる）
 
 ## 4. 本番の D1（データベース）
