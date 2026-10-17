@@ -11,7 +11,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 |---|---|---|---|---|---|---|
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
-| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0。v1.2 から v3 で計る） | 対応（v4。`balance: 2`） | SPEC-039・040・041・048・054・066 |
+| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0。v1.2 は v3、v1.3 から v4 で計る） | 対応（v4。v1.2 は `balance: 2`、v1.3 は `balance: 3`） | SPEC-039・040・041・048・054・066・082 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 対応 | 対応（v2） | `docs/platform.md` |
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |

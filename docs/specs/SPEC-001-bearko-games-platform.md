@@ -309,7 +309,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 
 | 区間 | 数えるレギュレーション | 区切り |
 |---|---|---|
-| Survivor ステージ 1 クリア | `survivor-normal`・`survivor-normal-v2`・`survivor-normal-v3` | `stage1` |
+| Survivor ステージ 1 クリア | `survivor-normal`・`survivor-normal-v2`・`survivor-normal-v3`・`survivor-normal-v4` | `stage1` |
 | Tactics 第 1 章クリア | `tactics-ch1`・`tactics-all5` | `ch1` |
 | Workshop Epic 解放 | `workshop-golden` | `epic` |
 | Factory 工房 Lv.2 | `factory-lv5` | `lv2` |
@@ -353,6 +353,25 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 - ゲーム v1.2 で遊びの中身が変わった（撃ってくる敵・雷鼓・ステージの仕掛け・トロイの大群・レベルアップ約 2 倍。Survivor の SPEC-062〜065）ので、記録を分ける（作者の決定 2026-10-17）。ルールは 6.15 と同じ（NORMAL／ABSOLUTE ×2.0・懐中時計あり）
 - 雷鼓はボスにも最大 HP の 20% 効くので、ボスを早く倒せる。ただし**ボスはゲーム内の 4 分で出る**・**宝箱は 1 ステージ 4 つ**のままで、トロイの木馬を壊したときの中身に懐中時計は出ない。最短時間は 6.15 と同じ
 - ゲームはこの 2 つで計る（Survivor SPEC-066）。6.15 の 2 つと懐中時計なしの 2 つは、過去の記録として残す（`deprecated` にするかは作者が決める）
+- 横断 RTA（6.14）の Survivor の区間にも数える
+
+### 6.17 Survivor v1.3（`survivor-normal-v4`・`survivor-absolute-2x-v4`）
+
+| 区切り（`order` 順） | 種類 | 最短時間（6.5） |
+|---|---|---|
+| `stage1` ステージ 1 クリア | `stage` | 3 分 15 秒 |
+| `stage2` ステージ 2 クリア | `stage` | 6 分 30 秒 |
+| `clear` 全 3 ステージクリア | `clear` | 9 分 45 秒 |
+
+- ゲーム v1.3 で遊びの中身が変わったので、記録を分ける（作者の決定 2026-10-17）
+  - 敵の大群：ボスの直前に画面の半分〜9 割が敵で埋まる
+  - ボス戦の枠：ボスが出るとほかの敵が消え、1/4 の枠の中で戦う
+  - ボスの強化：HP 15〜20 倍・突進などの型
+  - ボス戦の宝箱
+  - Survivor の SPEC-078〜081・084
+- ルールは 6.16 と同じ（NORMAL／ABSOLUTE ×2.0・懐中時計あり）
+- **ボスはゲーム内の 4 分で出る**・**宝箱は 1 ステージ 4 つ**のまま。ボス戦の宝箱からは懐中時計は出ない。最短時間は 6.15・6.16 と同じ
+- ゲームはこの 2 つで計る（Survivor SPEC-082）。6.16 までのレギュレーションは、過去の記録として残す
 - 横断 RTA（6.14）の Survivor の区間にも数える
 
 ## 7. タイトルごとの対応状況（2026-10-15 時点の調査）
@@ -550,3 +569,4 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 | 2026-10-17 | 1.6 | 6.14：タイトルをまたぐ RTA（`cross-first6`：6 タイトルの最初の区切りの合計・24 時間。作者の決定 2026-10-17、Issue #30） |
 | 2026-10-17 | 1.7 | 5 章：SDK 1.5.0 の `setToastPosition`（通知を上にも出せる。Survivor の結果画面のボタンが隠れるため）。6.15：Survivor 懐中時計ありのレギュレーション 2 つ。6.14 の Survivor の区間に `survivor-normal-v2` |
 | 2026-10-17 | 1.8 | 6.16：Survivor v1.2 のレギュレーション 2 つ（`survivor-normal-v3`・`survivor-absolute-2x-v3`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v3` |
+| 2026-10-17 | 1.9 | 6.17：Survivor v1.3 のレギュレーション 2 つ（`survivor-normal-v4`・`survivor-absolute-2x-v4`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v4` |
