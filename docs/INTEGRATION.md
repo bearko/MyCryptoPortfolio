@@ -12,7 +12,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応 | 対応 | SPEC-039・040・041 |
-| Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 未対応 | 対応 | SPEC-120・121 |
+| Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・`docs/ROADMAP.md` 8.4 |
@@ -66,6 +66,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
    - `score(metrics)` → `{ score, milestone, performance }`。ありえない値は `null`（受け付けない）
    - 形は SPEC-002 2 章：**節目の点**（最初の節目 1,000・ゲームクリア 5,000）＋ **成績 × 係数**（上限・頭打ちなし。D11）
    - `scoring/index.js` に足し、`platform/test/scoring.test.mjs` の基準プレイ（A ≒ 1,000・B ≒ 10,000）に 1 行足す
+   - 「レベルごとの自己ベストの合計」のように、いくつもの成績を束ねるタイトルは、計算式に `combine(list)`（成績を束ねて 1 つの成績にする純関数）を持たせる。API は前回の自己ベストのもとと今回を束ねてから計算し、版が変わったとき・仮アカウントをまとめたときは生の成績ぜんぶを束ね直す（Fortress v2 が例）
 2. ゲーム：終わったとき（積み上げなら増えたとき）に `BearkoGames.submitScore(metrics, { quiet })`
    - こまめに送るゲームは `{ quiet: true }`（通知なし）で、1 分に 1 回まで
    - 将来の「難易度ごとのレギュレーション」用に、難易度・レギュレーションも `metrics` に入れておく（今は点に効かない）
@@ -133,7 +134,7 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 ## 7. はまりどころ
 
 - **PR を作るとき**：この環境では `gh pr create` が使えない（GraphQL）。`gh api repos/<owner>/<repo>/pulls -f title=… -f head=… -f base=…` で作り、`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=squash` でマージする
-- **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は別の原因でプレビューが失敗している（未調査）
+- **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は設定とゲームが `web/` の下にあり、プレビューのコマンドがリポジトリの直下で動くため失敗していた。直下に `wrangler.jsonc`（`assets.directory: ./web/dist` と、`web/dist` を作る `build.command`）を置いて直した（Fortress の SPEC-124）
 - **Cloudflare の本番のブランチ**：ダッシュボードの Worker → Settings → Build → Branch control の「Production branch」。プレビューの設定画面（Tracking branch）と間違えやすい
 - **サンドボックスから本番のサイトに curl できない**（プロキシで 403）。本番の確認は WebFetch か、作者に見てもらう
 - **成績はゲームの自己申告**：範囲の確認はしているが改ざんは防げない（カジュアルなランキングとして割り切っている）
@@ -143,9 +144,8 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 タイトル別の課題と改善点は作者のドキュメント「タイトル別：RTA・総合スコアに向けた課題と改善点」にまとめてある。主なもの：
 
 - 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。公開後は管理画面の分布も見る）
-- Fortress を「レベルごとの自己ベストの合計」にするか
 - ~~管理画面（点数の分布・記録の削除・締め出し）~~（2026-10-17 済み。SPEC-003）
-- Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
+- DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - 同じ条件で競うレギュレーション（10 buy year の週替わりチャレンジ。案は SPEC-002 6.1）
 - Factory のセーブとクリアの条件（#94）、TCG の連戦（#5）、Education のゲームクリア（#1）

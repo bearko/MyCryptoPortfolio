@@ -156,7 +156,13 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     for (const t of USER_TABLES) stmts.push(db.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(guestId));
     stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(guestId));
     stmts.push(db.prepare('DELETE FROM users WHERE id = ?1 AND google_sub IS NULL').bind(guestId));
+    const combined = Object.entries(SCORERS).filter(([, sc]) => sc.combine);
+    const had = combined.length
+      ? (await db.prepare('SELECT DISTINCT game FROM plays WHERE user_id = ?1').bind(guestId).all()).results.map((r) => r.game)
+      : [];
     await db.batch(stmts);
+    // 成績を束ねるタイトルは、両方のアカウントの成績を束ね直す（高いほうを残すだけだと、片方だけでクリアしたレベルが消える）
+    for (const [game, sc] of combined) if (had.includes(game)) await rebuildCombined(userId, game, sc);
   }
 
   // 締め出し（bans）の行は消さない。退会してログインし直すだけで抜けられないように（SPEC-003 5 章）
@@ -292,14 +298,26 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const sc = SCORERS[body.game];
     if (!sc) return reply(req, 400, { error: 'game' });
     if (!fromGame(req, body.game)) return reply(req, 403, { error: 'game' });
-    const metrics = body.metrics;
-    const json = metrics && typeof metrics === 'object' && !Array.isArray(metrics) ? JSON.stringify(metrics) : null;
+    let metrics = body.metrics;
+    let json = metrics && typeof metrics === 'object' && !Array.isArray(metrics) ? JSON.stringify(metrics) : null;
     if (!json || json.length > METRICS_MAX) return reply(req, 400, { error: 'metrics' });
-    const r = sc.score(metrics);
+    let r = sc.score(metrics);
     if (!r) return reply(req, 400, { error: 'metrics' });
     const acc = await accountFor(req);
     if (acc.banned) return reply(req, 403, { error: 'banned' });
     const at = now();
+    // 成績を束ねるタイトル（combine）：前回の自己ベストのもとと束ねてから計算する（別の端末・古いセーブで送っても下がらない）
+    if (sc.combine) {
+      const base = await db
+        .prepare('SELECT p.metrics FROM title_scores ts JOIN plays p ON p.id = ts.play_id WHERE ts.user_id = ?1 AND ts.game = ?2')
+        .bind(acc.userId, body.game)
+        .first();
+      if (base) {
+        metrics = sc.combine([JSON.parse(base.metrics), metrics]);
+        json = JSON.stringify(metrics);
+        r = sc.score(metrics);
+      }
+    }
     const gameVersion = typeof body.version === 'string' ? body.version.slice(0, 32) : null;
     const play = await db
       .prepare('INSERT INTO plays (user_id, game, metrics, game_version, formula, score, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id')
@@ -342,6 +360,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     for (const [game, sc] of Object.entries(SCORERS)) {
       const { results } = await db.prepare('SELECT user_id FROM title_scores WHERE game = ?1 AND formula <> ?2 LIMIT ?3').bind(game, sc.version, limit).all();
       for (const { user_id } of results) {
+        if (sc.combine) {
+          await rebuildCombined(user_id, game, sc);
+          done++;
+          continue;
+        }
         const plays = await db.prepare('SELECT id, metrics FROM plays WHERE user_id = ?1 AND game = ?2').bind(user_id, game).all();
         let best = null;
         const stmts = [];
@@ -365,6 +388,32 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       }
     }
     return done;
+  }
+
+  // 成績を束ねるタイトル（combine）：保存してある生の成績をぜんぶ束ね、1 つの成績として保存し直して自己ベストにする
+  //   （計算式の版が変わったとき・仮アカウントをまとめたとき。v1 の 1 レベルずつの成績からも計算し直せる）
+  async function rebuildCombined(userId, game, sc) {
+    const plays = await db.prepare('SELECT metrics FROM plays WHERE user_id = ?1 AND game = ?2').bind(userId, game).all();
+    if (!plays.results.length) return;
+    const metrics = sc.combine(plays.results.map((p) => JSON.parse(p.metrics)));
+    const r = sc.score(metrics);
+    if (!r) return;
+    const at = now();
+    const play = await db
+      .prepare('INSERT INTO plays (user_id, game, metrics, game_version, formula, score, created_at) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6) RETURNING id')
+      .bind(userId, game, JSON.stringify(metrics), sc.version, r.score, at)
+      .first();
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO title_scores (user_id, game, score, milestone, performance, formula, play_id, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+           ON CONFLICT (user_id, game) DO UPDATE SET score = excluded.score, milestone = excluded.milestone, performance = excluded.performance,
+             formula = excluded.formula, play_id = excluded.play_id`,
+        )
+        .bind(userId, game, r.score, r.milestone, r.performance, sc.version, play.id, at),
+      // 束ねたので、もとの成績は要らない
+      db.prepare('DELETE FROM plays WHERE user_id = ?1 AND game = ?2 AND id <> ?3').bind(userId, game, play.id),
+    ]);
   }
 
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
