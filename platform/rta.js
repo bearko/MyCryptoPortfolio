@@ -57,6 +57,31 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 585e3 },
     ],
   },
+  // Survivor v1.2（Survivor SPEC-062〜066。SPEC-001 6.16）：撃ってくる敵・雷鼓（ボスにも最大 HP の 20%）・ステージの仕掛け・
+  // トロイの大群・レベルアップの速さが入り、遊びの中身が変わったので、記録を分ける（作者の決定 2026-10-17）。
+  // ボスはゲーム内の 4 分、宝箱は 1 ステージ 4 つのまま。木馬を壊したときの中身に懐中時計は出ないので、最短時間は v2 と同じ
+  {
+    id: 'survivor-normal-v3',
+    game: 'survivor',
+    name: 'Survivor 全 3 ステージ（v1.2）',
+    rule: 'NORMAL（難易度の調整なし）・ヒーロー自由。ゲーム v1.2 から（撃ってくる敵・雷鼓・ステージの仕掛け・トロイの大群）。宝箱から懐中時計（10 秒間 2 倍速）が出る。ステージ 1 の開始から、全 3 ステージクリアまで',
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: 'ステージ 1 クリア', minMs: 195e3 },
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2 クリア', minMs: 390e3 },
+      { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 585e3 },
+    ],
+  },
+  {
+    id: 'survivor-absolute-2x-v3',
+    game: 'survivor',
+    name: 'Survivor 全 3 ステージ（ABSOLUTE ×2.0・v1.2）',
+    rule: 'ABSOLUTE の 4 軸（出現数・HP・攻撃力・速さ）をすべて ×2.0 に固定・ヒーロー自由。ゲーム v1.2 から（撃ってくる敵・雷鼓・ステージの仕掛け・トロイの大群）。宝箱から懐中時計（10 秒間 2 倍速）が出る。ステージ 1 の開始から、全 3 ステージクリアまで',
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: 'ステージ 1 クリア', minMs: 195e3 },
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2 クリア', minMs: 390e3 },
+      { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 585e3 },
+    ],
+  },
   {
     id: 'workshop-golden',
     game: 'workshop',
@@ -157,7 +182,7 @@ export const CROSS_REGULATIONS = [
     rule: 'Survivor・Tactics・Workshop・Factory・Fortress・DeckBattle の RTA を、好きな順に、最初の区切りまで走る。各タイトルのルールはそのタイトルの RTA と同じ。公式タイムは 6 区間のタイムの合計（タイトルを移る時間は数えない）。挑戦を始めてから 24 時間以内に、6 区間とも終える',
     windowMs: CROSS_WINDOW_MS,
     segments: [
-      { game: 'survivor', regulations: ['survivor-normal', 'survivor-normal-v2'], checkpoint: 'stage1', label: 'Survivor ステージ 1 クリア' },
+      { game: 'survivor', regulations: ['survivor-normal', 'survivor-normal-v2', 'survivor-normal-v3'], checkpoint: 'stage1', label: 'Survivor ステージ 1 クリア' },
       { game: 'tactics', regulations: ['tactics-ch1', 'tactics-all5'], checkpoint: 'ch1', label: 'Tactics 第 1 章クリア' },
       { game: 'workshop', regulations: ['workshop-golden'], checkpoint: 'epic', label: 'Workshop Epic 解放' },
       { game: 'factory', regulations: ['factory-lv5'], checkpoint: 'lv2', label: 'Factory 工房 Lv.2' },
