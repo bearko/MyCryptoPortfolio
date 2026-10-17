@@ -12,7 +12,7 @@ test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリ
     ['survivor', { stagesCleared: 1, cleared: false }, { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1 }],
     ['fortress', { levelId: 'L1', won: true, hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 }, { levelId: 'L9', won: true, hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 }],
     ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: 180, avgBattleSec: 30 }])) }],
-    ['education', { cards: 47 }, { cards: 469 }],
+    ['education', { cards: 47, cells: 12, heroes: 1, titles: 1, cleared: false }, { cards: 469, cells: 40, heroes: 6, titles: 4, cleared: true }],
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
     ['10buy', { years: 10, netWorth: -100000, difficulty: 'normal' }, { years: 10, netWorth: 5e7, difficulty: 'normal' }],
     ['factory', { factoryLevel: 2 }, { factoryLevel: 5, weeksToLv5: 156, questsCleared: 50, crafted: { uncommon: 100 } }],
@@ -40,6 +40,20 @@ test('節目の点は決まった点', () => {
   assert.equal(s('factory', { factoryLevel: 5 }), 5000);
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
   assert.equal(s('10buy', { years: 4, netWorth: 1e9 }), 400, '10 年に届かなければ年数 × 100 だけ');
+});
+
+test('Education：クリアは 5,000、称号・英雄・マス・カードは加点（v2）', () => {
+  const e = (m) => s('education', m);
+  const base = { cards: 300, cells: 30, heroes: 5, titles: 3 };
+  assert.equal(e({ ...base, cleared: true }) - e({ ...base, cleared: false }), 5000);
+  assert.ok(e({ ...base, titles: 4 }) > e(base), '称号');
+  assert.ok(e({ ...base, heroes: 6 }) > e(base), '英雄');
+  assert.ok(e({ ...base, cells: 31 }) > e(base), 'マス');
+  assert.ok(e({ ...base, cards: 301 }) > e(base), 'カード');
+  assert.equal(e({ cards: 100 }), 600, 'v1 のころの成績（cards だけ）も受け付ける');
+  assert.equal(e({ cards: 10, cleared: true, heroes: 0 }), null, 'クリアならクレオパトラを解放している');
+  assert.equal(e({ cards: 10, cleared: 'yes' }), null);
+  assert.equal(e({ cards: 10, titles: -1 }), null);
 });
 
 test('Fortress：体力が残るほど・ヒーローが少ないほど高い', () => {
@@ -154,7 +168,7 @@ test('API：積み上げのタイトルは生の成績をふやさない。計�
   sqlite.prepare("UPDATE title_scores SET formula = 'v0', score = 1").run();
   const r = await api.cleanup();
   assert.equal(r.recomputed, 1);
-  assert.equal(sqlite.prepare("SELECT score FROM title_scores WHERE game = 'education'").get().score, Math.round(30 * 10000 / 469));
+  assert.equal(sqlite.prepare("SELECT score FROM title_scores WHERE game = 'education'").get().score, SCORERS.education.score({ cards: 30 }).score);
 });
 
 test('API：退会で点も消える', async () => {

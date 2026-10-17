@@ -3,7 +3,7 @@
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
 - 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）
-- 最終更新：2026-10-16
+- 最終更新：2026-10-17
 
 ## 1. いまの状態
 
@@ -17,7 +17,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
 | 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 未対応 | 未対応 | 対応 | `docs/17_platform_score.md` |
-| Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
+| Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 未対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
 | TCG | bearko/MyCryptoTCG（`main`） | tcg.bearko.games | 未対応 | 未対応 | 保留 | — |
 
 本番のブランチにマージすると、Cloudflare の Workers Builds が自動で本番に公開する（どのリポジトリも同じ）。
