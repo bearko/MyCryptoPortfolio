@@ -14,10 +14,10 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0） | 対応（v2） | SPEC-039・040・041・048 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 対応 | 対応（v2） | `docs/platform.md` |
-| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
+| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・`docs/ROADMAP.md` 8.4 |
 | 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 対応 | 未対応 | 対応（継承・師匠は記録だけ） | `docs/17_platform_score.md` |
-| Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 未対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
+| Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
 | TCG | bearko/MyCryptoTCG（`main`） | tcg.bearko.games | 未対応 | 未対応 | 保留 | — |
 
 本番のブランチにマージすると、Cloudflare の Workers Builds が自動で本番に公開する（どのリポジトリも同じ）。

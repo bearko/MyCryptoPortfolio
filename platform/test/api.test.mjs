@@ -205,6 +205,10 @@ test('トロフィー：そのゲームのサブドメインからしか受け�
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'workshop.clear' }, { origin: 'https://workshop.bearko.games' })).status, 200);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' })).status, 403, 'tactics から 10 buy year のトロフィーは送れない');
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' }, { origin: 'https://10-buy-year.bearko.games' })).status, 200);
+  for (const [id, host] of [['factory.clear', 'factory.bearko.games'], ['education.clear', 'education.bearko.games']]) {
+    assert.equal((await b.call('POST', '/api/trophies/unlock', { id })).status, 403, `tactics から ${id} は送れない`);
+    assert.equal((await b.call('POST', '/api/trophies/unlock', { id }, { origin: `https://${host}` })).status, 200);
+  }
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'cross.two' })).status, 400);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'nope' })).status, 400);
 });
@@ -219,6 +223,10 @@ test('横断トロフィー：2 タイトルで「シリーズの入り口」、
   assert.deepEqual(crossTrophiesFor(clears.slice(0, -1)).includes('cross.allclear'), false);
   assert.deepEqual(crossTrophiesFor(clears).sort(), ['cross.allclear', 'cross.four', 'cross.two']);
   assert.deepEqual(crossTrophiesFor([...clears, 'cross.two', 'cross.four', 'cross.allclear']), [], '持っているものは返さない');
+  for (const g of ['factory', 'education']) {
+    assert.ok(clears.includes(`${g}.clear`), `${g} のクリアも全制覇に要る`);
+    assert.equal(crossTrophiesFor(clears.filter((id) => id !== `${g}.clear`)).includes('cross.allclear'), false);
+  }
 });
 
 test('トロフィーの定義：ID が重ならず、タイトルが登録済み', async () => {
