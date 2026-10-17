@@ -30,6 +30,18 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '黄金のエクステンション', minMs: 50 * 60e3 },
     ],
   },
+  {
+    id: 'factory-lv5',
+    game: 'factory',
+    name: 'Factory 工房 Lv.5',
+    rule: 'はじめから（セーブなし）。2018 年 12 月 1 週の開始から、期限（8 年）内に工房 Lv.5 まで。速さは 2 倍速まで。再読み込みすると計測は消える',
+    checkpoints: [
+      { id: 'lv2', kind: 'milestone', label: '工房 Lv.2', minMs: 4e3 },
+      { id: 'lv3', kind: 'milestone', label: '工房 Lv.3', minMs: 6e3 },
+      { id: 'lv4', kind: 'milestone', label: '工房 Lv.4', minMs: 10e3 },
+      { id: 'clear', kind: 'clear', label: '工房 Lv.5（クリア）', minMs: 15e3 },
+    ],
+  },
 ];
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));
