@@ -42,12 +42,17 @@ await page.addInitScript(({ seed, bot }) => {
       // Survivor v1.2（SPEC-062〜064）：撃ってくる敵の弾・珠の列・パンチの印も避ける。木馬は止まっているので避けない
       const g12 = b.gimmick || { rows: [], punches: [] };
       const hazards = [];
-      for (const row of g12.rows || []) hazards.push({ x: p.x, y: row.y, r: 30, row: true });
+      for (const row of g12.rows || []) {
+        // Survivor SPEC-075：珠の列は横・縦・斜め。列のいちばん近い点から、列に直角な向きへ離れる（横の列は前と同じ）
+        const ux = row.ux ?? 1, uy = row.uy ?? 0, x0 = row.x0, y0 = row.y0 ?? row.y;
+        const sx = (p.x - x0) * ux + (p.y - y0) * uy;
+        hazards.push({ x: x0 + ux * sx, y: y0 + uy * sx, r: 30, row: true, nx: -uy, ny: ux });
+      }
       for (const pu of g12.punches || []) if (!pu.done) for (const h of pu.holes) hazards.push({ x: h.x, y: h.y, r: 40 });
       for (const hz of hazards) {
         const dx = p.x - hz.x, dy = p.y - hz.y, d = Math.hypot(dx, dy) || 1;
         const lim = hz.r + 40;
-        if (d < lim) { const w = ((lim - d) / lim) * 6; fx += (hz.row ? 0 : dx / d) * w; fy += (hz.row ? Math.sign(dy || 1) : dy / d) * w; }
+        if (d < lim) { const w = ((lim - d) / lim) * 6; if (hz.row) { const side = Math.sign(dx * hz.nx + dy * hz.ny) || 1; fx += hz.nx * side * w; fy += hz.ny * side * w; } else { fx += dx / d * w; fy += dy / d * w; } }
       }
       for (const e of [...b.enemies.filter((q) => !q.isProp && q.behavior !== 'trojan'), ...(b.bossProjectiles || []), ...(b.enemyShots || [])]) {
         const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
@@ -90,7 +95,11 @@ await page.addInitScript(({ seed, bot }) => {
 
 await page.clock.install({ time: new Date('2026-10-17T00:00:00Z') });
 await page.goto(`${BASE}/index.html`);
-for (let i = 0; i < 100 && !(await page.isVisible('#btnPressStart')); i++) await page.clock.runFor(200);
+for (let i = 0; i < 100 && !(await page.isVisible('#btnPressStart')); i++) {
+  await page.clock.runFor(200);
+  // Survivor SPEC-069：音を止められる環境では、読み込みのあとに「タップしてはじめる」が出る
+  if (await page.isVisible('#splashTap')) await page.evaluate(() => document.getElementById('splash').click());
+}
 await page.evaluate(() => document.getElementById('btnPressStart').click());
 await page.clock.runFor(900);   // 画面の切り替えのワイプ（640ms）を待つ
 await page.evaluate(() => document.getElementById('btnModeNormal').click());
