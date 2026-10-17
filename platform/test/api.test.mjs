@@ -422,3 +422,26 @@ test('RTA：レギュレーションの定義', async () => {
   for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
   assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });
+
+test('RTA：Tactics のレギュレーション（IGT はターン数）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const ch1 = res.body.regulations.find((r) => r.id === 'tactics-ch1');
+  const all5 = res.body.regulations.find((r) => r.id === 'tactics-all5');
+  assert.deepEqual([ch1.game, ch1.igt, ch1.checkpoints.map((c) => c.id)], ['tactics', 'turns', ['ch1']]);
+  assert.deepEqual([all5.igt, all5.checkpoints.map((c) => c.id)], ['turns', ['ch1', 'ch2', 'ch3', 'ch4', 'clear']]);
+  assert.equal(res.body.regulations.find((r) => r.id === 'survivor-normal').igt, 'ms');
+  const def = REGULATION_BY_ID['tactics-all5'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
+  assert.equal(REGULATION_BY_ID['tactics-ch1'].checkpoints[0].kind, 'clear');
+
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  const opt = { origin: 'https://tactics.bearko.games' };
+  assert.equal((await b.call('POST', '/api/rta/start', { regulation: 'tactics-ch1' })).status, 403, 'survivor からは始められない');
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'tactics-ch1' }, opt)).body.runId;
+  tick(3 * MIN);
+  const end = await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'ch1', igtMs: 42, idleMs: 1000 }, opt);
+  assert.equal(end.body.finished, true);
+  assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 42, 'ターン数をそのまま残す');
+});

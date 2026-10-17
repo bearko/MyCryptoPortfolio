@@ -65,7 +65,7 @@
 |---|---|---|
 | Survivor | **完了（v1.0.0、2026-10-16）**。親 Issue MyCryptoSurvivor#51 | #59〜#65（SPEC-042〜047） |
 | Tactics | **完了（v1.3.0、2026-10-16）**。親 Issue mycryptotactics#127。憲章の改定（localStorage `mct.*`・ja/en・見出しと数字の Web フォント・軽い演出）と MIT LICENSE は作者の決定 | #136〜#149（SPEC-010〜014） |
-| Workshop | 未着手 | — |
+| Workshop | **完了（v1.0.0、2026-10-17）**。親 Issue MyCryptoWorkshop#4。LICENSE は MIT（MCH の素材とドット絵は対象外）・古いデプロイ設定（vercel.json・GitHub Pages）を消して CI に・トロフィーと RTA を v1.0 に含める、は作者の決定。日本語のシステムフォントは基準の例外として残した（漢字の字形） | #5〜#11、MyCryptoPortfolio#17 |
 | Education | 未着手（#1 は決定済み） | — |
 | Factory | 未着手（#94 は決定済み） | — |
 | Fortress | 未着手 | — |
@@ -78,3 +78,4 @@
 | 2026-10-16 | Survivor を v1.0.0 に（遊び方・UI の土台・設定・戦闘の手ごたえ・結果の見せ方・公開版）。次は Tactics |
 | 2026-10-16 | Tactics を v1.3.0 に（憲章の改定・LICENSE・テストと CI・UI の土台・設定・演出・はじめての案内・公開版）。次は Workshop |
 | 2026-10-16 | Education #1（クレオパトラに勝つとクリア、称号などは加点）と Factory #94（8 年・Lv.5 でクリア・セーブあり）の決定を記録 |
+| 2026-10-17 | Workshop を v1.0.0 に（ドキュメントの数字・デプロイ設定と CI・LICENSE・UI の土台・トロフィー 4 つと RTA・版）。次は Education |
