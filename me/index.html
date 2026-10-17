@@ -147,6 +147,11 @@
       var regs = {};
       (x[0].regulations || []).forEach(function (r) { regs[r.id] = r; });
       var runs = x[1].ok ? x[1].runs : [];
+      // 横断 RTA（SPEC-001 6.14）も同じ並びに。区間は「区間名 タイム」で出す
+      (x[1].ok && x[1].cross || []).forEach(function (c) {
+        runs.push({ regulation: c.regulation, timeMs: c.timeMs, reference: c.reference, at: c.at, splits: c.segments.map(function (sg) { return { checkpoint: sg.label, elapsedMs: sg.ms }; }) });
+      });
+      runs.sort(function (a, b) { return b.at - a.at; });
       var best = {};
       runs.forEach(function (r) { if (!r.reference && (!best[r.regulation] || r.timeMs < best[r.regulation].timeMs)) best[r.regulation] = r; });
       var ul = $('run-list');

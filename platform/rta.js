@@ -119,16 +119,72 @@ export const REGULATIONS = [
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));
 
-// 公開用（GET /api/rta/regulations）
+// タイトルをまたぐ RTA（6.2・6.3・6.14）。各区間は、上のレギュレーションの区切り 1 つ。
+// 公式タイムは各区間のタイム（その計測の開始から、その区切りまで）の合計。区間と区間のあいだの時間は数えない
+//   windowMs：挑戦を始めてから、全区間を終えるまでの期限。各区間は、挑戦を始めたあとに始めて、期限までに終えた最初の記録を使う
+//   segments[].regulations：その区間に数えるレギュレーション（同じ条件で同じ区切りを通るもの）
+export const CROSS_WINDOW_MS = 24 * 3600e3;
+
+export const CROSS_REGULATIONS = [
+  {
+    id: 'cross-first6',
+    name: '6 タイトル 最初の区切り',
+    rule: 'Survivor・Tactics・Workshop・Factory・Fortress・DeckBattle の RTA を、好きな順に、最初の区切りまで走る。各タイトルのルールはそのタイトルの RTA と同じ。公式タイムは 6 区間のタイムの合計（タイトルを移る時間は数えない）。挑戦を始めてから 24 時間以内に、6 区間とも終える',
+    windowMs: CROSS_WINDOW_MS,
+    segments: [
+      { game: 'survivor', regulations: ['survivor-normal'], checkpoint: 'stage1', label: 'Survivor ステージ 1 クリア' },
+      { game: 'tactics', regulations: ['tactics-ch1', 'tactics-all5'], checkpoint: 'ch1', label: 'Tactics 第 1 章クリア' },
+      { game: 'workshop', regulations: ['workshop-golden'], checkpoint: 'epic', label: 'Workshop Epic 解放' },
+      { game: 'factory', regulations: ['factory-lv5'], checkpoint: 'lv2', label: 'Factory 工房 Lv.2' },
+      { game: 'fortress', regulations: ['fortress-all'], checkpoint: 'L1', label: 'Fortress レベル 01 クリア' },
+      { game: 'deckbattle', regulations: ['deckbattle-node1'], checkpoint: 'stage1', label: 'DeckBattle 1-1 クリア' },
+    ],
+  },
+];
+
+export const CROSS_BY_ID = Object.fromEntries(CROSS_REGULATIONS.map((r) => [r.id, r]));
+
+/** その計測の区切りが、横断 RTA のどの区間にあたるか（純関数）。あたらなければ -1 */
+export function crossSegmentOf(cross, regulation, checkpointId) {
+  return cross.segments.findIndex((sg) => sg.checkpoint === checkpointId && sg.regulations.includes(regulation));
+}
+
+/**
+ * 区切りを受け取ったとき、横断 RTA の挑戦に区間として数えるか（純関数）。
+ *   attempt：{ started_at, window_ms }、run：{ started_at }、filled：もう埋まっている区間の番号、at：受信時刻
+ * 返り値：区間の番号か -1
+ */
+export function judgeCrossSegment(cross, attempt, run, regulation, checkpointId, at, filled) {
+  if (at > attempt.started_at + cross.windowMs) return -1; // 期限切れ
+  if (run.started_at < attempt.started_at) return -1; // 挑戦を始める前に始めた計測は数えない
+  const seg = crossSegmentOf(cross, regulation, checkpointId);
+  if (seg < 0 || filled.includes(seg)) return -1; // 埋まっている区間は最初の記録のまま
+  return seg;
+}
+
+// 公開用（GET /api/rta/regulations）。横断 RTA は kind: 'cross'（game は 'cross'、区間を segments に）
 export function publicRegulations() {
-  return REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, igt, checkpoints }) => ({
-    id,
-    game,
-    name,
-    rule,
-    igt: igt || 'ms',
-    checkpoints: checkpoints.map(({ id: cid, kind, label }) => ({ id: cid, kind, label })),
-  }));
+  return [
+    ...REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, igt, checkpoints }) => ({
+      id,
+      game,
+      name,
+      rule,
+      igt: igt || 'ms',
+      checkpoints: checkpoints.map(({ id: cid, kind, label }) => ({ id: cid, kind, label })),
+    })),
+    ...CROSS_REGULATIONS.filter((r) => !r.deprecated).map(({ id, name, rule, windowMs, segments }) => ({
+      id,
+      game: 'cross',
+      kind: 'cross',
+      name,
+      rule,
+      igt: null,
+      windowMs,
+      checkpoints: [],
+      segments: segments.map(({ game, regulations, checkpoint, label }) => ({ game, regulation: regulations[0], regulations, checkpoint, label })),
+    })),
+  ];
 }
 
 /**

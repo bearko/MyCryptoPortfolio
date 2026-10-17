@@ -15,7 +15,10 @@
 //   POST   /api/rta/checkpoint { runId, checkpoint, igtMs, idleMs } → { splitMs, finished, timeMs, reference, best, rank }
 //   POST   /api/rta/ping       { runId, idleMs } 「操作あり」
 //   POST   /api/rta/abort      { runId } 中断
-//   GET    /api/rta/ranking?regulation=  ランキング（ログインした人の、参考記録でない自己ベスト）
+//   GET    /api/rta/ranking?regulation=  ランキング（ログインした人の、参考記録でない自己ベスト。横断 RTA も）
+//   POST   /api/rta/cross/start { regulation } 横断 RTA の挑戦を始める（ポータルから。6.14）→ { attempt }
+//   POST   /api/rta/cross/abort  挑戦をやめる
+//   GET    /api/rta/cross/current 挑戦中のもの（区間ごとの記録）
 //   GET    /api/me/rta         自分の記録（参考記録も含む）
 //   GET    /api/score/games    総合スコアの対象タイトル（SPEC-002）
 //   POST   /api/score/submit   { game, metrics, version } 成績を送る → { score, best, improved, total }
@@ -29,7 +32,7 @@
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from './trophies.js';
-import { REGULATION_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, RANKING_LIMIT } from './rta.js';
+import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
 
@@ -39,7 +42,7 @@ const DAY = 86400e3;
 const NAME_MAX = 16;
 
 // 段階 2 以降で増える「user_id を持つ表」。仮アカウントの記録を移す・退会で消すときに使う
-export const USER_TABLES = ['user_trophies', 'rta_runs', 'plays', 'title_scores'];
+export const USER_TABLES = ['user_trophies', 'rta_runs', 'plays', 'title_scores', 'rta_cross'];
 const PLAY_TTL = 90 * DAY; // 自己ベストのもとになっていない生の成績は 90 日で消す（SPEC-001 11 章）
 const METRICS_MAX = 4096; // 成績の JSON の大きさの上限（バイト）
 const SCORE_GAMES = Object.keys(SCORERS).map((g) => `'${g}'`).join(', '); // SQL に埋める（定数だけ）
@@ -167,8 +170,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   // 締め出し（bans）の行は消さない。退会してログインし直すだけで抜けられないように（SPEC-003 5 章）
   async function deleteUser(userId) {
-    // 区切りの記録は計測にぶら下がるので、計測より先に消す
-    const stmts = [db.prepare('DELETE FROM rta_splits WHERE run_id IN (SELECT id FROM rta_runs WHERE user_id = ?1)').bind(userId)];
+    // 区切りの記録は計測にぶら下がるので、計測より先に消す（横断 RTA の区間も同じ）
+    const stmts = [
+      db.prepare('DELETE FROM rta_splits WHERE run_id IN (SELECT id FROM rta_runs WHERE user_id = ?1)').bind(userId),
+      db.prepare('DELETE FROM rta_cross_segments WHERE cross_id IN (SELECT id FROM rta_cross WHERE user_id = ?1)').bind(userId),
+    ];
     stmts.push(...USER_TABLES.map((t) => db.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(userId)));
     stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(userId));
     stmts.push(db.prepare('DELETE FROM users WHERE id = ?1').bind(userId));
@@ -274,6 +280,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     }
     await db.batch(stmts);
     const out = { account, checkpoint: body.checkpoint, splitMs: j.elapsedMs, finished: j.last, reference: j.reference };
+    const cross = await noteCross(run, body.checkpoint, at, j.elapsedMs, j.reference, account);
+    if (cross) out.cross = cross;
     if (j.last) {
       const prev = await db
         .prepare("SELECT MIN(time_ms) AS t FROM rta_runs WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0 AND id <> ?3")
@@ -284,6 +292,97 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       out.rank = account === 'login' && !j.reference ? await rankOf(run.regulation, j.elapsedMs) : null;
     }
     return reply(req, 200, out);
+  }
+
+  // ---------------------------------------------------------------- タイトルをまたぐ RTA（6.14）
+  // 挑戦はポータル（bearko.games）で始める。各タイトルの計測はいつもどおりで、区切りを受け取ったときに区間として数える
+  const fromPortal = (req) => {
+    const origin = req.headers.get('origin') || '';
+    return origin === 'https://bearko.games' || extraOrigins.includes(origin);
+  };
+  const CROSS_RANKED = `c.regulation = ?1 AND c.status = 'finished' AND c.reference = 0 AND u.google_sub IS NOT NULL AND ${NOT_BANNED('c.user_id')}`;
+
+  async function crossRankOf(regulation, timeMs) {
+    const row = await db
+      .prepare(`SELECT COUNT(*) AS n FROM (SELECT MIN(c.time_ms) AS t FROM rta_cross c JOIN users u ON u.id = c.user_id WHERE ${CROSS_RANKED} GROUP BY c.user_id) WHERE t < ?2`)
+      .bind(regulation, timeMs)
+      .first();
+    return (row?.n ?? 0) + 1;
+  }
+
+  // 挑戦中のもの。期限を過ぎていたら、ここで「期限切れ」にする
+  async function crossAttempt(userId) {
+    const a = await db.prepare("SELECT * FROM rta_cross WHERE user_id = ?1 AND status = 'running' ORDER BY started_at DESC LIMIT 1").bind(userId).first();
+    if (!a) return null;
+    const cross = CROSS_BY_ID[a.regulation];
+    if (!cross || now() > a.started_at + cross.windowMs) {
+      await db.prepare("UPDATE rta_cross SET status = 'expired' WHERE id = ?1").bind(a.id).run();
+      return null;
+    }
+    return a;
+  }
+
+  const crossSegments = async (crossId) =>
+    (await db.prepare('SELECT seg, run_id, ms, reference, at FROM rta_cross_segments WHERE cross_id = ?1 ORDER BY seg').bind(crossId).all()).results;
+
+  function crossView(a, segs) {
+    const cross = CROSS_BY_ID[a.regulation];
+    return {
+      id: a.id,
+      regulation: a.regulation,
+      status: a.status,
+      startedAt: a.started_at,
+      deadline: a.started_at + cross.windowMs,
+      timeMs: a.time_ms ?? null,
+      reference: !!a.reference,
+      segments: cross.segments.map((sg, i) => {
+        const x = segs.find((r) => r.seg === i);
+        return { label: sg.label, game: sg.game, done: !!x, ms: x ? x.ms : null, reference: x ? !!x.reference : false };
+      }),
+    };
+  }
+
+  // 区切りを受け取ったとき：挑戦中で、まだ埋まっていない区間にあたれば数える。全区間がそろったら挑戦を終える
+  async function noteCross(run, checkpointId, at, ms, reference, account) {
+    const a = await crossAttempt(run.user_id);
+    if (!a) return null;
+    const cross = CROSS_BY_ID[a.regulation];
+    const segs = await crossSegments(a.id);
+    const seg = judgeCrossSegment(cross, a, run, run.regulation, checkpointId, at, segs.map((r) => r.seg));
+    if (seg < 0) return null;
+    const all = [...segs, { seg, ms, reference: reference ? 1 : 0 }];
+    const finished = all.length === cross.segments.length;
+    const timeMs = all.reduce((t, r) => t + r.ms, 0);
+    const ref = all.some((r) => r.reference);
+    const stmts = [db.prepare('INSERT INTO rta_cross_segments (cross_id, seg, run_id, ms, reference, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)').bind(a.id, seg, run.id, ms, reference ? 1 : 0, at)];
+    if (finished) {
+      stmts.push(db.prepare("UPDATE rta_cross SET status = 'finished', reference = ?2, time_ms = ?3, finished_at = ?4 WHERE id = ?1").bind(a.id, ref ? 1 : 0, timeMs, at));
+    } else if (reference) {
+      stmts.push(db.prepare('UPDATE rta_cross SET reference = 1 WHERE id = ?1').bind(a.id));
+    }
+    let best = null;
+    if (finished && !ref) {
+      const prev = await db
+        .prepare("SELECT MIN(time_ms) AS t FROM rta_cross WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0")
+        .bind(run.user_id, a.regulation)
+        .first();
+      best = prev?.t == null || timeMs < prev.t;
+    }
+    await db.batch(stmts);
+    return {
+      regulation: a.regulation,
+      name: cross.name,
+      segment: seg,
+      label: cross.segments[seg].label,
+      segmentMs: ms,
+      filled: all.length,
+      total: cross.segments.length,
+      finished,
+      timeMs: finished ? timeMs : null,
+      reference: ref,
+      best: finished ? !!best : null,
+      rank: finished && !ref && account === 'login' ? await crossRankOf(a.regulation, timeMs) : null,
+    };
   }
 
   // ---------------------------------------------------------------- 総合スコア（SPEC-002）
@@ -648,6 +747,63 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       return reply(req, 200, { ok: true });
     }
 
+    if (method === 'POST' && path === '/api/rta/cross/start') {
+      const cross = CROSS_BY_ID[body.regulation];
+      if (!cross || cross.deprecated) return reply(req, 400, { error: 'regulation' });
+      if (!fromPortal(req)) return reply(req, 403, { error: 'origin' });
+      const acc = await accountFor(req);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
+      const id = randomToken().slice(0, 32);
+      const at = now();
+      await db.batch([
+        // 挑戦は 1 人 1 本。終わっていない挑戦はやめたことにする
+        db.prepare("UPDATE rta_cross SET status = 'abandoned' WHERE user_id = ?1 AND status = 'running'").bind(acc.userId),
+        db.prepare('INSERT INTO rta_cross (id, user_id, regulation, started_at) VALUES (?1, ?2, ?3, ?4)').bind(id, acc.userId, cross.id, at),
+      ]);
+      const a = await db.prepare('SELECT * FROM rta_cross WHERE id = ?1').bind(id).first();
+      return reply(req, 200, { account: acc.kind, attempt: crossView(a, []) }, acc.cookies);
+    }
+
+    if (method === 'POST' && path === '/api/rta/cross/abort') {
+      if (!fromPortal(req)) return reply(req, 403, { error: 'origin' });
+      const s = (await login(req)) || (await guest(req));
+      if (!s) return reply(req, 401, { error: 'account' });
+      await db.prepare("UPDATE rta_cross SET status = 'abandoned' WHERE user_id = ?1 AND status = 'running'").bind(s.userId).run();
+      return reply(req, 200, { ok: true });
+    }
+
+    if (method === 'GET' && path === '/api/rta/cross/current') {
+      const s = (await login(req)) || (await guest(req));
+      if (!s) return reply(req, 200, { account: null, attempt: null });
+      const a = await crossAttempt(s.userId);
+      return reply(req, 200, { account: s.sub ? 'login' : 'guest', attempt: a ? crossView(a, await crossSegments(a.id)) : null });
+    }
+
+    if (method === 'GET' && path === '/api/rta/ranking' && CROSS_BY_ID[url.searchParams.get('regulation')]) {
+      const cross = CROSS_BY_ID[url.searchParams.get('regulation')];
+      const { results } = await db
+        .prepare(`SELECT c.user_id, u.name, MIN(c.time_ms) AS time_ms, c.finished_at FROM rta_cross c JOIN users u ON u.id = c.user_id WHERE ${CROSS_RANKED} GROUP BY c.user_id ORDER BY time_ms, c.finished_at LIMIT ?2`)
+        .bind(cross.id, RANKING_LIMIT)
+        .all();
+      const s = await login(req);
+      let rank = 0;
+      let prev = null;
+      const entries = results.map((r, i) => {
+        if (r.time_ms !== prev) rank = i + 1;
+        prev = r.time_ms;
+        return { rank, name: r.name ?? null, timeMs: r.time_ms, igtMs: null, at: r.finished_at, me: !!s && s.userId === r.user_id };
+      });
+      let me = null;
+      if (s) {
+        const best = await db
+          .prepare("SELECT MIN(time_ms) AS t FROM rta_cross WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0")
+          .bind(s.userId, cross.id)
+          .first();
+        if (best?.t != null) me = { rank: await crossRankOf(cross.id, best.t), timeMs: best.t };
+      }
+      return reply(req, 200, { regulation: cross.id, entries, me });
+    }
+
     if (method === 'GET' && path === '/api/rta/ranking') {
       const reg = REGULATION_BY_ID[url.searchParams.get('regulation')];
       if (!reg) return reply(req, 400, { error: 'regulation' });
@@ -685,9 +841,16 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const splits = await db.prepare(`SELECT run_id, ord, checkpoint, elapsed_ms, igt_ms FROM rta_splits WHERE run_id IN (${recent}) ORDER BY run_id, ord`).bind(s.userId).all();
       const byRun = {};
       for (const x of splits.results) (byRun[x.run_id] ||= []).push({ checkpoint: x.checkpoint, elapsedMs: x.elapsed_ms, igtMs: x.igt_ms ?? null });
+      const crosses = await db
+        .prepare("SELECT * FROM rta_cross WHERE user_id = ?1 AND status = 'finished' ORDER BY finished_at DESC LIMIT 20")
+        .bind(s.userId)
+        .all();
+      const cross = [];
+      for (const a of crosses.results) if (CROSS_BY_ID[a.regulation]) cross.push({ ...crossView(a, await crossSegments(a.id)), at: a.finished_at });
       return reply(req, 200, {
         account: s.sub ? 'login' : 'guest',
         runs: runs.results.map((r) => ({ id: r.id, regulation: r.regulation, timeMs: r.time_ms, igtMs: r.igt_ms ?? null, reference: !!r.reference, at: r.finished_at, splits: byRun[r.id] || [] })),
+        cross,
       });
     }
 
@@ -707,6 +870,12 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     await db.batch([
       db.prepare(`DELETE FROM rta_splits WHERE run_id IN (${stale})`).bind(now() - RTA_STALE),
       db.prepare(`DELETE FROM rta_runs WHERE id IN (${stale})`).bind(now() - RTA_STALE),
+    ]);
+    // 横断 RTA：やめた・期限切れの挑戦と、2 日たっても終わっていない挑戦（区間の記録ごと）
+    const staleCross = "SELECT id FROM rta_cross WHERE status IN ('abandoned', 'expired') OR (status = 'running' AND started_at < ?1)";
+    await db.batch([
+      db.prepare(`DELETE FROM rta_cross_segments WHERE cross_id IN (${staleCross})`).bind(now() - RTA_STALE),
+      db.prepare(`DELETE FROM rta_cross WHERE id IN (${staleCross})`).bind(now() - RTA_STALE),
     ]);
     // 自己ベストのもとになっていない、90 日より古い生の成績
     await db.prepare('DELETE FROM plays WHERE created_at < ?1 AND id NOT IN (SELECT play_id FROM title_scores)').bind(now() - PLAY_TTL).run();
