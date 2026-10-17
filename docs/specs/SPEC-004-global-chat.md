@@ -122,6 +122,23 @@ BearkoGames.chat.onMessage((m) => { ... });   // 自前の表示をしたいゲ�
 - 「右上」「右下」は `init({ chat: { position } })` で決める。各ゲームの通知・RTA の時計・マインちゃんの帯と重ならない位置を選んだ
 - 隠す／出すは、ゲームが画面を切り替える関数（Survivor なら `startBattle` / `returnToTitle`）から `setVisible` を呼ぶ
 
+### 6.1 実装の記録（2026-10-17）
+
+| タイトル | PR | 置いたもの |
+|---|---|---|
+| Survivor | bearko/MyCryptoSurvivor #121（SPEC-091） | 右上。タイトル・結果で出し、読み込み中と戦闘中は隠す |
+| Tactics | なし | SDK の既定（右下）のまま。タイトル・マップ・戦闘のどのボタンとも重ならない（390px で確認）ので、コードは触っていない |
+| Workshop | bearko/MyCryptoWorkshop #16 | 右下・上に 96px。既定のままだと工房の「Skill tree」のボタンに重なっていた |
+| Factory | bearko/mycryptofactory #122（SPEC-012） | 右下。`chat.onToggle` で開いているあいだ `pauseTime`。pause の見張りが窓を「開いている画面」として数える |
+| Fortress | bearko/mycryptofortress #60（SPEC-128） | 右下。Title・Home・LevelSelect・Tree で出し、Run（戦闘）で隠す |
+| DeckBattle | bearko/mycryptodeckbattle #16 | 右下。対戦（battle）と会話劇（scene）で隠す |
+| 10 buy year! | bearko/10buy-year #14 | `button: false`。横のボタンの列に「チャット」（SDK が読めたら現れる）。モーダルとスキルツリーの最中は隠す（重なって開くので数える） |
+| Education | bearko/MyCryptoEducation #12 | 右下。出題（quiz / wave / challenge）と最初の学年選び（grade）で隠す。ホーム以外の画面でも出す |
+| Advance | なし | **共通基盤の SDK がまだ入っていない**（`init` を呼んでいない）ので、チャットも出ない。SDK を入れるときに合わせて置く |
+| ポータル | bearko/MyCryptoPortfolio #49 / #50 | 下の帯と右下の 💬。`/me/` に自分の発言、管理画面に「チャット」 |
+
+本番で確かめる手順：ログインして名前を決め、どれかのゲームで 💬 を開いて 1 件送り、ポータルの帯から同じ発言が見えること。
+
 ## 7. 不正と荒らしへの備え
 
 - Origin の確認（bearko.games の配下だけ）・cookie による本人確認（SPEC-001 4）・締め出し（SPEC-003 A2）はそのまま効く
@@ -154,6 +171,7 @@ BearkoGames.chat.onMessage((m) => { ... });   // 自前の表示をしたいゲ�
 
 ## 10. 改定履歴
 
+| 2026-10-17 | 1.2 | 6.1 実装の記録（タイトルごとの PR と置き場所。Tactics はコードを触らず、Advance は SDK 未導入） |
 | 2026-10-17 | 1.1 | SDK 1.6.1：`chat.onToggle(fn)`（開いた・閉じたを知らせる。Factory の時間停止）と `init({ chat: { button: false } })`（💬 を出さず、ゲームのボタンから `open()`。10 buy year!）。6 章の表を実装に合わせた |
 | 2026-10-17 | 1.0 | 実装（`platform/chat.js` の ChatRoom・`/api/chat/*`・SDK 1.6.0 の `BearkoGames.chat`・ポータルの帯・`/me/` の自分の発言・管理画面の「チャット」）。ゲームごとの `setVisible`（6 章）は各リポジトリの PR |
 
