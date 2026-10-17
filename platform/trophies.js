@@ -49,6 +49,12 @@ export const TROPHIES = [
   { id: 'workshop.clear', game: 'workshop', name: '黄金の工房', nameFrom: 'ルーベンスのパッシブスキル', description: '黄金のエクステンションを作る', clear: true },
   { id: 'workshop.relocate', game: 'workshop', name: '西廻り航路の夢', nameFrom: 'コロンブスのパッシブスキル', description: 'ランド移転して 2 周目を始める' },
 
+  { id: '10buy.debtfree', game: '10buy', name: '解放の一矢', nameFrom: 'ウィリアム・テルのパッシブスキル', description: '借金を返し終える' },
+  { id: '10buy.sold1000', game: '10buy', name: '千客万来', nameFrom: 'エクステンション「バッタ商人」のスキル', description: '累計 1,000 個売る' },
+  { id: '10buy.stage5', game: '10buy', name: '頂点の覇気', nameFrom: 'エクステンション「チャンピオンベルト」のスキル', description: 'ステージ 5 に上がる' },
+  { id: '10buy.clear', game: '10buy', name: 'うさぎとかめ', nameFrom: 'イソップのパッシブスキル', description: '10 年を走り切る（事業売却での引退も含む）', clear: true },
+  { id: '10buy.rank_s', game: '10buy', name: '功名立志伝', nameFrom: '豊臣秀吉のパッシブスキル', description: 'S ランク（純資産 5,000 万円以上）で 10 年を終える' },
+
   { id: 'cross.two', game: 'cross', name: '二倍楽しむ、猫型バーガー！', nameFrom: 'エクステンション「ダブルにゃんバーガー」のスキル', description: '2 タイトルでトロフィーを獲得する', titles: 2 },
   { id: 'cross.four', game: 'cross', name: 'おくのほそ道', nameFrom: '松尾芭蕉のパッシブスキル', description: '4 タイトルでトロフィーを獲得する', titles: 4 },
   { id: 'cross.allclear', game: 'cross', name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', description: '対応しているすべてのタイトルで、クリアのトロフィーを獲得する', allClear: true },

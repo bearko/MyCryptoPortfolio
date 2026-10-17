@@ -40,6 +40,7 @@ test('節目の点は決まった点', () => {
   assert.equal(s('factory', { factoryLevel: 5 }), 5000);
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
   assert.equal(s('10buy', { years: 4, netWorth: 1e9 }), 400, '10 年に届かなければ年数 × 100 だけ');
+  assert.equal(s('10buy', { years: 10, netWorth: 5e7, legacy: 'cap_sales', mentor: true }), s('10buy', { years: 10, netWorth: 5e7 }), '継承・師匠は記録するだけで、点に効かない（SPEC-002 3.8）');
 });
 
 test('Education：クリアは 5,000、称号・英雄・マス・カードは加点（v2）', () => {

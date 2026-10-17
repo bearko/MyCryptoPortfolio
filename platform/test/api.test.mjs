@@ -203,6 +203,8 @@ test('トロフィー：そのゲームのサブドメインからしか受け�
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'fortress.level01' }, { origin: 'https://fortress.bearko.games' })).status, 200);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'workshop.clear' })).status, 403, 'tactics から workshop のトロフィーは送れない');
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'workshop.clear' }, { origin: 'https://workshop.bearko.games' })).status, 200);
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' })).status, 403, 'tactics から 10 buy year のトロフィーは送れない');
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' }, { origin: 'https://10-buy-year.bearko.games' })).status, 200);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'cross.two' })).status, 400);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'nope' })).status, 400);
 });
