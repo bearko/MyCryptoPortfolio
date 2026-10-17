@@ -14,7 +14,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応 | 対応 | SPEC-039・040・041 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
-| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
+| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・`docs/ROADMAP.md` 8.4 |
 | 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 対応 | 未対応 | 対応（継承・師匠は記録だけ） | `docs/17_platform_score.md` |
 | Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 未対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
@@ -148,4 +148,5 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 - DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - 同じ条件で競うレギュレーション（10 buy year の週替わりチャレンジ。案は SPEC-002 6.1）
-- Factory のセーブとクリアの条件（#94）、TCG の連戦（#5）、Education のゲームクリア（#1）
+- ~~Factory のセーブとクリアの条件（#94）~~（2026-10-17 済み。Factory v1.0.0）、TCG の連戦（#5）、Education のゲームクリア（#1）
+- Factory の RTA（`factory-lv5`）の最短時間を、作者の通しプレイの記録から引き上げる（いまは理屈の下限。SPEC-001 6.10）
