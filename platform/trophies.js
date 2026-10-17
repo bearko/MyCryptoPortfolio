@@ -55,6 +55,16 @@ export const TROPHIES = [
   { id: '10buy.clear', game: '10buy', name: 'うさぎとかめ', nameFrom: 'イソップのパッシブスキル', description: '10 年を走り切る（事業売却での引退も含む）', clear: true },
   { id: '10buy.rank_s', game: '10buy', name: '功名立志伝', nameFrom: '豊臣秀吉のパッシブスキル', description: 'S ランク（純資産 5,000 万円以上）で 10 年を終える' },
 
+  { id: 'factory.lv2', game: 'factory', name: 'エレキテル', nameFrom: '平賀源内のパッシブスキル', description: '工房 Lv.2 になる' },
+  { id: 'factory.legendary', game: 'factory', name: 'ダビデの覚醒', nameFrom: 'ミケランジェロのパッシブスキル', description: 'Legendary のエクステンションをクラフトする（打ち直しで Legendary にしたものも含む）' },
+  { id: 'factory.clear', game: 'factory', name: 'エジソン・エフェクト', nameFrom: 'トーマス・エジソンのパッシブスキル', description: '期限（8 年）内に工房 Lv.5 になる', clear: true },
+  { id: 'factory.clear3y', game: 'factory', name: '来た、見た、勝った', nameFrom: 'カエサルのパッシブスキル', description: '3 年（144 週）以内に工房 Lv.5 になる' },
+
+  { id: 'education.hero1', game: 'education', name: 'ヘウレーカ！ヘウレーカ！', nameFrom: 'アルキメデスのパッシブスキル', description: 'チャレンジで最初の英雄を仲間にする' },
+  { id: 'education.clear', game: 'education', name: '戦乱を呼ぶ美貌', nameFrom: 'クレオパトラのパッシブスキル', description: 'クレオパトラのチャレンジに勝つ', clear: true },
+  { id: 'education.map', game: 'education', name: '大日本沿海輿地全図', nameFrom: '伊能忠敬のパッシブスキル', description: '知識マップのマスをすべて埋める' },
+  { id: 'education.cards300', game: 'education', name: '種の起源', nameFrom: 'ダーウィンのパッシブスキル', description: '知識カードを 300 枚集める' },
+
   { id: 'cross.two', game: 'cross', name: '二倍楽しむ、猫型バーガー！', nameFrom: 'エクステンション「ダブルにゃんバーガー」のスキル', description: '2 タイトルでトロフィーを獲得する', titles: 2 },
   { id: 'cross.four', game: 'cross', name: 'おくのほそ道', nameFrom: '松尾芭蕉のパッシブスキル', description: '4 タイトルでトロフィーを獲得する', titles: 4 },
   { id: 'cross.allclear', game: 'cross', name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', description: '対応しているすべてのタイトルで、クリアのトロフィーを獲得する', allClear: true },
