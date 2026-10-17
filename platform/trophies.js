@@ -44,6 +44,11 @@ export const TROPHIES = [
   { id: 'deckbattle.area1', game: 'deckbattle', name: '開拓者の一歩', nameFrom: 'エクステンション「大西部のブーツ」のスキル', description: '最初のノード（近代・日本）を制覇する' },
   { id: 'deckbattle.clear', game: 'deckbattle', name: '十二の功業', nameFrom: 'エクステンション「キングヘラクレス」のスキル', description: '最後のノード「時空のはざま」を制覇する', clear: true },
 
+  { id: 'workshop.day30', game: 'workshop', name: '行列のできる人気店', nameFrom: 'エクステンション「定番醤油ラーメン」のスキル', description: '30 日目の営業を終える' },
+  { id: 'workshop.legendary', game: 'workshop', name: '千磨百錬', nameFrom: 'エクステンション「鍛冶バッタ」のスキル', description: '「MCH製法」を習得して Legendary をクラフトできるようにする' },
+  { id: 'workshop.clear', game: 'workshop', name: '黄金の工房', nameFrom: 'ルーベンスのパッシブスキル', description: '黄金のエクステンションを作る', clear: true },
+  { id: 'workshop.relocate', game: 'workshop', name: '西廻り航路の夢', nameFrom: 'コロンブスのパッシブスキル', description: 'ランド移転して 2 周目を始める' },
+
   { id: 'cross.two', game: 'cross', name: '二倍楽しむ、猫型バーガー！', nameFrom: 'エクステンション「ダブルにゃんバーガー」のスキル', description: '2 タイトルでトロフィーを獲得する', titles: 2 },
   { id: 'cross.four', game: 'cross', name: 'おくのほそ道', nameFrom: '松尾芭蕉のパッシブスキル', description: '4 タイトルでトロフィーを獲得する', titles: 4 },
   { id: 'cross.allclear', game: 'cross', name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', description: '対応しているすべてのタイトルで、クリアのトロフィーを獲得する', allClear: true },
