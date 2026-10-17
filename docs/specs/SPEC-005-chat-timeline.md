@@ -131,6 +131,23 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 | Education | ドック（出題以外） | シート | 1.x と同じ |
 | Advance | — | — | SDK 未導入のまま |
 
+### 6.1 実装の記録（2026-10-17）
+
+| タイトル | PR | 置いたもの |
+|---|---|---|
+| Survivor | bearko/MyCryptoSurvivor #122（SPEC-092） | 設定に「🙂 アイコン — 変える」。ドックは SDK の既定のまま（戦闘中は 1.x と同じく隠す） |
+| Tactics | bearko/mycryptotactics #158（SPEC-015） | 設定の言語の上に「🙂 アイコン — 変える」 |
+| Workshop | bearko/MyCryptoWorkshop #17 | 設定に「アイコン（bearko.games 全体で共通）— 変える」 |
+| Factory | bearko/mycryptofactory #123（SPEC-012 2.1） | ドックでは書いているあいだだけ時間を止める（`onCompose`）。設定に「アイコンを変える（bearko.games 共通）」 |
+| Fortress | bearko/mycryptofortress #61（SPEC-129） | ホームの総合ランキングのリンクの下に「アイコンを変える（bearko.games 共通）」 |
+| DeckBattle | bearko/mycryptodeckbattle #17 | タイトルのボタンの列に「アイコン」 |
+| 10 buy year! | bearko/10buy-year #15 | メニュー →「画面と音」の先頭に「アイコンを変える（bearko.games 全体で共通）」 |
+| Education | bearko/MyCryptoEducation #13 | マイページの「ユーザーアイコン」の下に「bearko.games のアイコン — アイコンを変える」（ゲーム内の英雄の顔とは別、と書く） |
+| Advance | なし | SDK 未導入のまま |
+| ポータル | bearko/MyCryptoPortfolio #54 / #55 / #56 | 部屋と API、SDK 1.7.0、上部の流れ・`/chat/`・`/me/` |
+
+どの入口も SDK が読めていない・古いときは出さない。窓の中に「bearko.games 全体のアイコンが変わります」と出る。
+
 ## 7. 費用（DAU 100）
 
 | | 1 日の呼び出し | 備考 |
@@ -177,3 +194,4 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 | 2026-10-17 | 0.1 | 下書き。作者の依頼（1 章）を 4〜7 章に展開。SDK 1.6.2 の不具合の直しを 2 章に |
 | 2026-10-17 | 1.0 | 作者の決定（9 章）：ヒーロー＋エクステンション、D1 の列、ドックは既定、新しい順といいね順。部屋と API（5.1・5.2・5.3）を実装 |
 | 2026-10-17 | 1.1 | SDK 1.7.0（5.4）：ドック・シート・YouTube 風の 1 件・並び替え・もっと読む・`mount`・アイコン選び（`assets/avatars.json` は `tools/make-avatars.mjs` で資産リポジトリから作る。図鑑に出るヒーロー 209・エクステンション 956） |
+| 2026-10-17 | 1.2 | ポータル（5.5。#56）と、タイトルごとの入口（6.1） |
