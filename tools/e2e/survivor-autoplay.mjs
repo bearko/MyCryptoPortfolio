@@ -39,14 +39,25 @@ await page.addInitScript(({ seed, bot }) => {
       let fx = -Math.sin(a) * RX / RY, fy = Math.cos(a);
       const tn = Math.hypot(fx, fy); fx /= tn; fy /= tn;
       fx += -Math.cos(a) * (rr - 1) * 2; fy += -Math.sin(a) * (rr - 1) * 2;
-      for (const e of [...b.enemies, ...(b.bossProjectiles || [])]) {
+      // Survivor v1.2（SPEC-062〜064）：撃ってくる敵の弾・珠の列・パンチの印も避ける。木馬は止まっているので避けない
+      const g12 = b.gimmick || { rows: [], punches: [] };
+      const hazards = [];
+      for (const row of g12.rows || []) hazards.push({ x: p.x, y: row.y, r: 30, row: true });
+      for (const pu of g12.punches || []) if (!pu.done) for (const h of pu.holes) hazards.push({ x: h.x, y: h.y, r: 40 });
+      for (const hz of hazards) {
+        const dx = p.x - hz.x, dy = p.y - hz.y, d = Math.hypot(dx, dy) || 1;
+        const lim = hz.r + 40;
+        if (d < lim) { const w = ((lim - d) / lim) * 6; fx += (hz.row ? 0 : dx / d) * w; fy += (hz.row ? Math.sign(dy || 1) : dy / d) * w; }
+      }
+      for (const e of [...b.enemies.filter((q) => !q.isProp && q.behavior !== 'trojan'), ...(b.bossProjectiles || []), ...(b.enemyShots || [])]) {
         const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
         const lim = (e.r || 8) + Number(window.__avoid || 34) + (e.isBoss ? 50 : 0);
         if (d < lim) { const w = ((lim - d) / lim) * 4; fx += dx / d * w; fy += dy / d * w; }
       }
       let g = null, gd = 1e9;
-      for (const m of b.gems) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
+      for (const m of [...b.gems, ...(b.items || [])]) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
       if (g && gd < 140) { fx += (g.x - p.x) / gd * 0.8; fy += (g.y - p.y) / gd * 0.8; }
+      for (const c of b.enemies) { if (c.propKind !== 'chest') continue; const d = Math.hypot(c.x - p.x, c.y - p.y) || 1; if (d < 450) { fx += (c.x - p.x) / d * 1.2; fy += (c.y - p.y) / d * 1.2; } }
       const n = Math.hypot(fx, fy) || 1; return { x: fx / n, y: fy / n };
     }
     // 近い敵から離れ（距離の 2 乗で重み）、横へも回る。安全なら一番近い宝石へ
@@ -67,7 +78,7 @@ await page.addInitScript(({ seed, bot }) => {
     fx += tx; fy += ty;
     if (near < 3) {
       let g = null, gd = 1e9;
-      for (const m of b.gems) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
+      for (const m of [...b.gems, ...(b.items || [])]) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
       if (g && gd < 400) { fx += (g.x - p.x) / gd * 1.2; fy += (g.y - p.y) / gd * 1.2; }
     }
     // 世界の中心へ戻る弱い力（端に追い詰められない）
@@ -81,10 +92,10 @@ await page.clock.install({ time: new Date('2026-10-17T00:00:00Z') });
 await page.goto(`${BASE}/index.html`);
 for (let i = 0; i < 100 && !(await page.isVisible('#btnPressStart')); i++) await page.clock.runFor(200);
 await page.evaluate(() => document.getElementById('btnPressStart').click());
-await page.clock.runFor(300);
+await page.clock.runFor(900);   // 画面の切り替えのワイプ（640ms）を待つ
 await page.evaluate(() => document.getElementById('btnModeNormal').click());
 if (Number(abs) !== 1) await page.evaluate((m) => { const s = window.__state; s.regulation = 'ABSOLUTE'; s.absolute = { spawnMul: m, hpMul: m, dmgMul: m, speedMul: m }; }, Number(abs));
-await page.clock.runFor(300);
+await page.clock.runFor(900);   // 画面の切り替えのワイプ（640ms）を待つ
 const tiles = page.locator('#heroSelectGrid .hero-tile');
 const nHero = await tiles.count();
 await page.evaluate((i) => document.querySelectorAll('#heroSelectGrid .hero-tile')[i].click(), Number(heroIdx) % nHero);

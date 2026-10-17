@@ -456,6 +456,18 @@ test('RTA：Survivor ABSOLUTE ×2.0 のレギュレーション', async () => {
   assert.equal(runs[0].timeMs, 15 * MIN);
 });
 
+test('RTA：Survivor v1.2（v3）のレギュレーション。最短時間は v2 と同じで、横断 RTA の区間にも数える', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  for (const [v3, v2] of [['survivor-normal-v3', 'survivor-normal-v2'], ['survivor-absolute-2x-v3', 'survivor-absolute-2x-v2']]) {
+    const reg = res.body.regulations.find((r) => r.id === v3);
+    assert.deepEqual([reg.game, reg.checkpoints.map((c) => c.id)], ['survivor', ['stage1', 'stage2', 'clear']]);
+    assert.ok(res.body.regulations.some((r) => r.id === v2), '古い記録のレギュレーションも残す');
+    assert.deepEqual(REGULATION_BY_ID[v3].checkpoints.map((c) => c.minMs), REGULATION_BY_ID[v2].checkpoints.map((c) => c.minMs));
+  }
+  const seg = CROSS_BY_ID['cross-first6'].segments.find((x) => x.game === 'survivor');
+  assert.ok(seg.regulations.includes('survivor-normal-v3'));
+});
+
 test('RTA：Survivor 懐中時計あり（v2）のレギュレーション', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   for (const [v2, v1] of [['survivor-normal-v2', 'survivor-normal'], ['survivor-absolute-2x-v2', 'survivor-absolute-2x']]) {
