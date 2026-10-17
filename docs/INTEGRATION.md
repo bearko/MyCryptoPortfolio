@@ -13,7 +13,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0） | 対応（v2） | SPEC-039・040・041・048 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
-| DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
+| DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 対応 | 対応（v2） | `docs/platform.md` |
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・`docs/ROADMAP.md` 8.4 |
 | 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 対応 | 未対応 | 対応（継承・師匠は記録だけ） | `docs/17_platform_score.md` |
@@ -155,7 +155,7 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 
 - 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。公開後は管理画面の分布も見る。Survivor は自動プレイで確かめた：6.3）
 - ~~管理画面（点数の分布・記録の削除・締め出し）~~（2026-10-17 済み。SPEC-003）
-- DeckBattle の RTA、タイトルをまたぐ RTA
+- タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - 同じ条件で競うレギュレーション（10 buy year の週替わりチャレンジ。案は SPEC-002 6.1）
 - ~~Factory のセーブとクリアの条件（#94）~~（2026-10-17 済み。Factory v1.0.0）、TCG の連戦（#5）、Education のゲームクリア（#1）

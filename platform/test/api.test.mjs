@@ -480,3 +480,24 @@ test('RTA：Fortress のレギュレーション（レベル 01〜09）', async 
   for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
   assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });
+
+test('RTA：DeckBattle のレギュレーション（近代・日本・10 勝でクリア）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const node1 = res.body.regulations.find((r) => r.id === 'deckbattle-node1');
+  const quest = res.body.regulations.find((r) => r.id === 'deckbattle-quest');
+  assert.deepEqual([node1.game, node1.igt, node1.checkpoints.map((c) => c.id)], ['deckbattle', 'ms', ['stage1', 'stage2', 'clear']]);
+  assert.deepEqual([quest.game, quest.igt, quest.checkpoints.map((c) => c.id)], ['deckbattle', 'ms', ['win5', 'clear']]);
+  for (const id of ['deckbattle-node1', 'deckbattle-quest']) {
+    const def = REGULATION_BY_ID[id];
+    for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+    assert.equal(def.checkpoints.at(-1).kind, 'clear');
+  }
+
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  const opt = { origin: 'https://deckbattle.bearko.games' };
+  assert.equal((await b.call('POST', '/api/rta/start', { regulation: 'deckbattle-quest' })).status, 403, 'survivor からは始められない');
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'deckbattle-quest' }, opt)).body.runId;
+  tick(5e3);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'win5', igtMs: 50e3, idleMs: 1000 }, opt)).body.rejected, true, '7 秒より速い 5 勝はありえない');
+});

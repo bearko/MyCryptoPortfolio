@@ -94,6 +94,27 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: 'レベル 09 クリア（全レベル）', minMs: 160e3 },
     ],
   },
+  {
+    id: 'deckbattle-node1',
+    game: 'deckbattle',
+    name: 'DeckBattle 近代・日本',
+    rule: 'RTA 用の新しいストーリー（本編のセーブとは別。プロローグ・操作の案内なし）。1-1 の出撃から、近代・日本の制覇（1-3 のレイドボス）まで。戦闘は ×4 固定・SKIP あり',
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: '1-1 クリア', minMs: 5e3 },
+      { id: 'stage2', kind: 'stage', label: '1-2 クリア', minMs: 12e3 },
+      { id: 'clear', kind: 'clear', label: '近代・日本 制覇', minMs: 20e3 },
+    ],
+  },
+  {
+    id: 'deckbattle-quest',
+    game: 'deckbattle',
+    name: 'DeckBattle 10 勝でクリア',
+    rule: 'フリーバトル（10 勝でクリア）。プレイヤー自由。プレイヤーを選んでから 10 勝まで。戦闘は ×4 固定・SKIP あり。再読み込みすると計測は消える',
+    checkpoints: [
+      { id: 'win5', kind: 'stage', label: '5 勝', minMs: 7e3 },
+      { id: 'clear', kind: 'clear', label: '10 勝（クリア）', minMs: 15e3 },
+    ],
+  },
 ];
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));
