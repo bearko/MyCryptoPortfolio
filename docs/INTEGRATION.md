@@ -11,7 +11,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 |---|---|---|---|---|---|---|
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
-| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0） | 対応（v2） | SPEC-039・040・041・048 |
+| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0。懐中時計ありの v2 へ移行中） | 対応（v2） | SPEC-039・040・041・048 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 対応 | 対応（v2） | `docs/platform.md` |
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
@@ -48,6 +48,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 2. ゲームに窓口のファイル（`platform.js` など）を作り、起動時に `BearkoGames.init({ game: '<タイトル ID>', version })` を呼ぶ
    - タイトル ID は `platform/trophies.js` の `GAME_HOSTS` のキー（`tactics` `survivor` `fortress` `deckbattle` `factory` `workshop` `10buy` `education` `tcg`）
    - SDK が遅れて読まれる可能性があるなら、`load` で読めたら `init` する（Fortress・Workshop の窓口が例）
+   - 通知（トロフィー・RTA の記録・自己ベスト）は既定で画面の下に出る。結果画面のボタンと重なるなら `init({ toast: 'top', toastOffset: <px> })` か `BearkoGames.setToastPosition({ position: 'top', offset })` で上に寄せる（SDK 1.5.0。Survivor が例）
 3. 守ること
    - **SDK が読めない・通信に失敗しても、ゲームは最後まで遊べる**（例外を出さない。失敗は `console.warn` だけ）
    - ログイン状態は共通基盤が持つ。ゲーム側で Cookie を触らない（Tactics は localStorage も使わない）
