@@ -136,7 +136,7 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 | タイトル | PR | 置いたもの |
 |---|---|---|
 | Survivor | bearko/MyCryptoSurvivor #122（SPEC-092） | 設定に「🙂 アイコン — 変える」。ドックは SDK の既定のまま（戦闘中は 1.x と同じく隠す） |
-| Tactics | bearko/mycryptotactics #158（SPEC-015） | 設定の言語の上に「🙂 アイコン — 変える」 |
+| Tactics | bearko/mycryptotactics #158（SPEC-016） | 設定の言語の上に「🙂 アイコン — 変える」 |
 | Workshop | bearko/MyCryptoWorkshop #17 | 設定に「アイコン（bearko.games 全体で共通）— 変える」 |
 | Factory | bearko/mycryptofactory #123（SPEC-012 2.1） | ドックでは書いているあいだだけ時間を止める（`onCompose`）。設定に「アイコンを変える（bearko.games 共通）」 |
 | Fortress | bearko/mycryptofortress #61（SPEC-129） | ホームの総合ランキングのリンクの下に「アイコンを変える（bearko.games 共通）」 |
