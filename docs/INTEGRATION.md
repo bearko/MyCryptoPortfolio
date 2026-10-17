@@ -3,14 +3,14 @@
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
 - 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）
-- 最終更新：2026-10-16
+- 最終更新：2026-10-17
 
 ## 1. いまの状態
 
 | タイトル | リポジトリ（本番のブランチ） | 本番の URL | トロフィー | RTA | 総合スコア | ゲーム側の説明 |
 |---|---|---|---|---|---|---|
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
-| Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 未対応 | 対応 | SPEC-008・SPEC-009 |
+| Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応 | 対応 | SPEC-039・040・041 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 未対応 | 対応 | SPEC-120・121 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
@@ -67,12 +67,13 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 2. ゲーム：終わったとき（積み上げなら増えたとき）に `BearkoGames.submitScore(metrics, { quiet })`
    - こまめに送るゲームは `{ quiet: true }`（通知なし）で、1 分に 1 回まで
    - 将来の「難易度ごとのレギュレーション」用に、難易度・レギュレーションも `metrics` に入れておく（今は点に効かない）
-3. **係数を変えたら、ファイルの版を上げる**（`tactics.v2.js` を作り `index.js` を差し替え）。毎日の掃除で、保存してある生の成績から全員を計算し直す
+3. **係数を変えたら、ファイルの版を上げる**（例：`tactics.v2.js` を作り、`index.js` で `v(tactics, 'v2')` に差し替え。古い版のファイルは残す）。毎日の掃除で、保存してある生の成績から全員を計算し直す
 
 ### 3.4 RTA
 
 1. 共通基盤：`platform/rta.js` の `REGULATIONS` に足す（区切りの順番・種類・最短時間）。最短時間は「どう頑張っても越えられない時間」から少し引いた値（根拠を SPEC に書く）
 2. ゲーム：「RTA で始める」を選んだときだけ `rta.start({ regulation, timerOffset })`、区切りで `rta.checkpoint(id, { igtMs })`、やめたら `rta.abort()`
+   - IGT がゲーム内時間でないとき（Tactics のターン数）は、レギュレーションに `igt: 'turns'` を書き、`igtMs` の欄にその値を入れる
    - 経過時間の表示・区間タイム・結果の通知・15 分の無操作（参考記録）は SDK と共通基盤が受け持つ
    - Survivor（SPEC-040）が例
 
@@ -133,9 +134,8 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 
 タイトル別の課題と改善点は作者のドキュメント「タイトル別：RTA・総合スコアに向けた課題と改善点」にまとめてある。主なもの：
 
-- Tactics のレギュレーション倍率（ABSOLUTE は最大 2,500 倍）を総合スコアにどう入れるか
 - 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる）
 - Fortress を「レベルごとの自己ベストの合計」にするか
-- Tactics・Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
+- Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - Factory のセーブとクリアの条件（#94）、TCG の連戦（#5）、Education のゲームクリア（#1）

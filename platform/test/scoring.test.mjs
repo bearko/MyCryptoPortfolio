@@ -55,6 +55,29 @@ test('10 buy year：難易度の係数', () => {
   assert.equal(m('easy'), 7301);
 });
 
+test('Tactics v2：倍率の前の点 × 共通基盤の難易度の係数（ゲーム内の倍率は使わない）', () => {
+  const t = (regulation, baseScore, extra = {}) => s('tactics', { chaptersCleared: 5, cleared: true, finalScore: 0, regulation, baseScore, ...extra });
+  assert.equal(t('common', 20000), 10000);
+  assert.equal(t('egg', 20000), 11000);
+  assert.equal(t('baby', 20000), 12000);
+  assert.equal(t('blue', 20000), 13500);
+  assert.equal(t('red', 20000), 15000);
+  assert.equal(t('absolute', 20000, { absoluteMult: 2500 }), 15000, 'ABSOLUTE は Red を超えない');
+  assert.equal(t('absolute', 20000, { absoluteMult: 1.5 }), 12500, 'ABSOLUTE の倍率そのもの');
+  assert.equal(t('absolute', 20000, { absoluteMult: 0.0004 }), 5002, 'やさしい設定ほど小さい（下限なし）');
+  assert.equal(s('tactics', { chaptersCleared: 3, cleared: false, regulation: 'red' }), 3000, '節目の点には掛けない');
+  assert.equal(t('nightmare', 20000), null);
+  assert.equal(t('absolute', 20000, { absoluteMult: 9999 }), null, 'ありえない倍率');
+});
+
+test('Tactics v2：v1 の生の成績（倍率の前の点がない）からも計算し直せる', () => {
+  const v1 = (regulation, finalScore) => s('tactics', { chaptersCleared: 5, cleared: true, finalScore, regulation });
+  assert.equal(v1('common', 20000), 10000);
+  assert.equal(v1('red', 60000), 15000, '最終スコア ÷ ゲーム内の倍率 3.0 ＝ 20,000 に Red の係数 2.0');
+  assert.equal(v1('absolute', 999999), 5000, 'ABSOLUTE の倍率が分からないので節目の点だけ');
+  assert.equal(s('tactics', { chaptersCleared: 4, cleared: false, finalScore: 0, regulation: 'common' }), 4000, '本番の 1 件（2026-10-17）は変わらない');
+});
+
 test('ありえない成績は受け付けない', () => {
   assert.equal(s('tactics', { chaptersCleared: 6, cleared: false }), null);
   assert.equal(s('tactics', { chaptersCleared: 3, cleared: true, finalScore: 1 }), null, 'クリアなら 5 章');

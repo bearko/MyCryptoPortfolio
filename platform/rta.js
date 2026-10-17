@@ -2,6 +2,7 @@
 // ID は変えない。区切りが変わったときは新しい ID を足し、古いものは deprecated: true にする（過去の記録は消さない）。
 //   checkpoints：レギュレーションが通る区切り（決めた順番どおりに送る）
 //     minMs：計測の開始からこれより速く着くのはありえない、という最短時間（6.5）
+//   igt：IGT の単位。省略すると 'ms'（ゲーム内時間）。'turns' はターン数を igtMs の欄にそのまま入れる（Tactics。6.9）
 
 export const IDLE_LIMIT_MS = 15 * 60e3; // これ以上操作がなければ参考記録（6.4）
 export const SERVER_GAP_MS = 20 * 60e3; // 「操作あり」の間隔がこれを超えたら参考記録（15 分＋送信の間隔 5 分）
@@ -30,17 +31,40 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '黄金のエクステンション', minMs: 50 * 60e3 },
     ],
   },
+  {
+    id: 'tactics-ch1',
+    game: 'tactics',
+    name: 'Tactics 第 1 章',
+    rule: 'Common・ヒーロー自由。章選択で第 1 章を始めてから、第 1 章のボスを倒すまで。IGT はターン数',
+    igt: 'turns',
+    checkpoints: [{ id: 'ch1', kind: 'clear', label: '第 1 章クリア', minMs: 30e3 }],
+  },
+  {
+    id: 'tactics-all5',
+    game: 'tactics',
+    name: 'Tactics 全 5 章',
+    rule: 'Common・ヒーロー自由。章選択で第 1 章を始めてから、第 5 章のボスを倒すまで。IGT はターン数',
+    igt: 'turns',
+    checkpoints: [
+      { id: 'ch1', kind: 'stage', label: '第 1 章クリア', minMs: 30e3 },
+      { id: 'ch2', kind: 'stage', label: '第 2 章クリア', minMs: 50e3 },
+      { id: 'ch3', kind: 'stage', label: '第 3 章クリア', minMs: 70e3 },
+      { id: 'ch4', kind: 'stage', label: '第 4 章クリア', minMs: 90e3 },
+      { id: 'clear', kind: 'clear', label: '全 5 章クリア', minMs: 120e3 },
+    ],
+  },
 ];
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));
 
 // 公開用（GET /api/rta/regulations）
 export function publicRegulations() {
-  return REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, checkpoints }) => ({
+  return REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, igt, checkpoints }) => ({
     id,
     game,
     name,
     rule,
+    igt: igt || 'ms',
     checkpoints: checkpoints.map(({ id: cid, kind, label }) => ({ id: cid, kind, label })),
   }));
 }
