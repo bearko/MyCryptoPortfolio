@@ -5,6 +5,7 @@
  *   await BearkoGames.init({ game: 'tactics', version: '1.2.0' });
  *   BearkoGames.setToastPosition({ position: 'top', offset: 48 });   // 通知を画面の上に出す（既定は下。1.5.0）
  *   BearkoGames.chat.setVisible(false);                                // 全体チャットの 💬 を隠す（遊びの最中。1.6.0）
+ *   BearkoGames.chat.onToggle(function (open) { ... });                // 窓を開いた・閉じた（1.6.1。Factory は時間を止める）
  *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
  *   BearkoGames.getUser();          // { id, name } か null
  *   await BearkoGames.login();      // { ok, user }
@@ -356,7 +357,7 @@
   // 画面の隅の 💬 と、押すと開く窓（通知と同じ Shadow DOM）。開いているあいだだけ WebSocket でつなぎ、閉じて 30 秒で切る。
   // 未ログインでも読める。書けるのはログインして名前を決めた人（サーバーが確かめる。画面では先に止める）。
   var chat = {
-    enabled: true, ui: true, visible: true, mounted: false, open: false,
+    enabled: true, ui: true, button: true, visible: true, mounted: false, open: false, toggles: [],
     position: 'bottom-right', offset: { x: 16, y: 16 },
     host: null, ws: null, you: null, msgs: [], unread: 0, note: '', retry: 0, closeTimer: null, pingTimer: null, retryTimer: null,
     listeners: [],
@@ -425,6 +426,7 @@
     panel.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
     panel.style[sy] = 'calc(' + (y + 58) + 'px + env(safe-area-inset-' + sy + '))';
     chat.host.style.display = chat.visible ? '' : 'none';
+    btn.style.display = chat.button ? '' : 'none';   // 1.6.1: { button: false } は 💬 を出さず、窓はゲームのボタンから open()
   }
 
   function chatMount() {
@@ -515,8 +517,14 @@
     return { ok: true };
   }
 
+  /** 開いた・閉じたを知らせる（1.6.1。Factory は開いているあいだ時間を止める） */
+  function chatToggled(open) {
+    chat.toggles.forEach(function (fn) { try { fn(open); } catch (e) { console.warn('[BearkoGames] chat onToggle', e); } });
+  }
+
   function chatOpen() {
     if (!chat.enabled) return;
+    var was = chat.open;
     chat.open = true;
     chat.unread = 0;
     clearTimeout(chat.closeTimer);
@@ -526,11 +534,14 @@
       var input = chat.host.shadowRoot.querySelector('.foot input');
       if (input) { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }
     }
+    if (!was) chatToggled(true);
   }
 
   function chatClose() {
+    var was = chat.open;
     chat.open = false;
     chatRender();
+    if (was) chatToggled(false);
     clearTimeout(chat.closeTimer);
     chat.closeTimer = setTimeout(function () { if (!chat.open) chatDisconnect(); }, CHAT_CLOSE_AFTER);
   }
@@ -661,12 +672,17 @@
     },
     /** 未読の数（窓を閉じているあいだに届いたもの） */
     unread: function () { return chat.unread; },
+    /** 窓を開いた（true）・閉じた（false）ときに呼ばれる（1.6.1）。解除する関数を返す */
+    onToggle: function (fn) {
+      if (typeof fn === 'function') chat.toggles.push(fn);
+      return function () { chat.toggles = chat.toggles.filter(function (f) { return f !== fn; }); };
+    },
   };
 
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.6.0',
+    version: '1.6.1',
     rta: rtaApi,
 
     /**
@@ -715,7 +731,7 @@
       if (opts.apiBase) state.base = String(opts.apiBase).replace(/\/+$/, '');
       // 全体チャット（1.6.0）：既定は 💬 を出す。chat: false で何も出さない。{ ui: false } で自前の窓（connect / send / onMessage）
       if (opts.chat === false) chat.enabled = false;
-      else if (opts.chat && typeof opts.chat === 'object') { if (opts.chat.ui === false) chat.ui = false; chatApi.setPosition(opts.chat); }
+      else if (opts.chat && typeof opts.chat === 'object') { if (opts.chat.ui === false) chat.ui = false; if (opts.chat.button === false) chat.button = false; chatApi.setPosition(opts.chat); }
       return refresh().then(function (r) { state.ready = true; try { chatMount(); } catch (e) { console.warn('[BearkoGames] chat', e); } return r; });
     },
 
