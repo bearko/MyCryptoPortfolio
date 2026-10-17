@@ -6,8 +6,12 @@
  *   BearkoGames.setToastPosition({ position: 'top', offset: 48 });   // 通知を画面の上に出す（既定は下。1.5.0）
  *   BearkoGames.chat.setVisible(false);                                // 全体チャットの 💬 を隠す（遊びの最中。1.6.0）
  *   BearkoGames.chat.onToggle(function (open) { ... });                // 窓を開いた・閉じた（1.6.1。Factory は時間を止める）
+ *   BearkoGames.chat.onCompose(function (on) { ... });                 // 入力欄に入った・出た（1.7.0）
  *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
- *   BearkoGames.getUser();          // { id, name } か null
+ *   BearkoGames.init({ game: 'portal', chat: { layout: 'float' } });        // PC でも右側のドックを使わず 1.x の窓（1.7.0）
+ *   BearkoGames.chat.mount(el, { composerAt: 'top' });                 // 自分の場所にタイムラインを描く（1.7.0）
+ *   BearkoGames.openAvatarPicker();                                    // アイコンを選ぶ窓（1.7.0。全ゲーム共通）
+ *   BearkoGames.getUser();          // { id, name, avatar } か null
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
  *   await BearkoGames.rta.start({ regulation: 'survivor-normal' });   // RTA の計測を始める
@@ -353,17 +357,96 @@
   };
 
 
-  // ---------------------------------------------------------------- 全体チャット（SPEC-004。1.6.0）
-  // 画面の隅の 💬 と、押すと開く窓（通知と同じ Shadow DOM）。開いているあいだだけ WebSocket でつなぎ、閉じて 30 秒で切る。
-  // 未ログインでも読める。書けるのはログインして名前を決めた人（サーバーが確かめる。画面では先に止める）。
+  // ---------------------------------------------------------------- 全体チャット（SPEC-004・SPEC-005。1.7.0）
+  // PC（1100px 以上）は右側のドック（常に見えている。▸ で畳める）、狭い画面（639px 以下）は 💬 → 下から出るシート、
+  // その間は 💬 → 窓。1 件は YouTube のコメント風：アイコン・名前・タイトルの札・時刻／本文／♡ いいね・返信・（本人なら）編集・消す。
+  // 返信は 1 段。並びは新しい順といいね順。未ログインでも読める。書けるのはログインして名前を決めた人（サーバーが確かめる）。
   var chat = {
-    enabled: true, ui: true, button: true, visible: true, mounted: false, open: false, toggles: [],
-    position: 'bottom-right', offset: { x: 16, y: 16 },
-    host: null, ws: null, you: null, msgs: [], unread: 0, note: '', retry: 0, closeTimer: null, pingTimer: null, retryTimer: null,
-    listeners: [],
+    enabled: true, ui: true, button: true, visible: true, mounted: false, open: false, collapsed: false,
+    layout: 'dock', dockMin: 1100, position: 'bottom-right', offset: { x: 16, y: 16 },
+    sort: 'new', filter: null, replyTo: null, editing: null, openReplies: {}, more: true, loading: false, likesLoaded: false,
+    host: null, ws: null, you: null, msgs: [], liked: {}, unread: 0, note: '', retry: 0, closeTimer: null, pingTimer: null, retryTimer: null,
+    listeners: [], toggles: [], composes: [], mounts: [], sheetWatching: false, focused: 0,
   };
-  var CHAT_CLOSE_AFTER = 30e3, CHAT_PING_EVERY = 25e3, CHAT_MAX = 200, CHAT_KEEP = 200;
-  var GAME_LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy-year': '10 buy year!', education: 'Education', advance: 'Advance', portal: 'bearko.games' };
+  var CHAT_CLOSE_AFTER = 30e3, CHAT_PING_EVERY = 25e3, CHAT_MAX = 200, CHAT_KEEP = 600, CHAT_PAGE = 50;
+  var GAME_LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', '10buy-year': '10 buy year!', education: 'Education', advance: 'Advance', portal: 'bearko.games' };
+  var ASSET_BASE = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
+  var CHAT_ERR = { rate: '少し待ってから送ってください', login: 'ログインすると参加できます', name: '名前を決めると参加できます', banned: 'このアカウントは発言できません', long: '1〜200 文字で送ってください', parent: 'その発言はもうありません', not_found: 'その発言はもうありません', owner: '自分の発言だけ直せます' };
+
+  /** アイコンの id（"hero:1001" / "ext:5106"）→ 絵の URL。合わなければ null（既定の絵） */
+  function avatarUrl(id) {
+    var m = /^(hero|ext):([0-9]{1,6})$/.exec(String(id || ''));
+    if (!m) return null;
+    return ASSET_BASE + (m[1] === 'hero' ? 'Image/Heroes/' : 'Image/Extensions/') + m[2] + '.png';
+  }
+
+  var CHAT_CSS =
+    ':host{all:initial}' +
+    '.btn{position:fixed;z-index:2147483645;width:48px;height:48px;border-radius:50%;background:#151926;border:1px solid rgba(167,139,250,.6);color:#eef0f6;font-size:22px;line-height:1;display:none;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;padding:0}' +
+    '.btn.on{display:flex}.btn:hover{border-color:#a78bfa}' +
+    '.b{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:#a78bfa;color:#140f24;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box}' +
+    '.b.on{display:flex}' +
+    '.tab{position:fixed;z-index:2147483645;right:0;top:38%;writing-mode:vertical-rl;background:#151926;border:1px solid rgba(167,139,250,.6);border-right:0;border-radius:10px 0 0 10px;color:#eef0f6;font:700 12px/1 "M PLUS 1p",system-ui,sans-serif;padding:14px 7px;cursor:pointer;display:none;align-items:center;gap:8px;box-shadow:-4px 0 16px rgba(0,0,0,.35)}' +
+    '.tab.on{display:flex}.tab:hover{border-color:#a78bfa}.tab .b{position:static;writing-mode:horizontal-tb}' +
+    '.panel{position:fixed;z-index:2147483645;display:none;flex-direction:column;background:#151926;color:#eef0f6;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;overflow:hidden;box-sizing:border-box}' +
+    '.panel.open{display:flex;animation:in .2s ease-out}' +
+    '.panel.mode-float{width:360px;max-height:70vh}' +
+    '.panel.mode-dock{top:0!important;right:0!important;bottom:0!important;left:auto!important;width:320px;max-height:none;border-radius:0;border-top:0;border-bottom:0;border-right:0;box-shadow:-8px 0 24px rgba(0,0,0,.35);animation:none}' +
+    '.panel.mode-sheet{left:0;right:0;top:auto;bottom:0;width:auto;max-height:none;height:60vh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}' +
+    '.tl{display:flex;flex-direction:column;min-height:0;flex:1;font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;color:#eef0f6}' +
+    '.head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
+    '.head .k{font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:.04em;flex:1;white-space:nowrap}' +
+    '.head .n{font-size:11px;color:#9aa1b5}' +
+    '.sort{display:flex;gap:2px;background:#0b0d14;border-radius:999px;padding:2px}' +
+    '.sort button{font:inherit;font-size:10px;border:0;border-radius:999px;padding:3px 8px;background:none;color:#9aa1b5;cursor:pointer;font-family:inherit}' +
+    '.sort button.on{background:#a78bfa;color:#140f24;font-weight:700}' +
+    '.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;padding:0 2px;font-family:inherit}' +
+    '.x:hover{color:#eef0f6}' +
+    '.list{flex:1;overflow-y:auto;padding:8px 12px;display:grid;gap:12px;align-content:start;min-height:120px;overscroll-behavior:contain}' +
+    '.m{display:grid;grid-template-columns:32px minmax(0,1fr);gap:8px}' +
+    '.m.r{grid-template-columns:24px minmax(0,1fr)}' +
+    '.av{width:32px;height:32px;border-radius:50%;background:#1d2233;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:700;color:#c4b5fd;font-size:13px;overflow:hidden;flex:none;box-sizing:border-box}' +
+    '.m.r .av{width:24px;height:24px;font-size:10px}' +
+    '.av img{width:100%;height:100%;image-rendering:pixelated;display:block}' +
+    '.h{display:flex;gap:6px;align-items:baseline;font-size:11px;color:#9aa1b5;flex-wrap:wrap;min-width:0}' +
+    '.h b{color:#c4b5fd;font-weight:700;max-width:12em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.g{font-size:10px;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:0 4px;color:#9aa1b5}' +
+    '.ed{font-size:10px;color:#6b7280}' +
+    '.t{white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#eef0f6;margin-top:2px}' +
+    '.acts{display:flex;gap:12px;margin-top:4px;align-items:center;flex-wrap:wrap}' +
+    '.acts button{background:none;border:0;color:#9aa1b5;font-size:11px;cursor:pointer;padding:0;font-family:inherit;display:inline-flex;gap:3px;align-items:center;line-height:1.4}' +
+    '.acts button:hover{color:#eef0f6}.acts .like.on{color:#f472b6}.acts .like.on .hz{display:none}.acts .like:not(.on) .hf{display:none}.acts .del:hover{color:#f9a8a8}' +
+    '.reps{margin-top:8px;display:grid;gap:8px}' +
+    '.lnk{background:none;border:0;color:#a78bfa;font-size:11px;cursor:pointer;padding:0;font-family:inherit;text-align:left;font-weight:700}' +
+    '.lnk:hover{text-decoration:underline}' +
+    '.cmp{display:flex;gap:6px;align-items:center;padding:8px 12px;border-top:1px solid rgba(255,255,255,.08)}' +
+    '.cmp.top{border-top:0;border-bottom:1px solid rgba(255,255,255,.08)}' +
+    '.icmp{display:flex;gap:6px;align-items:center;margin-top:6px}' +
+    '.cmp input,.icmp input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0b0d14;color:#eef0f6;box-sizing:border-box;font-family:inherit}' +
+    '.icmp input{font-size:12px;padding:6px 8px}' +
+    '.cmp input:focus,.icmp input:focus{outline:1px solid #a78bfa}' +
+    '.cmp button,.icmp button{font:inherit;font-size:12px;font-weight:700;border:0;border-radius:8px;padding:8px 12px;background:#a78bfa;color:#140f24;cursor:pointer;white-space:nowrap;font-family:inherit}' +
+    '.icmp button{font-size:11px;padding:6px 10px}' +
+    '.cmp button.sec,.icmp button.sec{background:none;color:#9aa1b5;border:1px solid rgba(255,255,255,.15)}' +
+    '.cmp button:disabled{opacity:.5;cursor:default}' +
+    '.cmp .msg{flex:1;font-size:12px;color:#9aa1b5}' +
+    '.note{font-size:11px;color:#f9a8a8;padding:0 12px 6px;min-height:14px}' +
+    '.empty{color:#6b7280;font-size:12px;text-align:center;padding:24px 8px}' +
+    '.ldm{font:inherit;font-size:11px;color:#9aa1b5;background:none;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:5px 12px;cursor:pointer;justify-self:center;font-family:inherit}' +
+    '.ldm:hover{color:#eef0f6}.ldm:disabled{opacity:.5}' +
+    '@keyframes in{from{opacity:0;transform:translateY(8px)}}' +
+    '@media (prefers-reduced-motion:reduce){.panel.open{animation:none}}';
+
+  /** いまの形：狭い画面はシート、広い画面でドックの設定ならドック、その間は窓 */
+  function chatMode() {
+    if (typeof window === 'undefined') return 'float';
+    if (window.innerWidth <= 639) return 'sheet';
+    if (chat.layout === 'dock' && window.innerWidth >= chat.dockMin) return 'dock';
+    return 'float';
+  }
+  function chatIsSheet() { return chatMode() === 'sheet'; }
+  /** タイムラインが見えているか（ドックなら畳んでいない、窓・シートなら開いている） */
+  function chatShown() { return chat.visible && (chatMode() === 'dock' ? !chat.collapsed : chat.open); }
 
   function chatRoot() {
     if (chat.host) return chat.host.shadowRoot;
@@ -371,46 +454,15 @@
     chat.host.setAttribute('data-bearko-games', 'chat');
     var root = chat.host.attachShadow({ mode: 'open' });
     root.innerHTML =
-      '<style>' +
-      ':host{all:initial}' +
-      '.btn{position:fixed;z-index:2147483645;width:48px;height:48px;border-radius:50%;background:#151926;border:1px solid rgba(167,139,250,.6);color:#eef0f6;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;padding:0}' +
-      '.btn:hover{border-color:#a78bfa}' +
-      '.btn .b{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:#a78bfa;color:#140f24;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box}' +
-      '.btn .b.on{display:flex}' +
-      '.panel{position:fixed;z-index:2147483645;width:360px;max-height:70vh;display:none;flex-direction:column;background:#151926;color:#eef0f6;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;overflow:hidden;box-sizing:border-box}' +
-      '.panel.open{display:flex;animation:in .2s ease-out}' +
-      '.head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
-      '.head .k{font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:.04em;flex:1}' +
-      '.head .n{font-size:11px;color:#9aa1b5}' +
-      '.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;padding:0 2px;font-family:inherit}' +
-      '.list{flex:1;overflow-y:auto;padding:8px 12px;display:grid;gap:8px;align-content:start;min-height:180px;overscroll-behavior:contain}' +
-      '.m{display:grid;gap:2px}' +
-      '.m .h{display:flex;gap:6px;align-items:baseline;font-size:11px;color:#9aa1b5}' +
-      '.m .h b{color:#c4b5fd;font-weight:700}' +
-      '.m .g{font-size:10px;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:0 4px;color:#9aa1b5}' +
-      '.m .t{white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#eef0f6}' +
-      '.m .d{background:none;border:0;color:#9aa1b5;font-size:11px;cursor:pointer;margin-left:auto;font-family:inherit}' +
-      '.m .d:hover{color:#f9a8a8}' +
-      '.foot{padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:6px;align-items:center}' +
-      '.foot input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0b0d14;color:#eef0f6;box-sizing:border-box}' +
-      '.foot input:focus{outline:1px solid #a78bfa}' +
-      '.foot button{font:inherit;font-size:12px;font-weight:700;border:0;border-radius:8px;padding:8px 12px;background:#a78bfa;color:#140f24;cursor:pointer;white-space:nowrap}' +
-      '.foot button:disabled{opacity:.5;cursor:default}' +
-      '.foot .msg{flex:1;font-size:12px;color:#9aa1b5}' +
-      '.note{font-size:11px;color:#f9a8a8;padding:0 12px 6px;min-height:14px}' +
-      '.empty{color:#6b7280;font-size:12px;text-align:center;padding:24px 8px}' +
-      '@media (max-width:639px){.panel{left:0;right:0;top:auto;bottom:0;width:auto;max-height:none;height:60vh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}}' +
-      '@keyframes in{from{opacity:0;transform:translateY(8px)}}' +
-      '@media (prefers-reduced-motion:reduce){.panel.open{animation:none}}' +
-      '</style>' +
+      '<style>' + CHAT_CSS + '</style>' +
       '<button class="btn" type="button" aria-label="チャット" aria-expanded="false">💬<span class="b" aria-hidden="true"></span></button>' +
-      '<div class="panel" role="dialog" aria-label="いまの会話">' +
-      '<div class="head"><span class="k">いまの会話</span><span class="n"></span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
-      '<div class="list" aria-live="polite"></div><div class="note"></div><div class="foot"></div></div>';
+      '<button class="tab" type="button" aria-label="チャットを開く">💬 いまの会話<span class="b" aria-hidden="true"></span></button>' +
+      '<div class="panel" role="dialog" aria-label="いまの会話"><div class="tl"></div></div>';
     root.querySelector('.btn').addEventListener('click', function () { if (chat.open) chatClose(); else chatOpen(); });
-    root.querySelector('.x').addEventListener('click', chatClose);
+    root.querySelector('.tab').addEventListener('click', function () { chatCollapse(false); });
     document.body.appendChild(chat.host);
-    window.addEventListener('resize', applyChatPosition);   // 1.6.2: 窓（PC）とシート（スマホ）の境目をまたいだら置き直す
+    try { chat.collapsed = localStorage.getItem('bg.chat.dock') === 'closed'; } catch (e) { /* 使えない環境 */ }
+    window.addEventListener('resize', function () { applyChatPosition(); chatRender(); });   // 窓・ドック・シートの境目をまたいだら置き直す
     applyChatPosition();
     return root;
   }
@@ -418,32 +470,33 @@
   function applyChatPosition() {
     if (!chat.host) return;
     var root = chat.host.shadowRoot, btn = root.querySelector('.btn'), panel = root.querySelector('.panel');
+    var mode = chatMode();
     var right = chat.position.indexOf('left') < 0, top = chat.position.indexOf('top') === 0;
     var x = Math.round(chat.offset.x), y = Math.round(chat.offset.y);
     var sx = right ? 'right' : 'left', sy = top ? 'top' : 'bottom';
     [btn, panel].forEach(function (el) { el.style.left = el.style.right = el.style.top = el.style.bottom = ''; });
+    panel.className = 'panel mode-' + mode + (chatShown() ? ' open' : '');
     btn.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
     btn.style[sy] = 'calc(' + y + 'px + env(safe-area-inset-' + sy + '))';
-    if (chatIsSheet()) {
-      panel.style.height = '';   // 1.6.2: スマホでは下から出るシート。キーボードが出たら chatFitSheet が見えている高さに合わせる
+    if (mode === 'sheet') {
+      panel.style.height = '';
       chatFitSheet();
-    } else {
+    } else if (mode === 'float') {
+      panel.style.height = '';
       panel.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
       panel.style[sy] = 'calc(' + (y + 58) + 'px + env(safe-area-inset-' + sy + '))';
+    } else {
+      panel.style.height = '';
     }
     chat.host.style.display = chat.visible ? '' : 'none';
-    btn.style.display = chat.button ? '' : 'none';   // 1.6.1: { button: false } は 💬 を出さず、窓はゲームのボタンから open()
-  }
-
-  /** スマホ（狭い画面）では窓を下から出るシートにする（CSS の @media と同じ境目） */
-  function chatIsSheet() {
-    return typeof window !== 'undefined' && window.innerWidth <= 639;
+    // 💬 は窓・シートのときだけ（ドックは畳んだときの耳）。{ button: false } は出さない
+    btn.classList.toggle('on', chat.button && mode !== 'dock');
+    root.querySelector('.tab').classList.toggle('on', mode === 'dock' && chat.collapsed);
   }
 
   /**
    * 1.6.2: シートを「いま見えている範囲」（visualViewport）に収める。
    * スマホでキーボードが出ると見える範囲が縮むが、position:fixed の窓は縮まず、入力欄がキーボードの下に隠れていた。
-   * Chrome が入力欄を見せようと visual viewport をずらすと、窓ごと上へ流れて何を打っているか分からなくなっていた。
    * 窓の上端と高さを visualViewport の offsetTop / height から決めるので、入力欄は常にキーボードのすぐ上に来る
    */
   function chatFitSheet() {
@@ -453,12 +506,12 @@
     if (!chatIsSheet()) return;   // PC の窓の位置は applyChatPosition が決める（ここでは触らない）
     if (!chat.open || !vv) { panel.style.top = panel.style.bottom = panel.style.height = ''; return; }
     var list = panel.querySelector('.list');
-    var atBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 40;   // 読み返している途中なら、その位置を保つ
+    var atTop = !list || list.scrollTop < 40;   // 読み返している途中なら、その位置を保つ
     var gap = Math.max(48, Math.round(vv.height * 0.12));   // 上に少し残して、ゲームが見えるままにする
     panel.style.top = Math.round(vv.offsetTop + gap) + 'px';
     panel.style.bottom = 'auto';
     panel.style.height = Math.round(vv.height - gap) + 'px';
-    if (list && atBottom) list.scrollTop = list.scrollHeight;
+    if (list && atTop) list.scrollTop = 0;
   }
 
   function chatSheetWatch(on) {
@@ -473,6 +526,7 @@
     if (!document.body) { document.addEventListener('DOMContentLoaded', chatMount, { once: true }); return; }
     chat.mounted = true;
     chatRoot();
+    if (chatMode() === 'dock' && chat.visible && !chat.collapsed) { chat.open = true; chatConnect(); }
     chatRender();
   }
 
@@ -500,7 +554,7 @@
       if (chat.ws === ws) chat.ws = null;
       clearInterval(chat.pingTimer);
       if (ev && ev.code === 4003) { chatNote('このアカウントは発言できません'); chatRender(); return; }
-      // 開いているあいだは少し待って（1・2・4…30 秒）つなぎ直す
+      // 見えているあいだは少し待って（1・2・4…30 秒）つなぎ直す
       if (chat.open) {
         var wait = Math.min(30e3, 1000 * Math.pow(2, chat.retry++));
         clearTimeout(chat.retryTimer);
@@ -518,61 +572,196 @@
     if (ws) { try { ws.close(); } catch (e) { /* もう閉じている */ } }
   }
 
+  // ---- 手元の発言の集まり（親も返信も 1 つの配列。id で引く）
+  function chatFind(id) {
+    for (var i = 0; i < chat.msgs.length; i++) if (chat.msgs[i].id === id) return chat.msgs[i];
+    return null;
+  }
+  function chatMerge(list, liked) {
+    var added = [];
+    (list || []).forEach(function (m) {
+      if (!m || typeof m.id !== 'number') return;
+      var cur = chatFind(m.id);
+      if (cur) { cur.text = m.text; cur.likes = m.likes || 0; cur.editedAt = m.editedAt || null; cur.avatar = m.avatar || null; }
+      else { chat.msgs.push(m); added.push(m); }
+    });
+    (liked || []).forEach(function (id) { chat.liked[id] = true; });
+    chatPrune();
+    return added;
+  }
+  /** 持ちすぎない：親が多すぎたら古い親（とその返信）から捨てる */
+  function chatPrune() {
+    var roots = chat.msgs.filter(function (m) { return m.parent == null; });
+    if (roots.length <= CHAT_KEEP) return;
+    roots.sort(function (a, b) { return a.id - b.id; });
+    var drop = {};
+    roots.slice(0, roots.length - CHAT_KEEP).forEach(function (m) { drop[m.id] = true; });
+    chat.msgs = chat.msgs.filter(function (m) { return !drop[m.id] && !(m.parent != null && drop[m.parent]); });
+  }
+  function chatRoots() {
+    var roots = chat.msgs.filter(function (m) { return m.parent == null && (!chat.filter || m.game === chat.filter); });
+    if (chat.sort === 'likes') roots.sort(function (a, b) { return (b.likes || 0) - (a.likes || 0) || b.id - a.id; });
+    else roots.sort(function (a, b) { return b.id - a.id; });
+    return roots;
+  }
+  function chatReplies(id) {
+    return chat.msgs.filter(function (m) { return m.parent === id; }).sort(function (a, b) { return a.id - b.id; });
+  }
+  function chatEmit(m) {
+    for (var i = 0; i < chat.listeners.length; i++) {
+      try { chat.listeners[i](m); } catch (e) { console.warn('[BearkoGames] chat.onMessage', e); }
+    }
+  }
+
   function chatHandle(m) {
     if (m.t === 'hist') {
-      chat.msgs = (m.msgs || []).slice(-CHAT_KEEP);
       chat.you = m.you || null;
+      chatMerge(m.msgs, m.liked);
       chatRender();
     } else if (m.t === 'msg') {
-      chat.msgs.push(m);
-      if (chat.msgs.length > CHAT_KEEP) chat.msgs.splice(0, chat.msgs.length - CHAT_KEEP);
-      if (!chat.open) chat.unread++;
-      for (var i = 0; i < chat.listeners.length; i++) {
-        try { chat.listeners[i](m); } catch (e) { console.warn('[BearkoGames] chat.onMessage', e); }
+      if (!chatFind(m.id)) {
+        chat.msgs.push(m);
+        chatPrune();
+        if (!chatShown() && !(chat.you && m.uid === chat.you.uid)) chat.unread++;
+        chatEmit(m);
       }
       chatRender();
+    } else if (m.t === 'like') {
+      var liked = chatFind(m.id);
+      if (liked) { liked.likes = m.n; chatEmit(m); chatRender(); }
+    } else if (m.t === 'liked') {
+      if (m.on) chat.liked[m.id] = true; else delete chat.liked[m.id];
+      chatRender();
+    } else if (m.t === 'edit') {
+      var edited = chatFind(m.id);
+      if (edited) { edited.text = m.text; edited.editedAt = m.editedAt; chatEmit(m); chatRender(); }
     } else if (m.t === 'del') {
-      chat.msgs = chat.msgs.filter(function (x) { return x.id !== m.id; });
+      chat.msgs = chat.msgs.filter(function (x) { return x.id !== m.id && x.parent !== m.id; });
+      chatEmit(m);
       chatRender();
     } else if (m.t === 'purge') {
-      chat.msgs = chat.msgs.filter(function (x) { return x.uid !== m.uid; });
+      var gone = {};
+      chat.msgs.forEach(function (x) { if (x.uid === m.uid) gone[x.id] = true; });
+      chat.msgs = chat.msgs.filter(function (x) { return !gone[x.id] && !(x.parent != null && gone[x.parent]); });
       chatRender();
     } else if (m.t === 'err') {
-      chatNote({ rate: '少し待ってから送ってください', login: 'ログインすると参加できます', name: '名前を決めると参加できます', banned: 'このアカウントは発言できません', long: '1〜200 文字で送ってください' }[m.code] || '送れませんでした');
+      chatNote(CHAT_ERR[m.code] || '送れませんでした');
+    }
+  }
+
+  /** 部屋から取り直す（遡る・いいね順）。WebSocket とは別に HTTP で読む */
+  function chatFetch(params) {
+    var q = [];
+    for (var k in params) if (params[k] != null) q.push(k + '=' + encodeURIComponent(params[k]));
+    return call('GET', '/api/chat/messages' + (q.length ? '?' + q.join('&') : '')).then(function (r) {
+      if (r.ok) chatMerge(r.msgs, r.liked);
+      return r;
+    });
+  }
+  function chatLoadMore() {
+    if (chat.loading || !chat.more) return Promise.resolve({ ok: false, error: 'done' });
+    var roots = chatRoots();
+    var oldest = null;
+    chat.msgs.forEach(function (m) { if (m.parent == null && (oldest == null || m.id < oldest)) oldest = m.id; });
+    chat.loading = true;
+    chatRender();
+    return chatFetch({ before: oldest || null, limit: CHAT_PAGE }).then(function (r) {
+      chat.loading = false;
+      if (r.ok) {
+        var n = 0;
+        (r.msgs || []).forEach(function (m) { if (m.parent == null) n++; });
+        if (n < CHAT_PAGE) chat.more = false;
+      }
+      chatRender();
+      return r;
+    });
+  }
+  function chatSetSort(sort) {
+    chat.sort = sort === 'likes' ? 'likes' : 'new';
+    chatRender();
+    if (chat.sort === 'likes' && !chat.likesLoaded) {
+      chat.likesLoaded = true;
+      chatFetch({ order: 'likes', limit: CHAT_PAGE }).then(function () { chatRender(); });
     }
   }
 
   function chatNote(text) {
     chat.note = text || '';
-    if (chat.host) chat.host.shadowRoot.querySelector('.note').textContent = chat.note;
+    chatEach(function (root) { var n = root.querySelector('.note'); if (n) n.textContent = chat.note; });
   }
 
-  function chatSend(text) {
-    var t = String(text == null ? '' : text).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  function chatWsSend(obj) {
+    if (!chat.ws || chat.ws.readyState !== 1) { chatConnect(); return { ok: false, error: 'closed' }; }
+    try { chat.ws.send(JSON.stringify(obj)); } catch (e) { return { ok: false, error: 'network' }; }
+    return { ok: true };
+  }
+  function chatClean(text) {
+    return String(text == null ? '' : text).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  }
+  function chatSend(text, parent) {
+    var t = chatClean(text);
     if (!t) return { ok: false, error: 'empty' };
     if (t.length > CHAT_MAX) return { ok: false, error: 'long' };
-    if (!chat.ws || chat.ws.readyState !== 1) { chatConnect(); return { ok: false, error: 'closed' }; }
-    try { chat.ws.send(JSON.stringify({ t: 'msg', text: t })); } catch (e) { return { ok: false, error: 'network' }; }
-    return { ok: true };
+    var msg = { t: 'msg', text: t };
+    if (parent != null) msg.parent = parent;
+    return chatWsSend(msg);
+  }
+  function chatLike(id, on) {
+    if (on == null) on = !chat.liked[id];
+    if (!state.user) { chatNote(CHAT_ERR.login); return { ok: false, error: 'login' }; }
+    if (!state.user.name) { chatNote(CHAT_ERR.name); return { ok: false, error: 'name' }; }
+    var r = chatWsSend({ t: 'like', id: id, on: !!on });
+    if (r.ok) {   // 先に手元を動かす（返事で正しい数に戻る）
+      var m = chatFind(id);
+      if (m) { m.likes = Math.max(0, (m.likes || 0) + (on ? 1 : -1)); }
+      if (on) chat.liked[id] = true; else delete chat.liked[id];
+      chatRender();
+    }
+    return r;
+  }
+  function chatEdit(id, text) {
+    var t = chatClean(text);
+    if (!t) return { ok: false, error: 'empty' };
+    if (t.length > CHAT_MAX) return { ok: false, error: 'long' };
+    return chatWsSend({ t: 'edit', id: id, text: t });
+  }
+  function chatDelete(id) {
+    return call('DELETE', '/api/chat/messages/' + encodeURIComponent(id)).then(function (r) {
+      if (r.ok) { chat.msgs = chat.msgs.filter(function (x) { return x.id !== id && x.parent !== id; }); chatRender(); }
+      else chatNote('消せませんでした');
+      return r;
+    });
   }
 
   /** 開いた・閉じたを知らせる（1.6.1。Factory は開いているあいだ時間を止める） */
   function chatToggled(open) {
     chat.toggles.forEach(function (fn) { try { fn(open); } catch (e) { console.warn('[BearkoGames] chat onToggle', e); } });
   }
+  /** 入力欄に入った・出た（1.7.0。Factory はドックでは書いているあいだだけ時間を止める） */
+  function chatComposing(on) {
+    chat.focused += on ? 1 : -1;
+    if (chat.focused < 0) chat.focused = 0;
+    var now = chat.focused > 0;
+    if (now === chat.composing) return;
+    chat.composing = now;
+    chat.composes.forEach(function (fn) { try { fn(now); } catch (e) { console.warn('[BearkoGames] chat onCompose', e); } });
+  }
 
   function chatOpen() {
     if (!chat.enabled) return;
+    chatMount();
+    if (chatMode() === 'dock') { chatCollapse(false); return; }
     var was = chat.open;
     chat.open = true;
     chat.unread = 0;
     clearTimeout(chat.closeTimer);
     chatConnect();
+    applyChatPosition();
     chatRender();
     chatSheetWatch(true);
     chatFitSheet();
     if (chat.host) {
-      var input = chat.host.shadowRoot.querySelector('.foot input');
+      var input = chat.host.shadowRoot.querySelector('.cmp input');
       var coarse = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
       // 1.6.2: 指で触る端末では、押したときだけキーボードを出す（開いた瞬間に出ると、窓がキーボードの下に隠れる）
       if (input && !coarse) { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }
@@ -581,62 +770,138 @@
   }
 
   function chatClose() {
+    if (chatMode() === 'dock') { chatCollapse(true); return; }
     var was = chat.open;
     chat.open = false;
     chatSheetWatch(false);
     chatFitSheet();
+    applyChatPosition();
     chatRender();
     if (was) chatToggled(false);
     clearTimeout(chat.closeTimer);
     chat.closeTimer = setTimeout(function () { if (!chat.open) chatDisconnect(); }, CHAT_CLOSE_AFTER);
   }
 
-  function chatTime(at) {
-    var d = new Date(at), two = function (n) { return (n < 10 ? '0' : '') + n; };
-    return two(d.getHours()) + ':' + two(d.getMinutes());
+  /** ドックを畳む（true）／広げる（false）。畳んだかどうかはこの端末に覚える */
+  function chatCollapse(on) {
+    var was = chatShown();
+    chat.collapsed = !!on;
+    try { localStorage.setItem('bg.chat.dock', on ? 'closed' : 'open'); } catch (e) { /* 使えない環境 */ }
+    if (!on) { chat.open = true; chat.unread = 0; clearTimeout(chat.closeTimer); chatConnect(); }
+    else { chat.open = false; clearTimeout(chat.closeTimer); chat.closeTimer = setTimeout(function () { if (!chat.open) chatDisconnect(); }, CHAT_CLOSE_AFTER); }
+    applyChatPosition();
+    chatRender();
+    if (was !== chatShown()) chatToggled(!on);
   }
 
-  function chatRender() {
-    if (!chat.host) return;
-    var root = chat.host.shadowRoot;
-    var btn = root.querySelector('.btn'), badge = btn.querySelector('.b'), panel = root.querySelector('.panel');
-    badge.textContent = chat.unread > 99 ? '99+' : String(chat.unread);
-    badge.classList.toggle('on', chat.unread > 0 && !chat.open);
-    btn.setAttribute('aria-expanded', String(chat.open));
-    panel.classList.toggle('open', chat.open);
-    if (!chat.open) return;
-    root.querySelector('.head .n').textContent = chat.ws && chat.ws.readyState === 1 ? '' : '接続中…';
-    // 一覧
-    var list = root.querySelector('.list');
-    var atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
-    list.textContent = '';
-    if (!chat.msgs.length) {
-      var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'まだ発言はありません。最初のひとことをどうぞ';
-      list.appendChild(empty);
-    }
+  function chatTime(at) {
+    var d = new Date(at), now = new Date(), two = function (n) { return (n < 10 ? '0' : '') + n; };
+    var hm = two(d.getHours()) + ':' + two(d.getMinutes());
+    if (d.toDateString() === now.toDateString()) return hm;
+    return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+  }
+  function chatAvatarEl(m, small) {
+    var av = document.createElement('div'); av.className = 'av';
+    var url = avatarUrl(m.avatar);
+    var initial = (m.name || '?').slice(0, 1);
+    if (url) {
+      var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = url;
+      img.addEventListener('error', function () { av.textContent = initial; });
+      av.appendChild(img);
+    } else av.textContent = initial;
+    return av;
+  }
+  function chatInlineComposer(opts) {
+    var box = document.createElement('div'); box.className = 'icmp';
+    var input = document.createElement('input'); input.type = 'text'; input.maxLength = CHAT_MAX; input.placeholder = opts.placeholder; input.value = opts.value || ''; input.setAttribute('autocomplete', 'off');
+    input.addEventListener('focus', function () { chatComposing(true); });
+    input.addEventListener('blur', function () { chatComposing(false); });
+    var ok = document.createElement('button'); ok.type = 'button'; ok.textContent = opts.okLabel;
+    var no = document.createElement('button'); no.type = 'button'; no.className = 'sec'; no.textContent = 'やめる';
+    var go = function () { opts.onOk(input.value); };
+    ok.addEventListener('click', go);
+    no.addEventListener('click', opts.onCancel);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); go(); } if (e.key === 'Escape') opts.onCancel(); });
+    box.appendChild(input); box.appendChild(ok); box.appendChild(no);
+    setTimeout(function () { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }, 0);
+    return box;
+  }
+
+  /** 1 件（親も返信も）。YouTube のコメント風 */
+  function chatItem(m, isReply) {
     var me = state.user ? state.user.id : null;
-    chat.msgs.forEach(function (m) {
-      var el = document.createElement('div'); el.className = 'm';
-      var h = document.createElement('div'); h.className = 'h';
-      var b = document.createElement('b'); b.textContent = m.name || '名無し'; h.appendChild(b);
-      var g = document.createElement('span'); g.className = 'g'; g.textContent = GAME_LABEL[m.game] || m.game; h.appendChild(g);
-      var tm = document.createElement('span'); tm.textContent = chatTime(m.at); h.appendChild(tm);
-      if (me && m.uid === me) {
-        var d = document.createElement('button'); d.className = 'd'; d.type = 'button'; d.textContent = '消す';
-        d.addEventListener('click', function () { chatDelete(m.id); });
-        h.appendChild(d);
-      }
-      var t = document.createElement('div'); t.className = 't'; t.textContent = m.text;
-      el.appendChild(h); el.appendChild(t);
-      list.appendChild(el);
+    var el = document.createElement('div'); el.className = 'm' + (isReply ? ' r' : ''); el.setAttribute('data-id', String(m.id));
+    el.appendChild(chatAvatarEl(m, isReply));
+    var body = document.createElement('div');
+    var h = document.createElement('div'); h.className = 'h';
+    var b = document.createElement('b'); b.textContent = m.name || '名無し'; h.appendChild(b);
+    var g = document.createElement('span'); g.className = 'g'; g.textContent = GAME_LABEL[m.game] || m.game; h.appendChild(g);
+    var tm = document.createElement('span'); tm.textContent = chatTime(m.at); h.appendChild(tm);
+    if (m.editedAt) { var ed = document.createElement('span'); ed.className = 'ed'; ed.textContent = '（編集済み）'; h.appendChild(ed); }
+    body.appendChild(h);
+    if (chat.editing === m.id) {
+      body.appendChild(chatInlineComposer({
+        placeholder: '本文を直す（200 文字まで）', value: m.text, okLabel: '保存',
+        onOk: function (v) { var r = chatEdit(m.id, v); if (r.ok) { chat.editing = null; chatRender(); } else chatNote(r.error === 'long' ? CHAT_ERR.long : r.error === 'empty' ? CHAT_ERR.long : 'つなぎ直しています…'); },
+        onCancel: function () { chat.editing = null; chatRender(); },
+      }));
+    } else {
+      var t = document.createElement('div'); t.className = 't'; t.textContent = m.text; body.appendChild(t);
+    }
+    var acts = document.createElement('div'); acts.className = 'acts';
+    var like = document.createElement('button'); like.type = 'button'; like.className = 'like' + (chat.liked[m.id] ? ' on' : '');
+    like.innerHTML = '<span class="hz">♡</span><span class="hf">♥</span><span class="ln"></span>';
+    like.querySelector('.ln').textContent = m.likes ? String(m.likes) : 'いいね';
+    like.setAttribute('aria-label', 'いいね');
+    like.addEventListener('click', function () { chatLike(m.id); });
+    acts.appendChild(like);
+    var rep = document.createElement('button'); rep.type = 'button'; rep.className = 'rep'; rep.textContent = '返信';
+    var rootId = isReply ? m.parent : m.id;
+    rep.addEventListener('click', function () {
+      if (!state.user) { chatNote(CHAT_ERR.login); return; }
+      if (!state.user.name) { chatNote(CHAT_ERR.name); return; }
+      chat.replyTo = rootId; chat.openReplies[rootId] = true; chat.replyPrefill = isReply ? '@' + (m.name || '') + ' ' : ''; chatRender();
     });
-    if (atBottom) list.scrollTop = list.scrollHeight;
-    root.querySelector('.note').textContent = chat.note;
-    // 入力欄（未ログイン → ログイン、名無し → 名前を決める）
-    var foot = root.querySelector('.foot');
-    var was = foot.querySelector('input');
-    var draft = was ? was.value : '';
-    foot.textContent = '';
+    acts.appendChild(rep);
+    if (me && m.uid === me) {
+      var edit = document.createElement('button'); edit.type = 'button'; edit.className = 'edt'; edit.textContent = '編集';
+      edit.addEventListener('click', function () { chat.editing = m.id; chatRender(); });
+      acts.appendChild(edit);
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'del'; d.textContent = '消す';
+      d.addEventListener('click', function () { chatDelete(m.id); });
+      acts.appendChild(d);
+    }
+    body.appendChild(acts);
+    if (!isReply) {
+      var replies = chatReplies(m.id);
+      var reps = document.createElement('div'); reps.className = 'reps';
+      var opened = chat.openReplies[m.id] || chat.replyTo === m.id;
+      if (replies.length && !opened) {
+        var more = document.createElement('button'); more.type = 'button'; more.className = 'lnk'; more.textContent = '返信 ' + replies.length + ' 件を見る';
+        more.addEventListener('click', function () { chat.openReplies[m.id] = true; chatRender(); });
+        reps.appendChild(more);
+      } else if (replies.length) {
+        replies.forEach(function (r) { reps.appendChild(chatItem(r, true)); });
+        var less = document.createElement('button'); less.type = 'button'; less.className = 'lnk'; less.textContent = '返信をたたむ';
+        less.addEventListener('click', function () { delete chat.openReplies[m.id]; if (chat.replyTo === m.id) chat.replyTo = null; chatRender(); });
+        reps.appendChild(less);
+      }
+      if (chat.replyTo === m.id) {
+        reps.appendChild(chatInlineComposer({
+          placeholder: '返信を書く（200 文字まで）', value: chat.replyPrefill || '', okLabel: '返信',
+          onOk: function (v) { var r = chatSend(v, m.id); if (r.ok) { chat.replyTo = null; chat.replyPrefill = ''; chatNote(''); chatRender(); } else chatNote(r.error === 'long' || r.error === 'empty' ? CHAT_ERR.long : 'つなぎ直しています…'); },
+          onCancel: function () { chat.replyTo = null; chat.replyPrefill = ''; chatRender(); },
+        }));
+      }
+      if (reps.childNodes.length) body.appendChild(reps);
+    }
+    el.appendChild(body);
+    return el;
+  }
+
+  /** 入力欄（未ログイン → ログイン、名無し → 名前を決める） */
+  function chatComposer(atTop) {
+    var foot = document.createElement('div'); foot.className = 'cmp' + (atTop ? ' top' : '');
     if (!state.user) {
       var msg = document.createElement('span'); msg.className = 'msg'; msg.textContent = '読むだけならこのまま。参加するにはログイン';
       var login = document.createElement('button'); login.type = 'button'; login.textContent = 'ログインして参加';
@@ -652,48 +917,209 @@
       });
       foot.appendChild(msg2); foot.appendChild(nameBtn);
     } else {
-      var input = document.createElement('input'); input.type = 'text'; input.maxLength = CHAT_MAX; input.placeholder = 'メッセージ（200 文字まで）'; input.value = draft; input.setAttribute('autocomplete', 'off');
+      var input = document.createElement('input'); input.type = 'text'; input.maxLength = CHAT_MAX; input.placeholder = 'メッセージ（200 文字まで）'; input.value = chat.draft || ''; input.setAttribute('autocomplete', 'off');
+      input.addEventListener('input', function () { chat.draft = input.value; });
+      input.addEventListener('focus', function () { chatComposing(true); });
+      input.addEventListener('blur', function () { chatComposing(false); });
       var send = document.createElement('button'); send.type = 'button'; send.textContent = '送る';
       var go = function () {
         var r = chatSend(input.value);
-        if (r.ok) { input.value = ''; chatNote(''); }
+        if (r.ok) { input.value = ''; chat.draft = ''; chatNote(''); }
         else if (r.error === 'closed') chatNote('つなぎ直しています…');
-        else if (r.error === 'long') chatNote('1〜200 文字で送ってください');
+        else if (r.error === 'long') chatNote(CHAT_ERR.long);
       };
       send.addEventListener('click', go);
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); go(); } });
       foot.appendChild(input); foot.appendChild(send);
     }
+    return foot;
   }
 
-  function chatDelete(id) {
-    call('DELETE', '/api/chat/messages/' + encodeURIComponent(id)).then(function (r) {
-      if (r.ok) { chat.msgs = chat.msgs.filter(function (x) { return x.id !== id; }); chatRender(); }
-      else chatNote('消せませんでした');
+  /** タイムライン 1 式を tl（.tl）に描く。opts.kind: 'panel' | 'mount' */
+  function chatRenderTimeline(tl, opts) {
+    var mode = chatMode();
+    var scroller = tl.querySelector('.list');
+    var keepScroll = scroller ? scroller.scrollTop : 0;
+    var wasFocused = tl.querySelector('.cmp input') && tl.querySelector('.cmp input').matches(':focus');
+    tl.textContent = '';
+    // 見出し：いまの会話・並び替え・（ドック）▸ ／（窓・シート）×
+    var head = document.createElement('div'); head.className = 'head';
+    var k = document.createElement('span'); k.className = 'k'; k.textContent = opts.title || 'いまの会話'; head.appendChild(k);
+    var n = document.createElement('span'); n.className = 'n'; n.textContent = chat.ws && chat.ws.readyState === 1 ? '' : '接続中…'; head.appendChild(n);
+    var sort = document.createElement('div'); sort.className = 'sort'; sort.setAttribute('role', 'tablist');
+    [['new', '新しい順'], ['likes', 'いいね順']].forEach(function (s) {
+      var sb = document.createElement('button'); sb.type = 'button'; sb.textContent = s[1]; sb.className = chat.sort === s[0] ? 'on' : '';
+      sb.addEventListener('click', function () { chatSetSort(s[0]); });
+      sort.appendChild(sb);
     });
+    head.appendChild(sort);
+    if (opts.kind === 'panel') {
+      var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.setAttribute('aria-label', mode === 'dock' ? 'たたむ' : '閉じる'); x.textContent = mode === 'dock' ? '▸' : '×';
+      x.addEventListener('click', function () { if (mode === 'dock') chatCollapse(true); else chatClose(); });
+      head.appendChild(x);
+    }
+    tl.appendChild(head);
+    var atTop = opts.composerAt === 'top' || (opts.composerAt !== 'bottom' && mode !== 'sheet');
+    if (atTop) tl.appendChild(chatComposer(true));
+    // 一覧（新しいものが上）
+    var list = document.createElement('div'); list.className = 'list';
+    var roots = chatRoots();
+    if (!roots.length) {
+      var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = chat.filter ? 'このタイトルの発言はまだありません' : 'まだ発言はありません。最初のひとことをどうぞ';
+      list.appendChild(empty);
+    }
+    roots.forEach(function (m) { list.appendChild(chatItem(m, false)); });
+    if (chat.sort === 'new' && roots.length && chat.more) {
+      var ldm = document.createElement('button'); ldm.type = 'button'; ldm.className = 'ldm'; ldm.textContent = chat.loading ? '読んでいます…' : 'もっと読む'; ldm.disabled = chat.loading;
+      ldm.addEventListener('click', function () { chatLoadMore(); });
+      list.appendChild(ldm);
+    }
+    tl.appendChild(list);
+    var note = document.createElement('div'); note.className = 'note'; note.textContent = chat.note; tl.appendChild(note);
+    if (!atTop) tl.appendChild(chatComposer(false));
+    list.scrollTop = keepScroll;
+    if (wasFocused) { var inp = tl.querySelector('.cmp input'); if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } } }
   }
 
-  // ログイン状態が変わったら、入力欄を描き直し、つないでいれば名前を持ち直すためにつなぎ直す
+  function chatEach(fn) {
+    if (chat.host) fn(chat.host.shadowRoot);
+    chat.mounts.forEach(function (m) { fn(m.root); });
+  }
+
+  function chatRender() {
+    if (chat.host) {
+      var root = chat.host.shadowRoot;
+      var btn = root.querySelector('.btn'), panel = root.querySelector('.panel');
+      var shown = chatShown();
+      [btn.querySelector('.b'), root.querySelector('.tab .b')].forEach(function (badge) {
+        badge.textContent = chat.unread > 99 ? '99+' : String(chat.unread);
+        badge.classList.toggle('on', chat.unread > 0 && !shown);
+      });
+      btn.setAttribute('aria-expanded', String(shown));
+      panel.classList.toggle('open', shown);
+      if (shown) chatRenderTimeline(panel.querySelector('.tl'), { kind: 'panel' });
+    }
+    chat.mounts.forEach(function (m) { chatRenderTimeline(m.root.querySelector('.tl'), { kind: 'mount', composerAt: m.composerAt, title: m.title }); });
+  }
+
+  // ログイン状態が変わったら、入力欄を描き直し、つないでいれば名前とアイコンを持ち直すためにつなぎ直す
   function chatOnUser() {
     if (!chat.enabled) return;
     chatRender();
     if (chat.ws) { chatDisconnect(); if (chat.open) chatConnect(); }
   }
 
+  // ---------------------------------------------------------------- アイコン選び（SPEC-005 5.3）
+  var picker = { host: null, data: null, tab: 'heroes', q: '' };
+  var PICKER_CSS =
+    ':host{all:initial}' +
+    '.pk{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;color:#eef0f6}' +
+    '.pkb{width:min(560px,96vw);height:min(640px,92vh);background:#151926;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}' +
+    '.pkh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
+    '.pkh .k{font-weight:700;flex:1}.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;font-family:inherit}' +
+    '.pkn{font-size:11px;color:#f9a8a8;padding:8px 12px 0;line-height:1.5}' +
+    '.pkt{display:flex;gap:6px;padding:8px 12px;align-items:center}' +
+    '.pkt button{font:inherit;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:5px 12px;background:none;color:#9aa1b5;cursor:pointer;font-family:inherit}' +
+    '.pkt button.on{background:#a78bfa;color:#140f24;font-weight:700;border-color:#a78bfa}' +
+    '.pkt input{flex:1;min-width:0;font:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0b0d14;color:#eef0f6;font-family:inherit}' +
+    '.pkg{flex:1;overflow-y:auto;padding:8px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;align-content:start}' +
+    '.it{display:flex;flex-direction:column;align-items:center;gap:4px;background:#0b0d14;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 4px;cursor:pointer;color:#9aa1b5;font:inherit;font-size:10px;font-family:inherit;min-width:0}' +
+    '.it:hover{border-color:#a78bfa;color:#eef0f6}.it.on{border-color:#f472b6;color:#eef0f6}' +
+    '.it img{width:48px;height:48px;image-rendering:pixelated}' +
+    '.it span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+    '.pkf{display:flex;gap:8px;padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);align-items:center}' +
+    '.pkf .cur{display:flex;align-items:center;gap:8px;flex:1;font-size:12px;color:#9aa1b5}' +
+    '.pkf .cur img{width:32px;height:32px;image-rendering:pixelated;border-radius:50%;background:#1d2233}' +
+    '.pkf button{font:inherit;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:7px 12px;background:none;color:#9aa1b5;cursor:pointer;font-family:inherit}' +
+    '.pkf button:hover{color:#eef0f6}' +
+    '.empty{grid-column:1/-1;color:#6b7280;text-align:center;padding:24px}';
+
+  function pickerLoad() {
+    if (picker.data) return Promise.resolve(picker.data);
+    return fetch(state.base + '/assets/avatars.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      picker.data = d && d.heroes ? d : { heroes: [], exts: [] };
+      return picker.data;
+    }).catch(function () { picker.data = { heroes: [], exts: [] }; return picker.data; });
+  }
+  function pickerClose() {
+    if (picker.host) { picker.host.remove(); picker.host = null; }
+  }
+  function pickerRender() {
+    if (!picker.host) return;
+    var root = picker.host.shadowRoot;
+    var grid = root.querySelector('.pkg');
+    grid.textContent = '';
+    var cur = state.user ? state.user.avatar : null;
+    var kind = picker.tab === 'exts' ? 'ext' : 'hero';
+    var list = (picker.data && picker.data[picker.tab]) || [];
+    var q = picker.q.trim().toLowerCase();
+    var shown = 0;
+    list.forEach(function (row) {
+      if (q && String(row[1]).toLowerCase().indexOf(q) < 0 && String(row[2]).toLowerCase().indexOf(q) < 0 && String(row[0]).indexOf(q) < 0) return;
+      if (shown >= 400) return;   // 絞らずに全部出すと重いので、400 件まで。名前で絞れば届く
+      shown++;
+      var id = kind + ':' + row[0];
+      var it = document.createElement('button'); it.type = 'button'; it.className = 'it' + (cur === id ? ' on' : ''); it.title = row[1] + ' / ' + row[2];
+      var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = avatarUrl(id);
+      var nm = document.createElement('span'); nm.textContent = row[1] || row[2] || String(row[0]);
+      it.appendChild(img); it.appendChild(nm);
+      it.addEventListener('click', function () {
+        api.setAvatar(id).then(function (r) { if (r.ok) pickerClose(); else root.querySelector('.pkn').textContent = r.error === 'login' || r.status === 401 ? 'ログインするとアイコンを決められます' : '変えられませんでした。時間をおいてもう一度'; });
+      });
+      grid.appendChild(it);
+    });
+    if (!shown) { var e = document.createElement('div'); e.className = 'empty'; e.textContent = picker.data ? '見つかりません' : '読んでいます…'; grid.appendChild(e); }
+    root.querySelectorAll('.pkt button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === picker.tab); });
+    var curBox = root.querySelector('.cur');
+    curBox.textContent = '';
+    var url = avatarUrl(cur);
+    if (url) { var ci = document.createElement('img'); ci.alt = ''; ci.src = url; curBox.appendChild(ci); }
+    var ct = document.createElement('span'); ct.textContent = url ? 'いまのアイコン' : 'いまは既定の絵（名前の 1 文字目）'; curBox.appendChild(ct);
+  }
+  /** アイコンを選ぶ窓。bearko.games 全体（すべてのゲームとチャット）のアイコンが変わる */
+  function openAvatarPicker() {
+    if (!document.body) return;
+    pickerClose();
+    picker.tab = 'heroes'; picker.q = '';
+    picker.host = document.createElement('div');
+    picker.host.setAttribute('data-bearko-games', 'avatar-picker');
+    var root = picker.host.attachShadow({ mode: 'open' });
+    root.innerHTML =
+      '<style>' + PICKER_CSS + '</style>' +
+      '<div class="pk"><div class="pkb" role="dialog" aria-label="アイコンを選ぶ">' +
+      '<div class="pkh"><span class="k">アイコンを選ぶ</span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
+      '<div class="pkn">bearko.games 全体のアイコンが変わります（すべてのゲームとチャットに効きます）</div>' +
+      '<div class="pkt"><button type="button" data-tab="heroes">ヒーロー</button><button type="button" data-tab="exts">エクステンション</button><input type="search" placeholder="名前で絞る" autocomplete="off"></div>' +
+      '<div class="pkg"></div>' +
+      '<div class="pkf"><div class="cur"></div><button type="button" class="reset">既定の絵に戻す</button><button type="button" class="close">閉じる</button></div>' +
+      '</div></div>';
+    root.querySelector('.x').addEventListener('click', pickerClose);
+    root.querySelector('.close').addEventListener('click', pickerClose);
+    root.querySelector('.pk').addEventListener('click', function (e) { if (e.target === root.querySelector('.pk')) pickerClose(); });
+    root.querySelector('.reset').addEventListener('click', function () { api.setAvatar(null).then(function (r) { if (r.ok) pickerClose(); }); });
+    root.querySelectorAll('.pkt button').forEach(function (b) { b.addEventListener('click', function () { picker.tab = b.getAttribute('data-tab'); pickerRender(); }); });
+    root.querySelector('.pkt input').addEventListener('input', function (e) { picker.q = e.target.value; pickerRender(); });
+    document.body.appendChild(picker.host);
+    pickerRender();
+    pickerLoad().then(pickerRender);
+  }
+
   var chatApi = {
-    /** 窓を開く（つなぐ） */
-    open: function () { chatMount(); chatOpen(); },
-    /** 窓を閉じる（30 秒後に切る） */
+    /** 窓・シートを開く（ドックなら広げる）。つなぐ */
+    open: function () { chatOpen(); },
+    /** 窓・シートを閉じる（ドックなら畳む）。30 秒後に切る */
     close: function () { chatClose(); },
-    /** 開いているか */
-    isOpen: function () { return chat.open; },
-    /** 💬 と窓を出す／隠す（遊びの最中は隠す）。隠すときは窓も閉じる */
+    /** 見えているか */
+    isOpen: function () { return chatShown(); },
+    /** ドックを畳む／広げる（1.7.0） */
+    collapse: function (on) { chatMount(); chatCollapse(on !== false); },
+    /** 💬・窓・ドックを出す／隠す（遊びの最中は隠す）。隠すときは窓も閉じる */
     setVisible: function (on) {
       chat.visible = on !== false;
-      if (!chat.visible && chat.open) chatClose();
-      if (chat.host) applyChatPosition();
+      if (!chat.visible && chat.open && chatMode() !== 'dock') chatClose();
+      if (chat.host) { applyChatPosition(); chatRender(); }
     },
-    /** 置き場所 { position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left', offset: { x, y } } */
+    /** 置き場所 { position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left', offset: { x, y } }（💬 と窓。ドックは右側に固定） */
     setPosition: function (opts) {
       opts = opts || {};
       if (typeof opts.position === 'string' && /^(top|bottom)-(left|right)$/.test(opts.position)) chat.position = opts.position;
@@ -701,33 +1127,71 @@
         var ox = Number(opts.offset.x), oy = Number(opts.offset.y);
         chat.offset = { x: isFinite(ox) ? Math.max(0, Math.min(ox, 2000)) : chat.offset.x, y: isFinite(oy) ? Math.max(0, Math.min(oy, 2000)) : chat.offset.y };
       }
-      if (chat.host) applyChatPosition();
+      if (typeof opts.layout === 'string' && /^(dock|float)$/.test(opts.layout)) chat.layout = opts.layout;
+      if (isFinite(Number(opts.dockMin)) && Number(opts.dockMin) > 0) chat.dockMin = Number(opts.dockMin);
+      if (chat.host) { applyChatPosition(); chatRender(); }
+    },
+    /** いまの形（1.7.0）：'dock' | 'float' | 'sheet' */
+    layout: function () { return chatMode(); },
+    /** 並び順（1.7.0）：'new' | 'likes' */
+    setSort: function (sort) { chatSetSort(sort); },
+    /** タイトルで絞る（1.7.0）。null で全部 */
+    setFilter: function (game) { chat.filter = typeof game === 'string' && game ? game : null; chatRender(); },
+    /** 遡って読む（1.7.0） */
+    loadMore: function () { return chatLoadMore(); },
+    /** 自分の場所に描く（1.7.0。ポータルの /chat/ など）。{ composerAt: 'top' | 'bottom', title } */
+    mount: function (el, opts) {
+      if (!el) return { ok: false, error: 'element' };
+      opts = opts || {};
+      var root = el.shadowRoot || el.attachShadow({ mode: 'open' });
+      root.innerHTML = '<style>' + CHAT_CSS + '</style><div class="tl"></div>';
+      var m = { el: el, root: root, composerAt: opts.composerAt || 'top', title: opts.title || null };
+      chat.mounts.push(m);
+      chat.open = true;
+      chatConnect();
+      chatRender();
+      return { ok: true, unmount: function () { chat.mounts = chat.mounts.filter(function (x) { return x !== m; }); root.innerHTML = ''; } };
     },
     /** 窓を使わず自前で出すとき：つなぐ（読み始める）。切るのは disconnect() */
     connect: function () { chatConnect(); },
     disconnect: function () { chatDisconnect(); },
     /** 発言する → { ok, error } （サーバーの返事は onMessage / err で） */
     send: function (text) { return chatSend(text); },
-    /** 手元にある発言（つないでから届いたもの） */
+    /** 返信する（1.7.0） */
+    reply: function (id, text) { return chatSend(text, Number(id)); },
+    /** いいね（on を省くと押し直し）（1.7.0） */
+    like: function (id, on) { return chatLike(Number(id), on); },
+    /** 直す（本人だけ）（1.7.0） */
+    edit: function (id, text) { return chatEdit(Number(id), text); },
+    /** 消す（本人か管理者）（1.7.0） */
+    remove: function (id) { return chatDelete(Number(id)); },
+    /** 手元にある発言（つないでから届いたもの。親も返信も） */
     getMessages: function () { return chat.msgs.slice(); },
-    /** 新しい発言が届いたら呼ばれる。解除する関数を返す */
+    /** 新しい発言・いいね・編集・削除が届いたら呼ばれる（{ t: 'msg' | 'like' | 'edit' | 'del', … }）。解除する関数を返す */
     onMessage: function (fn) {
       if (typeof fn === 'function') chat.listeners.push(fn);
       return function () { chat.listeners = chat.listeners.filter(function (f) { return f !== fn; }); };
     },
-    /** 未読の数（窓を閉じているあいだに届いたもの） */
+    /** 未読の数（見えていないあいだに届いたもの） */
     unread: function () { return chat.unread; },
-    /** 窓を開いた（true）・閉じた（false）ときに呼ばれる（1.6.1）。解除する関数を返す */
+    /** 窓・シートを開いた（true）・閉じた（false）／ドックを広げた・畳んだときに呼ばれる（1.6.1）。解除する関数を返す */
     onToggle: function (fn) {
       if (typeof fn === 'function') chat.toggles.push(fn);
       return function () { chat.toggles = chat.toggles.filter(function (f) { return f !== fn; }); };
     },
+    /** 入力欄に入った（true）・出た（false）ときに呼ばれる（1.7.0。Factory はドックでは書いているあいだだけ時間を止める） */
+    onCompose: function (fn) {
+      if (typeof fn === 'function') chat.composes.push(fn);
+      return function () { chat.composes = chat.composes.filter(function (f) { return f !== fn; }); };
+    },
+    /** にぎわい：タイトルごとの直近 24 時間の件数（1.7.0）→ { ok, games: { survivor: 12, … }, total } */
+    stats: function () { return call('GET', '/api/chat/stats'); },
   };
 
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.6.2',
+    version: '1.7.0',
     rta: rtaApi,
 
     /**
@@ -763,7 +1227,7 @@
     /** 総合スコアの対象タイトル → { ok, games: [{ id, name, kind, status }] } */
     getScoreGames: function () { return call('GET', '/api/score/games'); },
 
-    /** 全体チャット（SPEC-004。1.6.0）：open / close / setVisible / setPosition / send / onMessage / connect / disconnect */
+    /** 全体チャット（SPEC-004・SPEC-005。1.7.0）：open / close / collapse / setVisible / setPosition / layout / setSort / setFilter / loadMore / mount / send / reply / like / edit / remove / onMessage / onToggle / onCompose / stats */
     chat: chatApi,
 
     /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset?, chat?: false | { position, offset, ui } }。ログイン状態を読みに行く */
@@ -774,7 +1238,8 @@
       if (opts.ui === false) state.ui = false;
       if (opts.toast) api.setToastPosition({ position: opts.toast, offset: opts.toastOffset });
       if (opts.apiBase) state.base = String(opts.apiBase).replace(/\/+$/, '');
-      // 全体チャット（1.6.0）：既定は 💬 を出す。chat: false で何も出さない。{ ui: false } で自前の窓（connect / send / onMessage）
+      // 全体チャット（1.6.0 / 1.7.0）：既定は PC で右側のドック・狭い画面で 💬 → シート。chat: false で何も出さない。
+      // { layout: 'float' } で 1.x の窓、{ ui: false } で自前の窓（connect / send / onMessage）、{ button: false } で 💬 を出さない
       if (opts.chat === false) chat.enabled = false;
       else if (opts.chat && typeof opts.chat === 'object') { if (opts.chat.ui === false) chat.ui = false; if (opts.chat.button === false) chat.button = false; chatApi.setPosition(opts.chat); }
       return refresh().then(function (r) { state.ready = true; try { chatMount(); } catch (e) { console.warn('[BearkoGames] chat', e); } return r; });
@@ -793,7 +1258,7 @@
     },
 
     /** ログイン中なら { id, name }、していなければ null */
-    getUser: function () { return state.user ? { id: state.user.id, name: state.user.name } : null; },
+    getUser: function () { return state.user ? { id: state.user.id, name: state.user.name, avatar: state.user.avatar || null } : null; },
 
     /** 仮アカウント（未ログインで記録を貯めている）があるか */
     hasGuest: function () { return !!state.guest; },
@@ -857,6 +1322,21 @@
         return r;
       });
     },
+
+    /**
+     * アイコンを変える（SPEC-005 5.3。1.7.0）。bearko.games 全体（すべてのゲームとチャット）のアイコンが変わる。
+     * id は "hero:1001" / "ext:5106"（資産リポジトリのヒーロー／エクステンション）。null で既定の絵（名前の 1 文字目）
+     */
+    setAvatar: function (id) {
+      return call('POST', '/api/me/avatar', { id: id == null ? null : String(id) }).then(function (r) {
+        if (r.ok && r.user) { state.user = r.user; emit(); }
+        return r;
+      });
+    },
+    /** アイコンの id → 絵の URL（合わなければ null） */
+    avatarUrl: function (id) { return avatarUrl(id); },
+    /** アイコンを選ぶ窓を開く（1.7.0）。各タイトルのマイページはこれを呼ぶだけでよい */
+    openAvatarPicker: function () { try { openAvatarPicker(); } catch (e) { console.warn('[BearkoGames] avatar picker', e); } },
 
     /**
      * トロフィーを獲得する。未ログインなら仮アカウントに貯める（ログインしたときにまとめて登録）。

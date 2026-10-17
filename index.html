@@ -64,7 +64,7 @@
 <script>
   // SPEC-004: 全体チャット（SDK 1.6.0）。ポータルは「portal」として参加する
   if (window.BearkoGames) {
-    BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { position: 'bottom-right', offset: { x: 16, y: 16 } } });
+    BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { layout: 'float', position: 'bottom-right', offset: { x: 16, y: 16 } } });   // トップは一覧が右端まであるので、ドックではなく窓（/chat/ にタイムライン）
     var chatBand = document.getElementById('chat-band');
     if (chatBand) {
       chatBand.hidden = false;
