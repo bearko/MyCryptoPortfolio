@@ -26,6 +26,7 @@
 
   <section id="member" hidden>
     <p class="lead"><b id="who"></b> さんとしてログイン中です。</p>
+    <p class="error" id="banned" hidden>このアカウントは、管理者が記録の受け付けを止めています（ランキングにも載りません）。</p>
 
     <h2>表示名</h2>
     <form id="name-form" class="row">
@@ -184,11 +185,16 @@
     }
   }
   function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
+  // 締め出し中か（SPEC-003 5 章）。SDK は持っていないので、ここで聞く
+  function renderBanned() {
+    fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (r) { $('banned').hidden = !r.banned; }).catch(function () {});
+  }
 
-  BG.onChange(function () { render(); renderScores(); renderTrophies(); renderRuns(); });
+  BG.onChange(function () { render(); renderBanned(); renderScores(); renderTrophies(); renderRuns(); });
   BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
     if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
     render();
+    renderBanned();
     renderScores();
     renderTrophies();
     renderRuns();

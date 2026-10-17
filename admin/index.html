@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>管理画面 — MyCrypto Games</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/account.css">
+<style>
+  /* 管理画面だけの見た目（SPEC-003）。色は account.css のものを使う */
+  .card.admin { max-width: 880px; }
+  .scroll { overflow-x: auto; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 700; }
+  tbody tr.game { cursor: pointer; }
+  tbody tr.game:hover, tbody tr.game[aria-expanded="true"] { background: var(--panel-2); }
+  td.detail { text-align: left; white-space: normal; background: var(--panel-2); padding: 8px; }
+  .item { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+  .list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+  .item small { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+  .item .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+  .item .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .acts button { font-size: .8rem; padding: 4px 10px; }
+  .badge.guest { border: 1px solid var(--muted); color: var(--muted); }
+  .badge.ban { border: 1px solid var(--danger); color: var(--danger); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  select { font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main class="card wide admin">
+  <a href="../" class="muted">← ゲーム一覧</a>
+  <h1>管理画面</h1>
+
+  <section id="loading"><p class="muted">読み込み中…</p></section>
+
+  <section id="need-login" hidden>
+    <p class="lead">管理画面です。管理者の Google アカウントでログインしてください。</p>
+    <button class="primary" id="login" type="button">Google でログイン</button>
+  </section>
+
+  <section id="not-admin" hidden>
+    <p class="lead">このアカウントは管理者ではありません。</p>
+    <p class="note">あなたの会員番号：<code id="sub"></code></p>
+    <p class="note">管理者にするには、Cloudflare の Worker（mycryptoportfolio）→ Settings → Variables and Secrets で、シークレット <code>ADMIN_SUBS</code> にこの番号を入れます（複数ならカンマで区切る）。</p>
+  </section>
+
+  <section id="panel" hidden>
+    <nav class="tabs" id="tabs" aria-label="管理の種類">
+      <button type="button" data-tab="scores">総合スコア</button>
+      <button type="button" data-tab="rta">RTA の記録</button>
+      <button type="button" data-tab="players">プレイヤー</button>
+    </nav>
+
+    <section data-pane="scores" hidden>
+      <p class="note">締め出していない全アカウント（仮アカウントも含む）の自己ベストの分布です。行を押すと上位 10 件が出ます。</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>タイトル</th><th>件数（ログイン）</th><th>中央値</th><th>上位 10%</th><th>最高</th><th>計算式</th></tr></thead>
+          <tbody id="score-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section data-pane="rta" hidden>
+      <div class="controls">
+        <select id="reg" aria-label="レギュレーション"><option value="">すべてのレギュレーション</option></select>
+        <select id="order" aria-label="並び順"><option value="recent">新しい順</option><option value="time">速い順</option></select>
+      </div>
+      <ul class="list" id="run-list"></ul>
+      <p class="muted" id="run-empty" hidden>完了した記録はありません。</p>
+      <p class="note">完了した記録を 100 件まで出します。消すと、その人の次に速い記録がランキングに繰り上がります。</p>
+    </section>
+
+    <section data-pane="players" hidden>
+      <form class="row" id="search">
+        <input id="q" placeholder="名前か ID（空なら最近ログインした人）" maxlength="40">
+        <button class="secondary" type="submit">探す</button>
+      </form>
+      <ul class="list" id="user-list"></ul>
+      <h2>締め出し中</h2>
+      <ul class="list" id="ban-list"></ul>
+      <p class="muted" id="ban-empty" hidden>締め出している人はいません。</p>
+      <p class="note">締め出すと、ランキング（総合・タイトル別・RTA）から隠し、新しい成績・トロフィー・RTA を受け付けなくなります。記録は消しません。退会してログインし直しても締め出しは残ります。</p>
+    </section>
+  </section>
+
+  <p class="error" id="error" hidden></p>
+</main>
+
+<script src="../sdk/v1.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var BG = window.BearkoGames;
+  var nf = function (n) { return n == null ? '—' : Math.round(n).toLocaleString('ja-JP'); };
+  var day = function (t) { return t ? new Date(t).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' }) : '—'; };
+  var regs = {};
+  var current = 'scores';
+
+  function fail(text) { $('error').textContent = text || ''; $('error').hidden = !text; }
+
+  function api(method, path, body) {
+    return fetch(path, {
+      method: method,
+      credentials: 'same-origin',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
+    }).catch(function () { return { status: 0, error: 'network' }; });
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function badge(cls, text) { return el('span', 'badge ' + cls, text); }
+  function button(cls, text, onClick) {
+    var b = el('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function who(name, account, banned) {
+    var f = document.createDocumentFragment();
+    f.appendChild(el('b', null, name || (account === 'guest' ? '（仮アカウント）' : '名無し')));
+    if (account === 'guest') f.appendChild(badge('guest', '仮'));
+    if (banned) f.appendChild(badge('ban', '締め出し中'));
+    return f;
+  }
+
+  // ---------------------------------------------------------------- 操作
+  function done(r, ok) {
+    if (r.status === 200) { fail(''); ok(); return; }
+    fail(r.status === 404 ? 'もうありません（ほかの画面で消えたかもしれません）。' : '失敗しました（' + (r.error || r.status) + '）。');
+  }
+  function ban(userId, name) {
+    var reason = prompt((name || 'この人') + ' を締め出します。理由（任意・200 文字まで）：', '');
+    if (reason === null) return;
+    api('POST', '/api/admin/ban', { userId: userId, reason: reason }).then(function (r) { done(r, refresh); });
+  }
+  function unban(userId) {
+    if (!confirm('締め出しを解除しますか？ ランキングに戻り、記録を受け付けるようになります。')) return;
+    api('POST', '/api/admin/unban', { userId: userId }).then(function (r) { done(r, refresh); });
+  }
+
+  // ---------------------------------------------------------------- 総合スコア
+  function renderScores() {
+    api('GET', '/api/admin/scores').then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      var tbody = $('score-rows');
+      tbody.textContent = '';
+      r.games.forEach(function (g) {
+        var tr = el('tr', 'game');
+        tr.setAttribute('aria-expanded', 'false');
+        tr.tabIndex = 0;
+        [g.name, g.count + '（' + g.login + '）', nf(g.median), nf(g.top10), nf(g.max), g.formula].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        var detail = el('tr');
+        detail.hidden = true;
+        var td = el('td', 'detail');
+        td.colSpan = 6;
+        detail.appendChild(td);
+        var ul = el('ul', 'list');
+        g.top.forEach(function (t, i) {
+          var li = el('li', 'item');
+          var head = el('div', 'head');
+          head.appendChild(el('span', 'time', (i + 1) + '. ' + nf(t.score)));
+          head.appendChild(who(t.name, t.account, false));
+          li.appendChild(head);
+          li.appendChild(el('small', null, '節目 ' + nf(t.milestone) + ' ＋ 成績 ' + nf(t.performance) + ' ・ ' + t.formula + ' ・ ' + day(t.at)));
+          var acts = el('div', 'acts');
+          acts.appendChild(button('secondary', '記録を消す', function () {
+            if (!confirm((t.name || 'この人') + ' の ' + g.name + ' の記録（' + nf(t.score) + ' 点と、保存している成績）を消しますか？ 元に戻せません。')) return;
+            api('POST', '/api/admin/score/delete', { userId: t.userId, game: g.id }).then(function (x) { done(x, renderScores); });
+          }));
+          acts.appendChild(button('danger', '締め出す', function () { ban(t.userId, t.name); }));
+          li.appendChild(acts);
+          ul.appendChild(li);
+        });
+        if (!g.top.length) td.appendChild(el('p', 'muted', 'まだ記録がありません。'));
+        else td.appendChild(ul);
+        var toggle = function () {
+          detail.hidden = !detail.hidden;
+          tr.setAttribute('aria-expanded', String(!detail.hidden));
+        };
+        tr.addEventListener('click', toggle);
+        tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+        tbody.appendChild(tr);
+        tbody.appendChild(detail);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- RTA
+  function renderRuns() {
+    var q = '?regulation=' + encodeURIComponent($('reg').value) + '&order=' + $('order').value;
+    api('GET', '/api/admin/rta' + q).then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      if (!Object.keys(regs).length) {
+        r.regulations.forEach(function (g) {
+          regs[g.id] = g;
+          var o = el('option', null, g.name);
+          o.value = g.id;
+          $('reg').appendChild(o);
+        });
+      }
+      var ul = $('run-list');
+      ul.textContent = '';
+      r.runs.forEach(function (run) {
+        var reg = regs[run.regulation];
+        var turns = reg && reg.igt === 'turns';
+        var li = el('li', 'item');
+        var head = el('div', 'head');
+        head.appendChild(el('span', 'time', BG.rta.formatTime(run.timeMs)));
+        if (run.reference) head.appendChild(badge('ref', '参考記録'));
+        head.appendChild(who(run.name, run.account, run.banned));
+        li.appendChild(head);
+        li.appendChild(el('small', null,
+          (reg ? reg.name : run.regulation) + ' ・ IGT ' + (run.igtMs == null ? '—' : turns ? run.igtMs + ' ターン' : BG.rta.formatTime(run.igtMs)) +
+          ' ・ 一番長い無操作 ' + BG.rta.formatTime(run.maxIdleMs) + ' ・ ' + day(run.at)));
+        li.appendChild(el('small', null, run.splits.map(function (s) {
+          var cp = reg && reg.checkpoints.filter(function (c) { return c.id === s.checkpoint; })[0];
+          return (cp ? cp.label : s.checkpoint) + ' ' + BG.rta.formatTime(s.elapsedMs);
+        }).join(' ／ ')));
+        var acts = el('div', 'acts');
+        acts.appendChild(button('secondary', '記録を消す', function () {
+          if (!confirm((run.name || 'この人') + ' の ' + BG.rta.formatTime(run.timeMs) + ' の記録を消しますか？ 元に戻せません。')) return;
+          api('POST', '/api/admin/rta/delete', { runId: run.id }).then(function (x) { done(x, renderRuns); });
+        }));
+        if (run.banned) acts.appendChild(button('secondary', '締め出しを解除', function () { unban(run.userId); }));
+        else acts.appendChild(button('danger', '締め出す', function () { ban(run.userId, run.name); }));
+        li.appendChild(acts);
+        ul.appendChild(li);
+      });
+      $('run-empty').hidden = !!r.runs.length;
+    });
+  }
+
+  // ---------------------------------------------------------------- プレイヤー
+  function renderUsers() {
+    api('GET', '/api/admin/users?q=' + encodeURIComponent($('q').value.trim())).then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      var ul = $('user-list');
+      ul.textContent = '';
+      if (!r.users.length) ul.appendChild(el('li', 'muted', '見つかりません。'));
+      r.users.forEach(function (u) {
+        var li = el('li', 'item');
+        var head = el('div', 'head');
+        head.appendChild(who(u.name, u.account, u.banned));
+        li.appendChild(head);
+        li.appendChild(el('small', null, '総合 ' + nf(u.total) + ' 点 ・ RTA ' + u.runs + ' 件 ・ 最終利用 ' + day(u.lastSeen) + ' ・ ID ' + u.id));
+        var acts = el('div', 'acts');
+        if (u.banned) acts.appendChild(button('secondary', '締め出しを解除', function () { unban(u.id); }));
+        else acts.appendChild(button('danger', '締め出す', function () { ban(u.id, u.name); }));
+        li.appendChild(acts);
+        ul.appendChild(li);
+      });
+    });
+    api('GET', '/api/admin/bans').then(function (r) {
+      if (r.status !== 200) return;
+      var ul = $('ban-list');
+      ul.textContent = '';
+      r.bans.forEach(function (b) {
+        var li = el('li', 'item');
+        var head = el('div', 'head');
+        head.appendChild(who(b.withdrawn ? '（退会済み）' : b.name, b.account, false));
+        li.appendChild(head);
+        li.appendChild(el('small', null, (b.reason ? '理由：' + b.reason + ' ・ ' : '') + day(b.at) + ' ・ ID ' + b.userId));
+        var acts = el('div', 'acts');
+        acts.appendChild(button('secondary', '解除', function () { unban(b.userId); }));
+        li.appendChild(acts);
+        ul.appendChild(li);
+      });
+      $('ban-empty').hidden = !!r.bans.length;
+    });
+  }
+
+  // ---------------------------------------------------------------- 画面の切り替え
+  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers };
+  function show(tab) {
+    current = renderers[tab] ? tab : 'scores';
+    Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', String(b.dataset.tab === current)); });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pane]'), function (p) { p.hidden = p.dataset.pane !== current; });
+    history.replaceState(null, '', '#' + current);
+    renderers[current]();
+  }
+  function refresh() { renderers[current](); }
+
+  function start() {
+    $('loading').hidden = false;
+    api('GET', '/api/admin/me').then(function (r) {
+      $('loading').hidden = true;
+      $('need-login').hidden = !!r.user;
+      $('not-admin').hidden = !r.user || r.admin;
+      $('panel').hidden = !r.admin;
+      if (r.status !== 200) return fail('通信できませんでした。時間をおいて開き直してください。');
+      if (r.user && !r.admin) $('sub').textContent = r.sub;
+      if (r.admin) show(location.hash.slice(1));
+    });
+  }
+
+  Array.prototype.forEach.call($('tabs').children, function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
+  $('reg').addEventListener('change', renderRuns);
+  $('order').addEventListener('change', renderRuns);
+  $('search').addEventListener('submit', function (e) { e.preventDefault(); renderUsers(); });
+  $('login').addEventListener('click', function () {
+    fail('');
+    BG.login().then(function (r) { if (!r.ok && r.error !== 'closed') fail('ログインできませんでした。'); });
+  });
+  BG.onChange(start);
+  BG.init({ game: 'portal', apiBase: location.origin }).then(start);
+})();
+</script>
+</body>
+</html>

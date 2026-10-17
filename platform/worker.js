@@ -2,6 +2,7 @@
 // /api/* は共通基盤の API（platform/api.js）、それ以外はポータルの静的ファイル（ASSETS）。
 import { createApi } from './api.js';
 import { googleVerifier } from './google.js';
+import { parseAdminSubs } from './admin.js';
 
 let api;
 function apiFor(env) {
@@ -13,6 +14,8 @@ function apiFor(env) {
       verifyGoogle: clientId ? googleVerifier(clientId) : null,
       cookieDomain: env.COOKIE_DOMAIN || null,
       extraOrigins: (env.EXTRA_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean),
+      // 管理者の Google の会員番号（シークレット。SPEC-003 3 章）
+      adminSubs: parseAdminSubs(env.ADMIN_SUBS),
     });
   }
   return api;

@@ -21,7 +21,9 @@
 //   POST   /api/score/submit   { game, metrics, version } 成績を送る → { score, best, improved, total }
 //   GET    /api/score/ranking  総合ランキング（?game= でタイトル別）
 //   GET    /api/me/scores      自分のタイトルスコアと総合スコア
+//   /api/admin/*               管理画面（SPEC-003。platform/admin.js）
 //
+// 締め出したアカウント（表 bans。SPEC-003 5 章）は、ランキングから隠し、成績・トロフィー・RTA を 403 で受け付けない。
 // Cookie（どちらも Domain=.bearko.games・HttpOnly・Secure・SameSite=Lax）：
 //   bg_session … ログイン（180 日）  bg_guest … 仮アカウント（最後に使ってから 90 日）
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
@@ -29,6 +31,7 @@
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from './trophies.js';
 import { REGULATION_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
+import { createAdmin } from './admin.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
 export const GUEST_TTL = 90 * 86400e3;
@@ -43,6 +46,7 @@ const SCORE_GAMES = Object.keys(SCORERS).map((g) => `'${g}'`).join(', '); // SQL
 const RTA_STALE = 2 * DAY; // これより前に始めて終わっていない計測は掃除で消す
 
 const ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
+const NOT_BANNED = (col) => `${col} NOT IN (SELECT user_id FROM bans)`; // ランキングの集計から締め出しを外す
 
 export function cleanName(raw) {
   if (typeof raw !== 'string') return null;
@@ -74,7 +78,7 @@ function parseCookies(header) {
   return out;
 }
 
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [] }) {
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], log }) {
   const allowed = (origin) => !!origin && (ORIGIN_RE.test(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
@@ -141,6 +145,13 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         )
         .bind(userId, guestId),
     ];
+    // 仮アカウントを締め出していたら、本アカウントも締め出す（同じ人とみなす。SPEC-003 5 章）
+    stmts.push(
+      db
+        .prepare('INSERT OR IGNORE INTO bans (user_id, google_sub, reason, banned_at) SELECT ?1, (SELECT google_sub FROM users WHERE id = ?1), reason, banned_at FROM bans WHERE user_id = ?2')
+        .bind(userId, guestId),
+    );
+    stmts.push(db.prepare('DELETE FROM bans WHERE user_id = ?1').bind(guestId));
     for (const t of USER_TABLES) stmts.push(db.prepare(`UPDATE OR IGNORE ${t} SET user_id = ?1 WHERE user_id = ?2`).bind(userId, guestId));
     for (const t of USER_TABLES) stmts.push(db.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(guestId));
     stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(guestId));
@@ -148,6 +159,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     await db.batch(stmts);
   }
 
+  // 締め出し（bans）の行は消さない。退会してログインし直すだけで抜けられないように（SPEC-003 5 章）
   async function deleteUser(userId) {
     // 区切りの記録は計測にぶら下がるので、計測より先に消す
     const stmts = [db.prepare('DELETE FROM rta_splits WHERE run_id IN (SELECT id FROM rta_runs WHERE user_id = ?1)').bind(userId)];
@@ -163,12 +175,15 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     return { id, cookie: cookie('bg_guest', await newSession(id, 'guest', GUEST_TTL), GUEST_TTL) };
   }
 
-  // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）
+  const isBanned = async (userId) => !!(await db.prepare('SELECT 1 AS b FROM bans WHERE user_id = ?1').bind(userId).first());
+
+  // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）。
+  // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）
   async function accountFor(req) {
     const s = await login(req);
-    if (s) return { userId: s.userId, kind: 'login', cookies: [] };
+    if (s) return (await isBanned(s.userId)) ? { banned: true } : { userId: s.userId, kind: 'login', cookies: [] };
     const g = await guest(req);
-    if (g) return { userId: g.userId, kind: 'guest', cookies: [] };
+    if (g) return (await isBanned(g.userId)) ? { banned: true } : { userId: g.userId, kind: 'guest', cookies: [] };
     const created = await createGuest();
     return { userId: created.id, kind: 'guest', cookies: [created.cookie] };
   }
@@ -201,7 +216,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   // ---------------------------------------------------------------- RTA（6 章）
   // ランキングに出るのは：完了・参考記録でない・ログインした人（仮アカウントは出さない）
-  const RANKED = "r.regulation = ?1 AND r.status = 'finished' AND r.reference = 0 AND u.google_sub IS NOT NULL";
+  const RANKED = `r.regulation = ?1 AND r.status = 'finished' AND r.reference = 0 AND u.google_sub IS NOT NULL AND ${NOT_BANNED('r.user_id')}`;
 
   async function rankOf(regulation, timeMs) {
     const row = await db
@@ -218,6 +233,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (!s) return { error: [401, 'account'] };
     const run = await db.prepare('SELECT * FROM rta_runs WHERE id = ?1').bind(runId).first();
     if (!run || run.user_id !== s.userId) return { error: [404, 'run'] };
+    if (await isBanned(s.userId)) return { error: [403, 'banned'] };
     const reg = REGULATION_BY_ID[run.regulation];
     if (!reg) return { error: [400, 'regulation'] };
     if (!fromGame(req, reg.game)) return { error: [403, 'game'] };
@@ -270,7 +286,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   // 総合ランキングの母集団：ログインした人（仮アカウントは出さない）
   const TOTALS = `SELECT ts.user_id, u.name, SUM(ts.score) AS total, MAX(ts.updated_at) AS at FROM title_scores ts JOIN users u ON u.id = ts.user_id
-    WHERE u.google_sub IS NOT NULL AND ts.game IN (${SCORE_GAMES}) GROUP BY ts.user_id`;
+    WHERE u.google_sub IS NOT NULL AND ${NOT_BANNED('ts.user_id')} AND ts.game IN (${SCORE_GAMES}) GROUP BY ts.user_id`;
 
   async function scoreSubmit(req, body) {
     const sc = SCORERS[body.game];
@@ -282,6 +298,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const r = sc.score(metrics);
     if (!r) return reply(req, 400, { error: 'metrics' });
     const acc = await accountFor(req);
+    if (acc.banned) return reply(req, 403, { error: 'banned' });
     const at = now();
     const gameVersion = typeof body.version === 'string' ? body.version.slice(0, 32) : null;
     const play = await db
@@ -353,6 +370,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null });
+  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: ['https://bearko.games', ...extraOrigins], ...(log ? { log } : {}) });
 
   async function handle(req) {
     const url = new URL(req.url);
@@ -373,11 +391,13 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
     if (method === 'GET' && path === '/api/config') return reply(req, 200, { googleClientId: clientId });
 
+    if (path.startsWith('/api/admin/')) return admin(req, method, path, url, body);
+
     if (method === 'GET' && path === '/api/me') {
       const s = await login(req);
-      if (s) return reply(req, 200, { user: publicUser(s), guest: null });
+      if (s) return reply(req, 200, { user: publicUser(s), guest: null, ...((await isBanned(s.userId)) ? { banned: true } : {}) });
       const g = await guest(req);
-      return reply(req, 200, { user: null, guest: g ? { id: g.userId } : null });
+      return reply(req, 200, { user: null, guest: g ? { id: g.userId } : null, ...(g && (await isBanned(g.userId)) ? { banned: true } : {}) });
     }
 
     if (method === 'POST' && path === '/api/guest') {
@@ -397,6 +417,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!user) {
         user = { id: randomToken().slice(0, 32), name: null };
         await db.prepare('INSERT INTO users (id, google_sub, name, created_at, last_seen) VALUES (?1, ?2, NULL, ?3, ?3)').bind(user.id, claims.sub, now()).run();
+        // 退会する前に締め出されていた会員番号なら、新しいアカウントにも付け直す（SPEC-003 5 章）
+        await db
+          .prepare('INSERT OR IGNORE INTO bans (user_id, google_sub, reason, banned_at) SELECT ?1, google_sub, reason, MIN(banned_at) FROM bans WHERE google_sub = ?2 GROUP BY google_sub')
+          .bind(user.id, claims.sub)
+          .run();
       }
       const cookies = [];
       const g = await guest(req);
@@ -457,6 +482,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!t || t.game === 'cross') return reply(req, 400, { error: 'trophy' });
       if (!fromGame(req, t.game)) return reply(req, 403, { error: 'game' });
       const acc = await accountFor(req);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
       const unlocked = [];
       if (await grant(acc.userId, t.id)) unlocked.push(t.id, ...(await grantCross(acc.userId)));
       const total = (await trophyIds(acc.userId)).length;
@@ -481,7 +507,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (game) {
         if (!SCORERS[game]) return reply(req, 400, { error: 'game' });
         const { results } = await db
-          .prepare('SELECT ts.user_id, u.name, ts.score, ts.updated_at AS at FROM title_scores ts JOIN users u ON u.id = ts.user_id WHERE u.google_sub IS NOT NULL AND ts.game = ?1 ORDER BY ts.score DESC, ts.updated_at LIMIT ?2')
+          .prepare(`SELECT ts.user_id, u.name, ts.score, ts.updated_at AS at FROM title_scores ts JOIN users u ON u.id = ts.user_id
+             WHERE u.google_sub IS NOT NULL AND ${NOT_BANNED('ts.user_id')} AND ts.game = ?1 ORDER BY ts.score DESC, ts.updated_at LIMIT ?2`)
           .bind(game, RANKING_LIMIT)
           .all();
         let rank = 0;
@@ -543,6 +570,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!reg || reg.deprecated) return reply(req, 400, { error: 'regulation' });
       if (!fromGame(req, reg.game)) return reply(req, 403, { error: 'game' });
       const acc = await accountFor(req);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
       const id = randomToken().slice(0, 32);
       const at = now();
       await db.batch([
@@ -623,6 +651,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const { results } = await db.prepare('SELECT id FROM users WHERE google_sub IS NULL AND last_seen < ?1 LIMIT 500').bind(cutoff).all();
     for (const { id } of results) await deleteUser(id);
     await db.prepare('DELETE FROM sessions WHERE expires_at <= ?1').bind(now()).run();
+    // 消えた仮アカウントの締め出し（会員番号がないので、残しても付け直せない）
+    await db.prepare('DELETE FROM bans WHERE google_sub IS NULL AND user_id NOT IN (SELECT id FROM users)').run();
     // 中断・無効の計測と、2 日たっても終わっていない計測（区切りの記録ごと）
     const stale = "SELECT id FROM rta_runs WHERE status IN ('abandoned', 'rejected') OR (status = 'running' AND started_at < ?1)";
     await db.batch([
