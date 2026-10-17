@@ -134,9 +134,8 @@ test('Tactics v2：v1 の生の成績（倍率の前の点がない）からも�
   assert.equal(s('tactics', { chaptersCleared: 4, cleared: false, finalScore: 0, regulation: 'common' }), 4000, '本番の 1 件（2026-10-17）は変わらない');
 });
 
-test('Survivor v2：ABSOLUTE の倍率は 2.0 まで（係数 1/30 は v1 のまま）', () => {
+test('Survivor：名前のない古い成績は、ゲームが計算した倍率を 2.0 まで（v2 と同じ）', () => {
   const v = (regulationMul, reportScore = 150000) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, regulationMul });
-  assert.equal(SCORERS.survivor.version, 'v2');
   assert.equal(v(1), 10000);
   assert.equal(v(0.5), 7500, '2.0 未満はそのまま');
   assert.equal(v(1.5), 12500);
@@ -145,6 +144,25 @@ test('Survivor v2：ABSOLUTE の倍率は 2.0 まで（係数 1/30 は v1 のま
   assert.equal(v(5, 300000), 25000, '活動レポートのスコアには上限がない（D11）');
   assert.equal(s('survivor', { stagesCleared: 2, cleared: false, regulationMul: 5 }), 3000, '節目の点には倍率を掛けない');
   assert.equal(s('survivor', { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1000 }), null);
+});
+
+test('Survivor v3：難易度の係数は共通基盤で決める（名前と ABSOLUTE の 4 軸。SPEC-002 5.1 #27）', () => {
+  assert.equal(SCORERS.survivor.version, 'v3');
+  const v = (extra, reportScore = 150000) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, ...extra });
+  const ax = (spawnMul, hpMul, dmgMul, speedMul) => ({ spawnMul, hpMul, dmgMul, speedMul });
+  assert.equal(v({ difficulty: 'normal' }), 10000);
+  assert.equal(v({ difficulty: 'absolute', absolute: ax(2, 2, 2, 2) }), 15000);
+  assert.equal(v({ difficulty: 'absolute', absolute: ax(5, 5, 5, 5) }), 15000, '上限 2.0');
+  assert.equal(v({ difficulty: 'absolute', absolute: ax(0.5, 0.5, 1, 1) }), 8750, '平均 0.75');
+  assert.equal(v({ difficulty: 'absolute', absolute: ax(1.25, 1.5, 1, 1) }), 10000 + Math.round(5000 * 0.19), '平均 1.1875 → 1.19（ゲームと同じ丸め）');
+  assert.equal(v({ difficulty: 'normal', regulationMul: 5 }), 10000, 'ゲームが送った倍率は使わない');
+  assert.equal(v({ difficulty: 'absolute', absolute: ax(9, 1, 1, 1) }), null, '軸は 0.5〜5.0');
+  assert.equal(v({ difficulty: 'absolute' }), null, 'ABSOLUTE は 4 軸が要る');
+  assert.equal(v({ difficulty: 'hard' }), null);
+  // v2 までの成績（regulation：'NORMAL' / 'ABSOLUTE' と absolute、regulationMul）も同じ点になる
+  assert.equal(v({ regulation: 'NORMAL', absolute: null, regulationMul: 1 }), 10000);
+  assert.equal(v({ regulation: 'ABSOLUTE', absolute: ax(2, 2, 2, 2), regulationMul: 2 }), 15000);
+  assert.equal(v({ regulation: 'ABSOLUTE', absolute: ax(3, 3, 3, 3), regulationMul: 3 }), 15000);
 });
 
 test('ありえない成績は受け付けない', () => {
