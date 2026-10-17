@@ -4,6 +4,8 @@
  *   <script src="https://bearko.games/sdk/v1.js"></script>
  *   await BearkoGames.init({ game: 'tactics', version: '1.2.0' });
  *   BearkoGames.setToastPosition({ position: 'top', offset: 48 });   // 通知を画面の上に出す（既定は下。1.5.0）
+ *   BearkoGames.chat.setVisible(false);                                // 全体チャットの 💬 を隠す（遊びの最中。1.6.0）
+ *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
  *   BearkoGames.getUser();          // { id, name } か null
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
@@ -29,6 +31,7 @@
     for (var i = 0; i < listeners.length; i++) {
       try { listeners[i](state.user); } catch (e) { console.warn('[BearkoGames] onChange', e); }
     }
+    try { chatOnUser(); } catch (e) { console.warn('[BearkoGames] chat', e); }
   }
 
   function send(method, path, body) {
@@ -348,10 +351,322 @@
     formatTime: fmt,
   };
 
+
+  // ---------------------------------------------------------------- 全体チャット（SPEC-004。1.6.0）
+  // 画面の隅の 💬 と、押すと開く窓（通知と同じ Shadow DOM）。開いているあいだだけ WebSocket でつなぎ、閉じて 30 秒で切る。
+  // 未ログインでも読める。書けるのはログインして名前を決めた人（サーバーが確かめる。画面では先に止める）。
+  var chat = {
+    enabled: true, ui: true, visible: true, mounted: false, open: false,
+    position: 'bottom-right', offset: { x: 16, y: 16 },
+    host: null, ws: null, you: null, msgs: [], unread: 0, note: '', retry: 0, closeTimer: null, pingTimer: null, retryTimer: null,
+    listeners: [],
+  };
+  var CHAT_CLOSE_AFTER = 30e3, CHAT_PING_EVERY = 25e3, CHAT_MAX = 200, CHAT_KEEP = 200;
+  var GAME_LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy-year': '10 buy year!', education: 'Education', advance: 'Advance', portal: 'bearko.games' };
+
+  function chatRoot() {
+    if (chat.host) return chat.host.shadowRoot;
+    chat.host = document.createElement('div');
+    chat.host.setAttribute('data-bearko-games', 'chat');
+    var root = chat.host.attachShadow({ mode: 'open' });
+    root.innerHTML =
+      '<style>' +
+      ':host{all:initial}' +
+      '.btn{position:fixed;z-index:2147483645;width:48px;height:48px;border-radius:50%;background:#151926;border:1px solid rgba(167,139,250,.6);color:#eef0f6;font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;padding:0}' +
+      '.btn:hover{border-color:#a78bfa}' +
+      '.btn .b{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:#a78bfa;color:#140f24;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box}' +
+      '.btn .b.on{display:flex}' +
+      '.panel{position:fixed;z-index:2147483645;width:360px;max-height:70vh;display:none;flex-direction:column;background:#151926;color:#eef0f6;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;overflow:hidden;box-sizing:border-box}' +
+      '.panel.open{display:flex;animation:in .2s ease-out}' +
+      '.head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
+      '.head .k{font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:.04em;flex:1}' +
+      '.head .n{font-size:11px;color:#9aa1b5}' +
+      '.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;padding:0 2px;font-family:inherit}' +
+      '.list{flex:1;overflow-y:auto;padding:8px 12px;display:grid;gap:8px;align-content:start;min-height:180px;overscroll-behavior:contain}' +
+      '.m{display:grid;gap:2px}' +
+      '.m .h{display:flex;gap:6px;align-items:baseline;font-size:11px;color:#9aa1b5}' +
+      '.m .h b{color:#c4b5fd;font-weight:700}' +
+      '.m .g{font-size:10px;border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:0 4px;color:#9aa1b5}' +
+      '.m .t{white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#eef0f6}' +
+      '.m .d{background:none;border:0;color:#9aa1b5;font-size:11px;cursor:pointer;margin-left:auto;font-family:inherit}' +
+      '.m .d:hover{color:#f9a8a8}' +
+      '.foot{padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:6px;align-items:center}' +
+      '.foot input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0b0d14;color:#eef0f6;box-sizing:border-box}' +
+      '.foot input:focus{outline:1px solid #a78bfa}' +
+      '.foot button{font:inherit;font-size:12px;font-weight:700;border:0;border-radius:8px;padding:8px 12px;background:#a78bfa;color:#140f24;cursor:pointer;white-space:nowrap}' +
+      '.foot button:disabled{opacity:.5;cursor:default}' +
+      '.foot .msg{flex:1;font-size:12px;color:#9aa1b5}' +
+      '.note{font-size:11px;color:#f9a8a8;padding:0 12px 6px;min-height:14px}' +
+      '.empty{color:#6b7280;font-size:12px;text-align:center;padding:24px 8px}' +
+      '@media (max-width:639px){.panel{left:0!important;right:0!important;top:auto!important;bottom:0!important;width:100%;max-height:60vh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}}' +
+      '@keyframes in{from{opacity:0;transform:translateY(8px)}}' +
+      '@media (prefers-reduced-motion:reduce){.panel.open{animation:none}}' +
+      '</style>' +
+      '<button class="btn" type="button" aria-label="チャット" aria-expanded="false">💬<span class="b" aria-hidden="true"></span></button>' +
+      '<div class="panel" role="dialog" aria-label="いまの会話">' +
+      '<div class="head"><span class="k">いまの会話</span><span class="n"></span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
+      '<div class="list" aria-live="polite"></div><div class="note"></div><div class="foot"></div></div>';
+    root.querySelector('.btn').addEventListener('click', function () { if (chat.open) chatClose(); else chatOpen(); });
+    root.querySelector('.x').addEventListener('click', chatClose);
+    document.body.appendChild(chat.host);
+    applyChatPosition();
+    return root;
+  }
+
+  function applyChatPosition() {
+    if (!chat.host) return;
+    var root = chat.host.shadowRoot, btn = root.querySelector('.btn'), panel = root.querySelector('.panel');
+    var right = chat.position.indexOf('left') < 0, top = chat.position.indexOf('top') === 0;
+    var x = Math.round(chat.offset.x), y = Math.round(chat.offset.y);
+    var sx = right ? 'right' : 'left', sy = top ? 'top' : 'bottom';
+    [btn, panel].forEach(function (el) { el.style.left = el.style.right = el.style.top = el.style.bottom = ''; });
+    btn.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
+    btn.style[sy] = 'calc(' + y + 'px + env(safe-area-inset-' + sy + '))';
+    panel.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
+    panel.style[sy] = 'calc(' + (y + 58) + 'px + env(safe-area-inset-' + sy + '))';
+    chat.host.style.display = chat.visible ? '' : 'none';
+  }
+
+  function chatMount() {
+    if (!chat.enabled || !chat.ui || !state.ui || chat.mounted) return;
+    if (!document.body) { document.addEventListener('DOMContentLoaded', chatMount, { once: true }); return; }
+    chat.mounted = true;
+    chatRoot();
+    chatRender();
+  }
+
+  function chatUrl() {
+    return state.base.replace(/^http/, 'ws') + '/api/chat/ws?game=' + encodeURIComponent(state.game || 'portal');
+  }
+
+  function chatConnect() {
+    if (chat.ws || !chat.enabled || typeof WebSocket === 'undefined') return;
+    var ws;
+    try { ws = new WebSocket(chatUrl()); } catch (e) { chatNote('つながりませんでした'); return; }
+    chat.ws = ws;
+    ws.onopen = function () {
+      chat.retry = 0;
+      chatNote('');
+      clearInterval(chat.pingTimer);
+      chat.pingTimer = setInterval(function () { try { ws.send('ping'); } catch (e) { /* 閉じた */ } }, CHAT_PING_EVERY);
+    };
+    ws.onmessage = function (ev) {
+      var m = null;
+      try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m && typeof m === 'object') chatHandle(m);
+    };
+    ws.onclose = function (ev) {
+      if (chat.ws === ws) chat.ws = null;
+      clearInterval(chat.pingTimer);
+      if (ev && ev.code === 4003) { chatNote('このアカウントは発言できません'); chatRender(); return; }
+      // 開いているあいだは少し待って（1・2・4…30 秒）つなぎ直す
+      if (chat.open) {
+        var wait = Math.min(30e3, 1000 * Math.pow(2, chat.retry++));
+        clearTimeout(chat.retryTimer);
+        chat.retryTimer = setTimeout(function () { if (chat.open) chatConnect(); }, wait);
+      }
+    };
+    ws.onerror = function () { /* onclose が来る */ };
+  }
+
+  function chatDisconnect() {
+    clearTimeout(chat.retryTimer);
+    clearInterval(chat.pingTimer);
+    var ws = chat.ws;
+    chat.ws = null;
+    if (ws) { try { ws.close(); } catch (e) { /* もう閉じている */ } }
+  }
+
+  function chatHandle(m) {
+    if (m.t === 'hist') {
+      chat.msgs = (m.msgs || []).slice(-CHAT_KEEP);
+      chat.you = m.you || null;
+      chatRender();
+    } else if (m.t === 'msg') {
+      chat.msgs.push(m);
+      if (chat.msgs.length > CHAT_KEEP) chat.msgs.splice(0, chat.msgs.length - CHAT_KEEP);
+      if (!chat.open) chat.unread++;
+      for (var i = 0; i < chat.listeners.length; i++) {
+        try { chat.listeners[i](m); } catch (e) { console.warn('[BearkoGames] chat.onMessage', e); }
+      }
+      chatRender();
+    } else if (m.t === 'del') {
+      chat.msgs = chat.msgs.filter(function (x) { return x.id !== m.id; });
+      chatRender();
+    } else if (m.t === 'purge') {
+      chat.msgs = chat.msgs.filter(function (x) { return x.uid !== m.uid; });
+      chatRender();
+    } else if (m.t === 'err') {
+      chatNote({ rate: '少し待ってから送ってください', login: 'ログインすると参加できます', name: '名前を決めると参加できます', banned: 'このアカウントは発言できません', long: '1〜200 文字で送ってください' }[m.code] || '送れませんでした');
+    }
+  }
+
+  function chatNote(text) {
+    chat.note = text || '';
+    if (chat.host) chat.host.shadowRoot.querySelector('.note').textContent = chat.note;
+  }
+
+  function chatSend(text) {
+    var t = String(text == null ? '' : text).replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    if (!t) return { ok: false, error: 'empty' };
+    if (t.length > CHAT_MAX) return { ok: false, error: 'long' };
+    if (!chat.ws || chat.ws.readyState !== 1) { chatConnect(); return { ok: false, error: 'closed' }; }
+    try { chat.ws.send(JSON.stringify({ t: 'msg', text: t })); } catch (e) { return { ok: false, error: 'network' }; }
+    return { ok: true };
+  }
+
+  function chatOpen() {
+    if (!chat.enabled) return;
+    chat.open = true;
+    chat.unread = 0;
+    clearTimeout(chat.closeTimer);
+    chatConnect();
+    chatRender();
+    if (chat.host) {
+      var input = chat.host.shadowRoot.querySelector('.foot input');
+      if (input) { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }
+    }
+  }
+
+  function chatClose() {
+    chat.open = false;
+    chatRender();
+    clearTimeout(chat.closeTimer);
+    chat.closeTimer = setTimeout(function () { if (!chat.open) chatDisconnect(); }, CHAT_CLOSE_AFTER);
+  }
+
+  function chatTime(at) {
+    var d = new Date(at), two = function (n) { return (n < 10 ? '0' : '') + n; };
+    return two(d.getHours()) + ':' + two(d.getMinutes());
+  }
+
+  function chatRender() {
+    if (!chat.host) return;
+    var root = chat.host.shadowRoot;
+    var btn = root.querySelector('.btn'), badge = btn.querySelector('.b'), panel = root.querySelector('.panel');
+    badge.textContent = chat.unread > 99 ? '99+' : String(chat.unread);
+    badge.classList.toggle('on', chat.unread > 0 && !chat.open);
+    btn.setAttribute('aria-expanded', String(chat.open));
+    panel.classList.toggle('open', chat.open);
+    if (!chat.open) return;
+    root.querySelector('.head .n').textContent = chat.ws && chat.ws.readyState === 1 ? '' : '接続中…';
+    // 一覧
+    var list = root.querySelector('.list');
+    var atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    list.textContent = '';
+    if (!chat.msgs.length) {
+      var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'まだ発言はありません。最初のひとことをどうぞ';
+      list.appendChild(empty);
+    }
+    var me = state.user ? state.user.id : null;
+    chat.msgs.forEach(function (m) {
+      var el = document.createElement('div'); el.className = 'm';
+      var h = document.createElement('div'); h.className = 'h';
+      var b = document.createElement('b'); b.textContent = m.name || '名無し'; h.appendChild(b);
+      var g = document.createElement('span'); g.className = 'g'; g.textContent = GAME_LABEL[m.game] || m.game; h.appendChild(g);
+      var tm = document.createElement('span'); tm.textContent = chatTime(m.at); h.appendChild(tm);
+      if (me && m.uid === me) {
+        var d = document.createElement('button'); d.className = 'd'; d.type = 'button'; d.textContent = '消す';
+        d.addEventListener('click', function () { chatDelete(m.id); });
+        h.appendChild(d);
+      }
+      var t = document.createElement('div'); t.className = 't'; t.textContent = m.text;
+      el.appendChild(h); el.appendChild(t);
+      list.appendChild(el);
+    });
+    if (atBottom) list.scrollTop = list.scrollHeight;
+    root.querySelector('.note').textContent = chat.note;
+    // 入力欄（未ログイン → ログイン、名無し → 名前を決める）
+    var foot = root.querySelector('.foot');
+    var was = foot.querySelector('input');
+    var draft = was ? was.value : '';
+    foot.textContent = '';
+    if (!state.user) {
+      var msg = document.createElement('span'); msg.className = 'msg'; msg.textContent = '読むだけならこのまま。参加するにはログイン';
+      var login = document.createElement('button'); login.type = 'button'; login.textContent = 'ログインして参加';
+      login.addEventListener('click', function () { api.login(); });
+      foot.appendChild(msg); foot.appendChild(login);
+    } else if (!state.user.name) {
+      var msg2 = document.createElement('span'); msg2.className = 'msg'; msg2.textContent = '参加するには名前を決めてください';
+      var nameBtn = document.createElement('button'); nameBtn.type = 'button'; nameBtn.textContent = '名前を決める';
+      nameBtn.addEventListener('click', function () {
+        var name = prompt('表示名（16 文字まで）', '');
+        if (name == null) return;
+        api.setName(name).then(function (r) { if (!r.ok) chatNote('名前を変えられませんでした'); });
+      });
+      foot.appendChild(msg2); foot.appendChild(nameBtn);
+    } else {
+      var input = document.createElement('input'); input.type = 'text'; input.maxLength = CHAT_MAX; input.placeholder = 'メッセージ（200 文字まで）'; input.value = draft; input.setAttribute('autocomplete', 'off');
+      var send = document.createElement('button'); send.type = 'button'; send.textContent = '送る';
+      var go = function () {
+        var r = chatSend(input.value);
+        if (r.ok) { input.value = ''; chatNote(''); }
+        else if (r.error === 'closed') chatNote('つなぎ直しています…');
+        else if (r.error === 'long') chatNote('1〜200 文字で送ってください');
+      };
+      send.addEventListener('click', go);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) { e.preventDefault(); go(); } });
+      foot.appendChild(input); foot.appendChild(send);
+    }
+  }
+
+  function chatDelete(id) {
+    call('DELETE', '/api/chat/messages/' + encodeURIComponent(id)).then(function (r) {
+      if (r.ok) { chat.msgs = chat.msgs.filter(function (x) { return x.id !== id; }); chatRender(); }
+      else chatNote('消せませんでした');
+    });
+  }
+
+  // ログイン状態が変わったら、入力欄を描き直し、つないでいれば名前を持ち直すためにつなぎ直す
+  function chatOnUser() {
+    if (!chat.enabled) return;
+    chatRender();
+    if (chat.ws) { chatDisconnect(); if (chat.open) chatConnect(); }
+  }
+
+  var chatApi = {
+    /** 窓を開く（つなぐ） */
+    open: function () { chatMount(); chatOpen(); },
+    /** 窓を閉じる（30 秒後に切る） */
+    close: function () { chatClose(); },
+    /** 開いているか */
+    isOpen: function () { return chat.open; },
+    /** 💬 と窓を出す／隠す（遊びの最中は隠す）。隠すときは窓も閉じる */
+    setVisible: function (on) {
+      chat.visible = on !== false;
+      if (!chat.visible && chat.open) chatClose();
+      if (chat.host) applyChatPosition();
+    },
+    /** 置き場所 { position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left', offset: { x, y } } */
+    setPosition: function (opts) {
+      opts = opts || {};
+      if (typeof opts.position === 'string' && /^(top|bottom)-(left|right)$/.test(opts.position)) chat.position = opts.position;
+      if (opts.offset) {
+        var ox = Number(opts.offset.x), oy = Number(opts.offset.y);
+        chat.offset = { x: isFinite(ox) ? Math.max(0, Math.min(ox, 2000)) : chat.offset.x, y: isFinite(oy) ? Math.max(0, Math.min(oy, 2000)) : chat.offset.y };
+      }
+      if (chat.host) applyChatPosition();
+    },
+    /** 窓を使わず自前で出すとき：つなぐ（読み始める）。切るのは disconnect() */
+    connect: function () { chatConnect(); },
+    disconnect: function () { chatDisconnect(); },
+    /** 発言する → { ok, error } （サーバーの返事は onMessage / err で） */
+    send: function (text) { return chatSend(text); },
+    /** 手元にある発言（つないでから届いたもの） */
+    getMessages: function () { return chat.msgs.slice(); },
+    /** 新しい発言が届いたら呼ばれる。解除する関数を返す */
+    onMessage: function (fn) {
+      if (typeof fn === 'function') chat.listeners.push(fn);
+      return function () { chat.listeners = chat.listeners.filter(function (f) { return f !== fn; }); };
+    },
+    /** 未読の数（窓を閉じているあいだに届いたもの） */
+    unread: function () { return chat.unread; },
+  };
+
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.5.0',
+    version: '1.6.0',
     rta: rtaApi,
 
     /**
@@ -387,7 +702,10 @@
     /** 総合スコアの対象タイトル → { ok, games: [{ id, name, kind, status }] } */
     getScoreGames: function () { return call('GET', '/api/score/games'); },
 
-    /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset? }。ログイン状態を読みに行く */
+    /** 全体チャット（SPEC-004。1.6.0）：open / close / setVisible / setPosition / send / onMessage / connect / disconnect */
+    chat: chatApi,
+
+    /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset?, chat?: false | { position, offset, ui } }。ログイン状態を読みに行く */
     init: function (opts) {
       opts = opts || {};
       state.game = opts.game || null;
@@ -395,7 +713,10 @@
       if (opts.ui === false) state.ui = false;
       if (opts.toast) api.setToastPosition({ position: opts.toast, offset: opts.toastOffset });
       if (opts.apiBase) state.base = String(opts.apiBase).replace(/\/+$/, '');
-      return refresh().then(function (r) { state.ready = true; return r; });
+      // 全体チャット（1.6.0）：既定は 💬 を出す。chat: false で何も出さない。{ ui: false } で自前の窓（connect / send / onMessage）
+      if (opts.chat === false) chat.enabled = false;
+      else if (opts.chat && typeof opts.chat === 'object') { if (opts.chat.ui === false) chat.ui = false; chatApi.setPosition(opts.chat); }
+      return refresh().then(function (r) { state.ready = true; try { chatMount(); } catch (e) { console.warn('[BearkoGames] chat', e); } return r; });
     },
 
     /**

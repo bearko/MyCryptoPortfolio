@@ -154,6 +154,8 @@ BearkoGames.chat.onMessage((m) => { ... });   // 自前の表示をしたいゲ�
 
 ## 10. 改定履歴
 
+| 2026-10-17 | 1.0 | 実装（`platform/chat.js` の ChatRoom・`/api/chat/*`・SDK 1.6.0 の `BearkoGames.chat`・ポータルの帯・`/me/` の自分の発言・管理画面の「チャット」）。ゲームごとの `setVisible`（6 章）は各リポジトリの PR |
+
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-10-17 | 0.1 | 下書き |

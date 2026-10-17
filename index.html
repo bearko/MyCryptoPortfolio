@@ -41,6 +41,11 @@
 
   <main class="grid" id="grid" aria-label="ゲーム一覧"></main>
 
+  <!-- SPEC-004: 全体チャット。帯を押すと SDK の窓が開く（💬 のボタンは右下にも出る） -->
+  <section class="chat-band" id="chat-band" hidden>
+    <button class="chat-band__btn" id="chat-open" type="button"><span class="chat-band__label">💬 いまの会話</span><span class="chat-band__sub">読むだけなら誰でも。話すにはログインして名前を決める</span></button>
+  </section>
+
   <footer class="foot">
     キャラクター画像・BGM/SE は My Crypto Heroes（MCH Co., Ltd.）に帰属し、許諾のもとで利用しています。各作品は非公式のファン制作です。
   </footer>
@@ -55,5 +60,17 @@
 
 
 <script type="module" src="js/main.js"></script>
+<script src="sdk/v1.js"></script>
+<script>
+  // SPEC-004: 全体チャット（SDK 1.6.0）。ポータルは「portal」として参加する
+  if (window.BearkoGames) {
+    BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { position: 'bottom-right', offset: { x: 16, y: 16 } } });
+    var chatBand = document.getElementById('chat-band');
+    if (chatBand) {
+      chatBand.hidden = false;
+      document.getElementById('chat-open').addEventListener('click', function () { BearkoGames.chat.open(); });
+    }
+  }
+</script>
 </body>
 </html>

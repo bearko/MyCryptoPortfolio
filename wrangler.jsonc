@@ -21,6 +21,11 @@
       "migrations_dir": "migrations"
     }
   ],
+  // 全体チャットの部屋（SPEC-004）。SQLite つきの Durable Object（無料プランで使える種類）
+  "durable_objects": {
+    "bindings": [{ "name": "CHAT", "class_name": "ChatRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRoom"] }],
   // 毎日 4:00（日本時間）に期限切れのセッションと古い仮アカウントを消す
   "triggers": { "crons": ["0 19 * * *"] },
   // 本番以外のブランチ（プレビュー）のビルドで `wrangler preview` を使うために必要。
