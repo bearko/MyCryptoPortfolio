@@ -19,6 +19,17 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 705e3 },
     ],
   },
+  {
+    id: 'workshop-golden',
+    game: 'workshop',
+    name: 'Workshop 黄金のエクステンション',
+    rule: '1 周目（リセット直後・引き継ぎなし）。Day 1 の開店から、黄金のエクステンションの習得まで。再読み込みすると計測は消える',
+    checkpoints: [
+      { id: 'epic', kind: 'stage', label: 'Epic 解放（インペリアル製法）', minMs: 20 * 60e3 },
+      { id: 'legendary', kind: 'stage', label: 'Legendary 解放（MCH製法）', minMs: 30 * 60e3 },
+      { id: 'clear', kind: 'clear', label: '黄金のエクステンション', minMs: 50 * 60e3 },
+    ],
+  },
 ];
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));
