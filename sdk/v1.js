@@ -233,6 +233,26 @@
     }, 12000);
   }
 
+  // 横断 RTA（SPEC-001 6.14）：区切りがその挑戦の区間に数えられたとき
+  function showCross(c) {
+    var lines = [c.name];
+    if (c.finished) {
+      lines.push('公式タイム（' + c.total + ' 区間の合計）');
+      if (c.reference) lines.push('参考記録：15 分以上操作がなかった区間があるため、ランキングには載りません');
+      else if (c.rank) lines.push((c.best ? '自己ベスト！ ' : '') + 'ランキング ' + c.rank + ' 位');
+      else if (c.best) lines.push('自己ベスト！');
+    } else {
+      lines.push('区間 ' + c.filled + ' / ' + c.total + '：' + c.label + ' ' + fmt(c.segmentMs));
+    }
+    toast({
+      kicker: '横断 RTA',
+      title: c.finished ? fmt(c.timeMs) : c.label,
+      time: !!c.finished,
+      lines: lines,
+      link: { text: c.finished ? 'ランキングを見る' : 'のこりの区間を見る', href: state.base + '/rta/?regulation=' + encodeURIComponent(c.regulation) },
+    }, 9000);
+  }
+
   var rtaApi = {
     /** 計測を始める。{ regulation, timer: 'top' | 'bottom' | false, timerOffset: px }。前の計測は中断になる → { ok, runId, account } */
     start: function (opts) {
@@ -274,6 +294,7 @@
               var cp = reg && reg.checkpoints.filter(function (c) { return c.id === id; })[0];
               toast({ kicker: 'RTA ' + (cp ? cp.label : id), title: fmt(r.splitMs), time: true }, 3500);
             }
+            if (r.cross) showCross(r.cross);
             if (r.finished && rta === run) endRun();
             return r;
           });
@@ -299,6 +320,13 @@
     /** ランキング → { ok, entries: [{ rank, name, timeMs, at, me }], me } */
     getRanking: function (regulation) { return call('GET', '/api/rta/ranking?regulation=' + encodeURIComponent(regulation)); },
 
+    /** 横断 RTA の挑戦を始める（ポータルから。SPEC-001 6.14）→ { ok, account, attempt } */
+    crossStart: function (regulation) { return call('POST', '/api/rta/cross/start', { regulation: regulation }); },
+    /** 横断 RTA の挑戦をやめる */
+    crossAbort: function () { return call('POST', '/api/rta/cross/abort', {}); },
+    /** 挑戦中の横断 RTA → { ok, account, attempt: { regulation, startedAt, deadline, segments: [{ label, game, done, ms }] } | null } */
+    crossCurrent: function () { return call('GET', '/api/rta/cross/current'); },
+
     /** 自分の記録（参考記録も含む） → { ok, account, runs } */
     getMyRuns: function () { return call('GET', '/api/me/rta'); },
 
@@ -309,7 +337,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.3.1',
+    version: '1.4.0',
     rta: rtaApi,
 
     /**

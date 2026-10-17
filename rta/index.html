@@ -10,6 +10,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/account.css">
+<style>
+  [hidden] { display: none !important; } /* a.primary などの display より hidden を優先する */
+  /* 横断 RTA（SPEC-001 6.14）の挑戦 */
+  .cross { margin: 12px 0; padding: 12px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+  .cross h2 { margin: 0 0 4px; font-size: 1rem; }
+  ul.segs { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+  ul.segs li { display: grid; grid-template-columns: 1.4em 1fr auto; align-items: baseline; column-gap: 8px; font-size: .9rem; }
+  ul.segs li .ok { color: var(--accent); font-weight: 900; }
+  ul.segs li .t { font-variant-numeric: tabular-nums; font-weight: 700; }
+  ul.segs li a { font-size: .8rem; }
+</style>
 </head>
 <body>
 <main class="card wide">
@@ -19,6 +30,15 @@
   <nav class="tabs" id="tabs" aria-label="レギュレーション"></nav>
   <p class="note" id="rule"></p>
   <p class="note" id="mine" hidden></p>
+  <section class="cross" id="cross" hidden>
+    <h2>あなたの挑戦</h2>
+    <p class="note" id="crossState"></p>
+    <ul class="segs" id="crossSegs"></ul>
+    <div class="actions">
+      <button type="button" class="primary" id="crossStart">横断 RTA を始める</button>
+      <button type="button" class="danger" id="crossAbort" hidden>挑戦をやめる</button>
+    </div>
+  </section>
 
   <section id="loading"><p class="muted">読み込み中…</p></section>
   <ol class="ranking" id="ranking" hidden></ol>
@@ -30,6 +50,7 @@
   <ul class="note rules">
     <li>ゲームの中の「RTA で始める」から計測します。公式タイムは、サーバーが受け取った時刻の差です。</li>
     <li>15 分以上操作がなかった記録は <b>参考記録</b> です。ランキングには載りませんが、マイページに残ります。</li>
+    <li><b>横断 RTA</b> は、ここで「横断 RTA を始める」を押してから、各ゲームの「RTA で始める」で区間を走ります。公式タイムは区間のタイムの合計で、ゲームを移る時間は数えません。各区間は、挑戦を始めたあとに最初に終えた記録を使います。</li>
     <li>ランキングには、ログインした人の自己ベストが 1 人 1 件載ります。ログインせずに走った記録も、あとでログインすると載ります。</li>
   </ul>
   <p class="note"><a href="../me/">マイページで自分の記録を見る</a></p>
@@ -43,14 +64,79 @@
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   var BG = window.BearkoGames;
-  var HOSTS = { survivor: 'https://survivor.bearko.games/', deckbattle: 'https://deckbattle.bearko.games/' };
+  var HOSTS = {
+    survivor: 'https://survivor.bearko.games/',
+    deckbattle: 'https://deckbattle.bearko.games/',
+    tactics: 'https://tactics.bearko.games/',
+    workshop: 'https://workshop.bearko.games/',
+    factory: 'https://factory.bearko.games/',
+    fortress: 'https://fortress.bearko.games/',
+  };
   var regs = [];
+  var current = null; // いま表示しているレギュレーション
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  // 横断 RTA：挑戦の進み具合（区間ごと）と、始める・やめる
+  function showCross(reg) {
+    var box = $('cross');
+    box.hidden = reg.kind !== 'cross';
+    if (box.hidden) return;
+    $('crossState').textContent = '読み込み中…';
+    $('crossSegs').textContent = '';
+    BG.rta.crossCurrent().then(function (r) {
+      if (current !== reg.id) return;
+      var a = r.ok && r.attempt && r.attempt.regulation === reg.id ? r.attempt : null;
+      var ul = $('crossSegs');
+      ul.textContent = '';
+      reg.segments.forEach(function (sg, i) {
+        var x = a ? a.segments[i] : null;
+        var li = el('li');
+        li.appendChild(el('span', x && x.done ? 'ok' : 'muted', x && x.done ? '✓' : '・'));
+        li.appendChild(el('span', '', sg.label));
+        if (x && x.done) li.appendChild(el('span', 't', BG.rta.formatTime(x.ms)));
+        else if (HOSTS[sg.game]) { var link = el('a', '', 'このゲームへ ↗'); link.href = HOSTS[sg.game]; link.target = '_blank'; link.rel = 'noopener'; li.appendChild(link); }
+        else li.appendChild(el('span'));
+        ul.appendChild(li);
+      });
+      if (a) {
+        var done = a.segments.filter(function (x) { return x.done; });
+        var sum = done.reduce(function (t, x) { return t + x.ms; }, 0);
+        $('crossState').textContent = '挑戦中：' + done.length + ' / ' + a.segments.length + ' 区間（合計 ' + BG.rta.formatTime(sum) + '）。期限 ' +
+          new Date(a.deadline).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '。各ゲームの「RTA で始める」で、のこりの区間を走ってください。';
+      } else {
+        $('crossState').textContent = '「横断 RTA を始める」を押すと、24 時間の挑戦が始まります。押す前に始めた計測は数えません。';
+      }
+      $('crossStart').textContent = a ? '最初からやり直す' : '横断 RTA を始める';
+      $('crossAbort').hidden = !a;
+    });
+  }
+
+  $('crossStart').addEventListener('click', function () {
+    var reg = regs.filter(function (r) { return r.id === current; })[0];
+    if (!reg || reg.kind !== 'cross') return;
+    if ($('crossAbort').hidden === false && !confirm('いまの挑戦をやめて、最初からやり直しますか？')) return;
+    BG.rta.crossStart(reg.id).then(function (r) {
+      if (!r.ok) return fail('挑戦を始められませんでした。時間をおいてやり直してください。');
+      fail('');
+      showCross(reg);
+    });
+  });
+  $('crossAbort').addEventListener('click', function () {
+    if (!confirm('いまの挑戦をやめますか？（終えた区間の記録も消えます）')) return;
+    BG.rta.crossAbort().then(function () {
+      var reg = regs.filter(function (r) { return r.id === current; })[0];
+      if (reg) showCross(reg);
+    });
+  });
 
   function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
 
   function show(regId) {
     var reg = regs.filter(function (r) { return r.id === regId; })[0] || regs[0];
     if (!reg) return;
+    current = reg.id;
+    showCross(reg);
     Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', b.dataset.id === reg.id ? 'true' : 'false'); });
     $('rule').textContent = reg.rule;
     $('play').hidden = !HOSTS[reg.game];

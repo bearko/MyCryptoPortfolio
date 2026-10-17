@@ -509,3 +509,113 @@ test('RTA：DeckBattle のレギュレーション（近代・日本・10 勝で
   tick(5e3);
   assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'win5', igtMs: 50e3, idleMs: 1000 }, opt)).body.rejected, true, '7 秒より速い 5 勝はありえない');
 });
+
+// ---------------------------------------------------------------- タイトルをまたぐ RTA（SPEC-001 6.14）
+import { CROSS_BY_ID, judgeCrossSegment, crossSegmentOf } from '../rta.js';
+
+const PORTAL = 'https://bearko.games';
+const HOST_OF = { survivor: SURVIVOR, tactics: 'https://tactics.bearko.games', workshop: 'https://workshop.bearko.games', factory: 'https://factory.bearko.games', fortress: 'https://fortress.bearko.games', deckbattle: 'https://deckbattle.bearko.games' };
+
+// そのタイトルの計測を始め、ms 経ってから区切りを送る
+async function segment(b, tick, regulation, checkpoint, ms) {
+  const game = regulation.split('-')[0];
+  const opt = { origin: HOST_OF[game] };
+  const runId = (await b.call('POST', '/api/rta/start', { regulation }, opt)).body.runId;
+  tick(ms / 2);
+  await b.call('POST', '/api/rta/ping', { runId, idleMs: 1000 }, opt);
+  tick(ms / 2);
+  return (await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint, igtMs: null, idleMs: 1000 }, opt)).body;
+}
+
+test('横断 RTA：区間の判定（純関数）', () => {
+  const cross = CROSS_BY_ID['cross-first6'];
+  assert.equal(cross.segments.length, 6);
+  for (const sg of cross.segments) for (const r of sg.regulations) assert.ok(REGULATION_BY_ID[r].checkpoints.some((c) => c.id === sg.checkpoint), `${r} に ${sg.checkpoint} がある`);
+  assert.equal(crossSegmentOf(cross, 'tactics-all5', 'ch1'), 1, '全 5 章の計測の第 1 章でも数える');
+  assert.equal(crossSegmentOf(cross, 'survivor-absolute-2x', 'stage1'), -1, 'ABSOLUTE は NORMAL の区間に数えない');
+  const attempt = { started_at: 1000 };
+  assert.equal(judgeCrossSegment(cross, attempt, { started_at: 2000 }, 'factory-lv5', 'lv2', 5000, []), 3);
+  assert.equal(judgeCrossSegment(cross, attempt, { started_at: 500 }, 'factory-lv5', 'lv2', 5000, []), -1, '挑戦の前に始めた計測');
+  assert.equal(judgeCrossSegment(cross, attempt, { started_at: 2000 }, 'factory-lv5', 'lv2', 5000, [3]), -1, '埋まっている区間');
+  assert.equal(judgeCrossSegment(cross, attempt, { started_at: 2000 }, 'factory-lv5', 'lv2', 1000 + cross.windowMs + 1, []), -1, '期限切れ');
+});
+
+test('横断 RTA：6 区間を好きな順に走り、区間の合計が公式タイム（移る時間は数えない）', async () => {
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  await b.call('POST', '/api/auth/google', { credential: 'ok:crosser' });
+  assert.equal((await b.call('POST', '/api/rta/cross/start', { regulation: 'cross-first6' })).status, 403, 'ゲームのサブドメインからは始められない');
+  // 挑戦の前に始めた計測は数えない
+  const early = await b.call('POST', '/api/rta/start', { regulation: 'factory-lv5' }, { origin: HOST_OF.factory });
+  tick(1000);
+  const start = await b.call('POST', '/api/rta/cross/start', { regulation: 'cross-first6' }, { origin: PORTAL });
+  assert.equal(start.status, 200);
+  assert.equal(start.body.attempt.segments.length, 6);
+  tick(5 * MIN);
+  const earlyCp = await b.call('POST', '/api/rta/checkpoint', { runId: early.body.runId, checkpoint: 'lv2', idleMs: 1000 }, { origin: HOST_OF.factory });
+  assert.equal(earlyCp.body.cross, undefined);
+
+  const plan = [
+    ['deckbattle-node1', 'stage1', 1 * MIN],
+    ['survivor-normal', 'stage1', 4.5 * MIN],
+    ['tactics-all5', 'ch1', 2 * MIN],
+    ['fortress-all', 'L1', 3 * MIN],
+    ['workshop-golden', 'epic', 22 * MIN],
+  ];
+  let last;
+  for (const [i, [reg, cp, ms]] of plan.entries()) {
+    last = await segment(b, tick, reg, cp, ms);
+    assert.equal(last.cross.filled, i + 1, `${reg} で ${i + 1} 区間`);
+    assert.equal(last.cross.segmentMs, ms);
+    tick(30 * MIN); // タイトルを移る時間（数えない）
+  }
+  // 同じ区間を 2 回目に走っても、最初の記録のまま
+  const again = await segment(b, tick, 'deckbattle-node1', 'stage1', 0.5 * MIN);
+  assert.equal(again.cross, undefined);
+  const cur = await b.call('GET', '/api/rta/cross/current');
+  assert.equal(cur.body.attempt.segments.filter((x) => x.done).length, 5);
+  assert.equal(cur.body.attempt.segments[0].ms, 4.5 * MIN);
+
+  last = await segment(b, tick, 'factory-lv5', 'lv2', 3 * MIN);
+  assert.equal(last.cross.finished, true);
+  assert.equal(last.cross.timeMs, (1 + 4.5 + 2 + 3 + 22 + 3) * MIN);
+  assert.equal(last.cross.best, true);
+  assert.equal(last.cross.rank, 1);
+  assert.equal((await b.call('GET', '/api/rta/cross/current')).body.attempt, null);
+
+  const rk = await b.call('GET', '/api/rta/ranking?regulation=cross-first6');
+  assert.equal(rk.body.entries.length, 1);
+  assert.equal(rk.body.entries[0].timeMs, 35.5 * MIN);
+  assert.equal(rk.body.me.rank, 1);
+  const mine = await b.call('GET', '/api/me/rta');
+  assert.equal(mine.body.cross.length, 1);
+  assert.equal(mine.body.cross[0].segments.every((x) => x.done), true);
+  const regs = await b.call('GET', '/api/rta/regulations');
+  assert.ok(regs.body.regulations.some((r) => r.id === 'cross-first6' && r.kind === 'cross' && r.segments.length === 6));
+});
+
+test('横断 RTA：24 時間の期限・やめる・未ログインからログイン・退会', async () => {
+  const { db, mk, tick } = rtaSetup();
+  const b = mk();
+  const st = await b.call('POST', '/api/rta/cross/start', { regulation: 'cross-first6' }, { origin: PORTAL });
+  assert.equal(st.body.account, 'guest', '未ログインでも挑戦できる（仮アカウント）');
+  assert.equal((await segment(b, tick, 'factory-lv5', 'lv2', MIN)).cross.filled, 1);
+  tick(24 * 3600e3);
+  assert.equal((await segment(b, tick, 'fortress-all', 'L1', MIN)).cross, undefined, '期限を過ぎた区間は数えない');
+  assert.equal((await b.call('GET', '/api/rta/cross/current')).body.attempt, null);
+  assert.equal(db.sqlite.prepare("SELECT status FROM rta_cross").get().status, 'expired');
+
+  await b.call('POST', '/api/rta/cross/start', { regulation: 'cross-first6' }, { origin: PORTAL });
+  assert.equal((await b.call('POST', '/api/rta/cross/abort', {}, { origin: PORTAL })).status, 200);
+  assert.equal((await b.call('GET', '/api/rta/cross/current')).body.attempt, null);
+
+  await b.call('POST', '/api/rta/cross/start', { regulation: 'cross-first6' }, { origin: PORTAL });
+  await segment(b, tick, 'factory-lv5', 'lv2', MIN);
+  await b.call('POST', '/api/auth/google', { credential: 'ok:later' });
+  const cur = await b.call('GET', '/api/rta/cross/current');
+  assert.equal(cur.body.account, 'login');
+  assert.equal(cur.body.attempt.segments[3].done, true, 'ログインしても挑戦は続く');
+  await b.call('DELETE', '/api/me');
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_cross').get().n, 0);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_cross_segments').get().n, 0);
+});

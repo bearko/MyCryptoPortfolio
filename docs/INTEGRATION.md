@@ -79,12 +79,13 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
    - IGT がゲーム内時間でないとき（Tactics のターン数）は、レギュレーションに `igt: 'turns'` を書き、`igtMs` の欄にその値を入れる
    - 経過時間の表示・区間タイム・結果の通知・15 分の無操作（参考記録）は SDK と共通基盤が受け持つ
    - Survivor（SPEC-040）が例
+3. タイトルをまたぐ RTA（SPEC-001 6.14）：`platform/rta.js` の `CROSS_REGULATIONS` に区間（数えるレギュレーションと区切り）を足すだけ。ゲーム側の変更はいらない（いつもの計測の区切りを、サーバーが挑戦の区間として数える）
 
 ## 4. 本番の D1（データベース）
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
-- これまでの 0001〜0005 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
+- これまでの 0001〜0006 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
 - 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
 
 ### 4.1 管理画面（bearko.games/admin/）
@@ -147,6 +148,7 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 - **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は設定とゲームが `web/` の下にあり、プレビューのコマンドがリポジトリの直下で動くため失敗していた。直下に `wrangler.jsonc`（`assets.directory: ./web/dist` と、`web/dist` を作る `build.command`）を置いて直した（Fortress の SPEC-124）
 - **Cloudflare の本番のブランチ**：ダッシュボードの Worker → Settings → Build → Branch control の「Production branch」。プレビューの設定画面（Tracking branch）と間違えやすい
 - **サンドボックスから本番のサイトに curl できない**（プロキシで 403）。本番の確認は WebFetch か、作者に見てもらう
+- **横断 RTA の区間は「挑戦を始めたあとに始めた計測」だけ**：先にゲームで計測を始めてから、ポータルで挑戦を始めると、その計測は数えない（e2e で確かめるときの順番に注意）
 - **未ログインで書き込みを同時に送る**：Cookie がまだないので、サーバーは仮アカウントを送った数だけ作り、記録が 1 つしか残らなかった。SDK 1.3.1 から、ログインも仮アカウントもないあいだは最初の書き込みの返事を待ってから残りを送る（ゲーム側で順に送る必要はない）
 - **成績はゲームの自己申告**：範囲の確認はしているが改ざんは防げない（カジュアルなランキングとして割り切っている）
 
@@ -156,7 +158,7 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 
 - 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。公開後は管理画面の分布も見る。Survivor は自動プレイで確かめた：6.3）
 - ~~管理画面（点数の分布・記録の削除・締め出し）~~（2026-10-17 済み。SPEC-003）
-- タイトルをまたぐ RTA
+- ~~タイトルをまたぐ RTA~~（2026-10-17 済み。`cross-first6`、SPEC-001 6.14）。次の区間の組み合わせ（全クリアの合計など）は走る人が増えてから
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - 同じ条件で競うレギュレーション（10 buy year の週替わりチャレンジ。案は SPEC-002 6.1）
 - ~~Factory のセーブとクリアの条件（#94）~~（2026-10-17 済み。Factory v1.0.0）、TCG の連戦（#5）、Education のゲームクリア（#1）
