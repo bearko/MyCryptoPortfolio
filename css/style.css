@@ -30,7 +30,7 @@ button { font: inherit; color: inherit; }
   height: 100vh;
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;   /* 見出し・一覧・チャットの帯（SPEC-004）・注記 */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;   /* 見出し・いまの会話の流れ（SPEC-005）・一覧・注記 */
   gap: 10px;
   padding: max(10px, env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right))
            max(8px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
@@ -94,13 +94,29 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 
 .foot { font-size: 9.5px; line-height: 1.45; color: var(--muted); text-align: center; }
 
-/* 全体チャットの帯（SPEC-004 5 章）。押すと SDK の窓が開く */
-.chat-band { margin: 2px 0 4px; }
-.chat-band__btn { width: 100%; display: flex; align-items: center; gap: 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text, #eef0f6);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; text-align: left; }
-.chat-band__btn:hover { border-color: var(--accent); }
-.chat-band__label { white-space: nowrap; flex: none; }
-.chat-band__sub { min-width: 0; font-size: 10.5px; font-weight: 500; color: var(--muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* いまの会話の流れ（SPEC-005 5.5）。タイトル横断の直近 12 件を右から左へ。押すと /chat/ */
+.ticker { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); text-decoration: none; overflow: hidden; }
+.ticker[hidden] { display: none; }
+.ticker:hover { border-color: var(--accent); }
+.ticker__tag { flex: none; font-size: 13px; }
+.ticker__win { flex: 1; min-width: 0; overflow: hidden; mask-image: linear-gradient(90deg, #000 92%, transparent); }   /* 右端だけぼかす（左をぼかすと最初の 1 件の名前が欠ける） */
+.ticker__track { display: inline-flex; gap: 28px; white-space: nowrap; will-change: transform;
+  animation: ticker calc(var(--n, 6) * 5s) linear infinite; }
+.ticker:hover .ticker__track { animation-play-state: paused; }
+.ticker__it { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+.ticker__it b { color: #c4b5fd; }
+.ticker__it i { font-style: normal; font-size: 9.5px; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.ticker__t { color: var(--text); max-width: 24em; overflow: hidden; text-overflow: ellipsis; }
+.ticker__av { width: 18px; height: 18px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; flex: none;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #c4b5fd; }
+.ticker__av img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+@keyframes ticker { to { transform: translateX(-50%); } }
+@media (max-width: 520px) { .chat-link { display: none; } }   /* 狭い画面では見出しの行に入らない。流れの帯と 💬 から行ける */
+@media (prefers-reduced-motion: reduce) {
+  .ticker__track { animation: none; }
+  .ticker__it + .ticker__it { display: none; }   /* 流さず、最新の 1 件だけ */
+}
 
 /* 横長の画面（PC・横向きのスマホ）はサムネイルの比率（1200:630）を崩さずに並べる。
    カードの幅は「列で割った幅」と「行で割った高さから逆算した幅」の小さいほう。
