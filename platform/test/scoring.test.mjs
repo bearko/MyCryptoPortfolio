@@ -18,7 +18,7 @@ test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリ
     ['education', { cards: 47, cells: 12, heroes: 1, titles: 1, cleared: false }, { cards: 469, cells: 40, heroes: 6, titles: 4, cleared: true }],
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
     ['10buy', { years: 10, netWorth: -100000, difficulty: 'normal' }, { years: 10, netWorth: 5e7, difficulty: 'normal' }],
-    ['factory', { factoryLevel: 2 }, { factoryLevel: 5, weeksToLv5: 156, questsCleared: 50, crafted: { uncommon: 100 } }],
+    ['factory', { factoryLevel: 2 }, { factoryLevel: 5, weeksToLv5: 248, questsCleared: 88, crafted: { common: 4, uncommon: 6, rare: 9, epic: 13, legendary: 23 } }],
   ];
   for (const [game, a, b] of cases) {
     const sa = s(game, a), sb = s(game, b);
@@ -114,6 +114,22 @@ test('Fortress v2：v1 の成績（1 レベルずつ）を束ねて、レベル�
   const next = combine([prev, { levels: { L1: FORTRESS_TYPICAL, L3: FORTRESS_TYPICAL } }]);
   assert.deepEqual(Object.keys(next.levels), ['L1', 'L2', 'L3']);
   assert.equal(next.levels.L1.hpLeft, 90);
+});
+
+test('Factory v2：係数は自動プレイの実測（期限までふつうに遊んで約 10,000）', () => {
+  assert.equal(SCORERS.factory.version, 'v2');
+  const f = (weeksToLv5, questsCleared, crafted) => s('factory', { factoryLevel: 5, weeksToLv5, questsCleared, crafted });
+  // 実測の 4 回（期限の時点）
+  const runs = [
+    f(250, 84, { common: 5, uncommon: 6, rare: 10, epic: 12, legendary: 25 }),
+    f(246, 87, { common: 4, uncommon: 8, rare: 6, epic: 13, legendary: 21 }),
+    f(260, 88, { common: 4, uncommon: 6, rare: 10, epic: 14, legendary: 22 }),
+    f(220, 98, { common: 3, uncommon: 6, rare: 9, epic: 14, legendary: 25 }),
+  ].sort((a, b) => a - b);
+  const median = (runs[1] + runs[2]) / 2;
+  assert.ok(Math.abs(median - 10000) < 300, `中央値 ${median}`);
+  assert.equal(f(240, 0, {}), 7000, 'ふつうの速さ（5 年）で 2,000');
+  assert.equal(f(120, 0, {}), 9000, '速さは伸び続ける（上限なし）');
 });
 
 test('10 buy year：難易度の係数', () => {
