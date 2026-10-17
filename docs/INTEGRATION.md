@@ -147,6 +147,7 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 - **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は設定とゲームが `web/` の下にあり、プレビューのコマンドがリポジトリの直下で動くため失敗していた。直下に `wrangler.jsonc`（`assets.directory: ./web/dist` と、`web/dist` を作る `build.command`）を置いて直した（Fortress の SPEC-124）
 - **Cloudflare の本番のブランチ**：ダッシュボードの Worker → Settings → Build → Branch control の「Production branch」。プレビューの設定画面（Tracking branch）と間違えやすい
 - **サンドボックスから本番のサイトに curl できない**（プロキシで 403）。本番の確認は WebFetch か、作者に見てもらう
+- **未ログインで書き込みを同時に送る**：Cookie がまだないので、サーバーは仮アカウントを送った数だけ作り、記録が 1 つしか残らなかった。SDK 1.3.1 から、ログインも仮アカウントもないあいだは最初の書き込みの返事を待ってから残りを送る（ゲーム側で順に送る必要はない）
 - **成績はゲームの自己申告**：範囲の確認はしているが改ざんは防げない（カジュアルなランキングとして割り切っている）
 
 ## 8. 残っている課題
