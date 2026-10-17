@@ -7,7 +7,7 @@ import * as deckbattle from './deckbattle.v2.js';
 import * as education from './education.v2.js';
 import * as workshop from './workshop.v1.js';
 import * as tenbuy from './10buy.v1.js';
-import * as factory from './factory.v1.js';
+import * as factory from './factory.v2.js';
 
 // combine：成績を束ねる関数を持つタイトル（レベルごとの自己ベストの合計など）は、共通基盤が前回の自己ベストと束ねてから計算する
 const v = (mod, version = 'v1') => ({ version, kind: mod.KIND, score: mod.score, ...(mod.combine ? { combine: mod.combine } : {}) });
@@ -20,7 +20,7 @@ export const SCORERS = {
   education: v(education, 'v2'), // v2：ゲームクリアと加点（MyCryptoEducation#1）
   workshop: v(workshop),
   '10buy': v(tenbuy),
-  factory: v(factory),
+  factory: v(factory, 'v2'), // v2：係数を自動プレイの実測に（SPEC-002 3.9）
 };
 
 /** 総合スコアにまだ入れないタイトル（SPEC-002 3.5） */
