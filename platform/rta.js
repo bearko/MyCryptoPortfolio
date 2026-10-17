@@ -21,6 +21,18 @@ export const REGULATIONS = [
     ],
   },
   {
+    id: 'survivor-absolute-2x',
+    game: 'survivor',
+    name: 'Survivor 全 3 ステージ（ABSOLUTE ×2.0）',
+    rule: 'ABSOLUTE の 4 軸（出現数・HP・攻撃力・速さ）をすべて ×2.0 に固定・ヒーロー自由。ステージ 1 の開始から、全 3 ステージクリアまで',
+    // ABSOLUTE はボスに効かず、ボスはゲーム内の 4 分で出る。最短時間は survivor-normal と同じ
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: 'ステージ 1 クリア', minMs: 235e3 },
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2 クリア', minMs: 470e3 },
+      { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 705e3 },
+    ],
+  },
+  {
     id: 'workshop-golden',
     game: 'workshop',
     name: 'Workshop 黄金のエクステンション',

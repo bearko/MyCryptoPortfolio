@@ -140,7 +140,7 @@ test('総合スコアの分布：タイトルごとの件数・中央値・上�
   const boss = await player('boss');
   const games = (await boss.admin('GET', '/api/admin/scores')).body.games;
   const sv = games.find((x) => x.id === 'survivor');
-  assert.equal(sv.formula, 'survivor.v1');
+  assert.equal(sv.formula, 'survivor.v2');
   assert.deepEqual([sv.count, sv.login, sv.median, sv.top10, sv.max], [3, 2, 10000, 15000, 15000]);
   assert.deepEqual(sv.top.map((t) => [t.name, t.account, t.score]), [['Bさん', 'login', 15000], ['Aさん', 'login', 10000], [null, 'guest', 6000]]);
   assert.equal(games.find((x) => x.id === 'tactics').count, 0, '記録のないタイトルも行は出る');

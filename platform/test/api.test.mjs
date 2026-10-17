@@ -425,6 +425,29 @@ test('RTA：レギュレーションの定義', async () => {
   assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });
 
+test('RTA：Survivor ABSOLUTE ×2.0 のレギュレーション', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'survivor-absolute-2x');
+  assert.deepEqual([reg.game, reg.igt, reg.checkpoints.map((c) => c.id)], ['survivor', 'ms', ['stage1', 'stage2', 'clear']]);
+  // ボスは ABSOLUTE の倍率を受けず 4 分で出るので、最短時間は NORMAL と同じ
+  assert.deepEqual(
+    REGULATION_BY_ID['survivor-absolute-2x'].checkpoints.map((c) => [c.id, c.kind, c.minMs]),
+    REGULATION_BY_ID['survivor-normal'].checkpoints.map((c) => [c.id, c.kind, c.minMs]),
+  );
+
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  assert.equal((await b.call('POST', '/api/rta/start', { regulation: 'survivor-absolute-2x' }, { origin: 'https://tactics.bearko.games' })).status, 403);
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-absolute-2x' })).body.runId;
+  for (const [cp, min] of [['stage1', 5], ['stage2', 5], ['clear', 5]]) {
+    tick(min * MIN);
+    await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: cp, igtMs: 1, idleMs: 1000 });
+  }
+  const runs = (await b.call('GET', '/api/me/rta')).body.runs;
+  assert.equal(runs[0].regulation, 'survivor-absolute-2x');
+  assert.equal(runs[0].timeMs, 15 * MIN);
+});
+
 test('RTA：Tactics のレギュレーション（IGT はターン数）', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const ch1 = res.body.regulations.find((r) => r.id === 'tactics-ch1');

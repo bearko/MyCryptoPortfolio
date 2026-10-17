@@ -125,6 +125,19 @@ test('Tactics v2：v1 の生の成績（倍率の前の点がない）からも�
   assert.equal(s('tactics', { chaptersCleared: 4, cleared: false, finalScore: 0, regulation: 'common' }), 4000, '本番の 1 件（2026-10-17）は変わらない');
 });
 
+test('Survivor v2：ABSOLUTE の倍率は 2.0 まで（係数 1/30 は v1 のまま）', () => {
+  const v = (regulationMul, reportScore = 150000) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, regulationMul });
+  assert.equal(SCORERS.survivor.version, 'v2');
+  assert.equal(v(1), 10000);
+  assert.equal(v(0.5), 7500, '2.0 未満はそのまま');
+  assert.equal(v(1.5), 12500);
+  assert.equal(v(2), 15000);
+  assert.equal(v(5), 15000, '×5.0 でも 2.0 で止める');
+  assert.equal(v(5, 300000), 25000, '活動レポートのスコアには上限がない（D11）');
+  assert.equal(s('survivor', { stagesCleared: 2, cleared: false, regulationMul: 5 }), 3000, '節目の点には倍率を掛けない');
+  assert.equal(s('survivor', { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1000 }), null);
+});
+
 test('ありえない成績は受け付けない', () => {
   assert.equal(s('tactics', { chaptersCleared: 6, cleared: false }), null);
   assert.equal(s('tactics', { chaptersCleared: 3, cleared: true, finalScore: 1 }), null, 'クリアなら 5 章');
