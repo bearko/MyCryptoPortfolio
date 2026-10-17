@@ -403,6 +403,16 @@ test('RTA：Workshop のレギュレーション', async () => {
   assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });
 
+test('RTA：Factory のレギュレーション', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'factory-lv5');
+  assert.equal(reg.game, 'factory');
+  assert.deepEqual(reg.checkpoints.map((c) => c.id), ['lv2', 'lv3', 'lv4', 'clear']);
+  const def = REGULATION_BY_ID['factory-lv5'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
+});
+
 test('RTA：レギュレーションの定義', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const reg = res.body.regulations.find((r) => r.id === 'survivor-normal');
