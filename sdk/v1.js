@@ -20,7 +20,7 @@
   if (window.BearkoGames) return;
 
   var ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
-  var state = { base: 'https://bearko.games', game: null, version: null, user: null, guest: null, ready: false, ui: true, defs: null };
+  var state = { base: 'https://bearko.games', game: null, version: null, user: null, guest: null, hasAccount: false, ready: false, ui: true, defs: null };
   var listeners = [];
   var trophyListeners = [];
 
@@ -30,7 +30,7 @@
     }
   }
 
-  function call(method, path, body) {
+  function send(method, path, body) {
     var opt = { method: method, credentials: 'include', headers: {} };
     if (body !== undefined) {
       opt.headers['Content-Type'] = 'application/json';
@@ -39,10 +39,24 @@
     return fetch(state.base + path, opt)
       .then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (data) {
+          if (res.ok && data.account === 'guest') state.guest = state.guest || { id: null };
+          if (res.ok && data.account) state.hasAccount = true;
           return res.ok ? Object.assign({ ok: true }, data) : { ok: false, status: res.status, error: data.error || 'http_' + res.status };
         });
       })
       .catch(function (e) { return { ok: false, error: 'network', detail: String(e && e.message || e) }; });
+  }
+
+  // ログインも仮アカウントもまだないとき、書き込みを同時に送ると、Cookie がまだないので
+  // サーバーが仮アカウントを送った数だけ作ってしまう（記録が 1 つしか残らない）。
+  // そのあいだは最初の書き込みの返事（ここで Cookie が届く）を待ってから、残りを送る（SPEC-001 4.6）
+  var accountGate = null;
+  function call(method, path, body) {
+    if (method === 'GET' || state.user || state.guest || state.hasAccount) return send(method, path, body);
+    if (accountGate) return accountGate.then(function () { return call(method, path, body); });
+    var first = send(method, path, body);
+    accountGate = first.then(function () { accountGate = null; });
+    return first;
   }
 
   function refresh() {
@@ -295,7 +309,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.3.0',
+    version: '1.3.1',
     rta: rtaApi,
 
     /**
@@ -394,7 +408,7 @@
     /** この端末のログインを終える */
     logout: function () {
       return call('POST', '/api/auth/logout', {}).then(function (r) {
-        if (r.ok) { state.user = null; emit(); }
+        if (r.ok) { state.user = null; state.hasAccount = false; emit(); }
         return r;
       });
     },
