@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 状態 | **Draft（0.1、2026-10-17）**。作者の確認待ち（9 章） |
+| 状態 | **Accepted（1.0、2026-10-17）**。9 章の作者の決定どおりに作る。順番は 10 章 |
 | 作成 | 2026-10-17 |
 | 親 | [SPEC-004](SPEC-004-global-chat.md)（全体チャット 1.x。部屋・API・SDK 1.6） |
 | 置き場所 | 部屋 `platform/chat.js`、API `platform/api.js`、D1 `migrations/`、SDK `sdk/v1.js`（1.7.0）、ポータル `index.html` / `chat/` / `me/` |
@@ -47,7 +47,7 @@ PC（1100px 以上）                           スマホ
 - **PC：右側に常に出ている「ドック」**（幅 320px。▸ で畳める。畳んだかどうかは端末に覚える）。ゲームの表示はいまのまま、空いている右側に重ねる。ゲームが右端まで使う画面（Fortress の戦闘など）では、ゲームが `setVisible(false)` で隠すのは 1.x と同じ
 - **スマホ：💬 → シート**（2 章）。常時表示はしない。かわりに **未読の数** と、ポータルの上部の流れ（7 章）で盛り上がりを見せる
 - **1 件の見た目（YouTube 風）**：アイコン・名前・タイトルの札・時刻 ／ 本文 ／ ♡ いいね（数）・返信（数）・自分のものなら 編集・消す ／ 返信は「返信 N 件を見る」で畳む
-- **並び**：新しい順（上が最新）。入力欄は **PC は上**（YouTube と同じ）、**スマホは下**（キーボードのすぐ上）
+- **並び**：**新しい順** と **いいね順** を切り替える（既定は新しい順。上が最新）。いいね順は部屋から「いいねの多い親 50 件」を取り直す。入力欄は **PC は上**（YouTube と同じ）、**スマホは下**（キーボードのすぐ上）
 
 ## 4. いいね・返信・編集
 
@@ -91,7 +91,7 @@ CREATE TABLE likes (msg INTEGER NOT NULL, uid TEXT NOT NULL, at INTEGER NOT NULL
 ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "10042"）。無ければ既定の絵
 ```
 
-- `GET /api/me` が `avatar` を返す。`PUT /api/me/avatar { id }` で変える（ログインした人だけ。id は資産リポジトリのヒーロー一覧にあるものだけ）
+- `GET /api/me` が `avatar` を返す。`POST /api/me/avatar { id }` で変える（ログインした人だけ。`null` で既定の絵に戻す）。id の形（`hero:数字` / `ext:数字`）だけを確かめ、絵が無ければ画面が既定の絵に落とす（Worker から資産リポジトリを引かない）
 - 絵は資産リポジトリ（bearko/mycryptoheroes）の raw URL。**アップロードはしない**（審査と保存の費用が無料枠に合わない。ヒーローの絵なら世界観にも合う）
 - 発言には `avatar` を載せる（部屋は接続のときに Worker から受け取る。1.x の `{ uid, name, game, banned }` に足す）。**名前と同じで、変えると以後の発言から変わる**（過去の発言は接続時の絵のまま。部屋は D1 を読まない）
 - SDK：`BearkoGames.getUser().avatar`、`BearkoGames.setAvatar(id)`、`BearkoGames.avatarUrl(id)`。各タイトルのマイページは、この 3 つで選ぶ画面を作る。**選ぶ画面には「bearko.games 全体のアイコンが変わります」と書く**（作者の依頼）
@@ -106,6 +106,9 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 | `chat.like(id)` / `chat.reply(id, text)` / `chat.edit(id, text)` | 窓を使わないゲーム（`ui: false`）のため |
 | `chat.onMessage(fn)` | 1.x のまま。`like` / `edit` / `del` も流す（`fn({ t, … })`） |
 | `chat.stats()` | タイトルごとの直近 24 時間の件数（7 章の「にぎわい」） |
+| `chat.setSort('new' \| 'likes')` | 並び順（9 章 Q4） |
+| `chat.onCompose(fn)` / `chat.layout()` | 入力欄に入った・出た（Factory はドックでは書いているあいだだけ止める）／いまの形（`dock` / `float` / `sheet`） |
+| `BearkoGames.openAvatarPicker()` | アイコンを選ぶ窓（ヒーロー／エクステンションのタブ・名前で絞る・「bearko.games 全体のアイコンが変わります」）。各タイトルのマイページはこれを呼ぶだけ |
 
 ### 5.5 ポータル
 
@@ -149,14 +152,14 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 - 通知（返信されたら知らせる）。まずは未読の数だけ
 - 個別のチャット・DM（SPEC-004 と同じ）
 
-## 9. 作者に決めてもらうこと
+## 9. 作者の決定（2026-10-17）
 
-| # | 論点 | 提案 |
+| # | 論点 | 決定 |
 |---|---|---|
-| Q1 | アイコンの選択肢 | **MCH のヒーロー全員**（資産リポジトリの一覧。名前で絞る）。各ゲームの登場ヒーローだけ、にもできる |
-| Q2 | D1 の `migrations/` に `users.avatar` を足してよいか | SPEC-004 のときは D1 を触らなかった。今回は 1 列足す（`0007_avatar.sql`）。本番デプロイで適用 |
-| Q3 | PC のドックをゲーム内でも既定で出すか | **出す**（SDK の既定を `dock`）。ゲームはいまの `setVisible` で隠す画面を決めるだけ。ゲームの幅は変えない |
-| Q4 | 並び順 | **新しい順**（YouTube 風）。入力欄は PC は上・スマホは下 |
+| Q1 | アイコンの選択肢 | **MCH のヒーロー全員 ＋ エクステンション全部**（資産リポジトリの `Data/Heroes/heroes.json`・`Data/Extensions/extensions.json`。名前で絞る）。id は `hero:1001` / `ext:5106` の形 |
+| Q2 | D1 の `migrations/` に `users.avatar` を足す | **足してよい**（`0007_avatar.sql`。マージの前に本番へ適用） |
+| Q3 | PC のドック | **ゲーム内でも既定で出す**。スマホは無理に常時表示せず、💬 で切り替える（シート） |
+| Q4 | 並び順 | **新しい順といいね順を切り替えられる**。入力欄は PC は上・スマホは下 |
 
 ## 10. 作る順番
 
@@ -172,3 +175,4 @@ ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "100
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-10-17 | 0.1 | 下書き。作者の依頼（1 章）を 4〜7 章に展開。SDK 1.6.2 の不具合の直しを 2 章に |
+| 2026-10-17 | 1.0 | 作者の決定（9 章）：ヒーロー＋エクステンション、D1 の列、ドックは既定、新しい順といいね順。部屋と API（5.1・5.2・5.3）を実装 |
