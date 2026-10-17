@@ -57,6 +57,7 @@
       <button type="button" data-tab="scores">総合スコア</button>
       <button type="button" data-tab="rta">RTA の記録</button>
       <button type="button" data-tab="players">プレイヤー</button>
+      <button type="button" data-tab="chat">チャット</button>
     </nav>
 
     <section data-pane="scores" hidden>
@@ -89,6 +90,13 @@
       <ul class="list" id="ban-list"></ul>
       <p class="muted" id="ban-empty" hidden>締め出している人はいません。</p>
       <p class="note">締め出すと、ランキング（総合・タイトル別・RTA）から隠し、新しい成績・トロフィー・RTA を受け付けなくなります。記録は消しません。退会してログインし直しても締め出しは残ります。</p>
+    </section>
+
+    <!-- SPEC-004 7 章：全体チャットの直近 200 件。発言を消す・その人を締め出す -->
+    <section data-pane="chat" hidden>
+      <p class="note">直近 200 件（<span id="chat-total">0</span> 件が残っています）。締め出すと、その人の発言はすべて消え、接続も切れます。</p>
+      <ul class="list" id="chat-list"></ul>
+      <p class="muted" id="chat-empty" hidden>発言はありません。</p>
     </section>
   </section>
 
@@ -286,8 +294,37 @@
     });
   }
 
+  // ---------------------------------------------------------------- 全体チャット（SPEC-004）
+  function renderChat() {
+    api('GET', '/api/admin/chat').then(function (r) {
+      if (r.status !== 200) return fail(r.status === 503 ? 'チャットの部屋がありません（この環境では使えません）。' : '読み込めませんでした（' + (r.error || r.status) + '）。');
+      var ul = $('chat-list');
+      ul.textContent = '';
+      $('chat-total').textContent = String(r.total || 0);
+      r.msgs.slice().reverse().forEach(function (m) {
+        var li = el('li', 'item');
+        var head = el('div', 'head');
+        head.appendChild(who(m.name, 'login', false));
+        head.appendChild(badge('ref', m.game));
+        li.appendChild(head);
+        var text = el('div', null, m.text);
+        text.style.whiteSpace = 'pre-wrap';
+        text.style.wordBreak = 'break-word';
+        text.style.margin = '4px 0';
+        li.appendChild(text);
+        li.appendChild(el('small', null, day(m.at) + ' ・ ID ' + m.uid));
+        var acts = el('div', 'acts');
+        acts.appendChild(button('secondary', '消す', function () { api('POST', '/api/admin/chat/delete', { id: m.id }).then(function (res) { done(res, refresh); }); }));
+        acts.appendChild(button('danger', '締め出す', function () { ban(m.uid, m.name); }));
+        li.appendChild(acts);
+        ul.appendChild(li);
+      });
+      $('chat-empty').hidden = !!r.msgs.length;
+    });
+  }
+
   // ---------------------------------------------------------------- 画面の切り替え
-  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers };
+  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat };
   function show(tab) {
     current = renderers[tab] ? tab : 'scores';
     Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', String(b.dataset.tab === current)); });

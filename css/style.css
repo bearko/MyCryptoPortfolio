@@ -30,7 +30,7 @@ button { font: inherit; color: inherit; }
   height: 100vh;
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;   /* 見出し・一覧・チャットの帯（SPEC-004）・注記 */
   gap: 10px;
   padding: max(10px, env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right))
            max(8px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
@@ -93,6 +93,14 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .card.asset { border-style: dashed; border-color: rgba(34, 211, 238, .45); }
 
 .foot { font-size: 9.5px; line-height: 1.45; color: var(--muted); text-align: center; }
+
+/* 全体チャットの帯（SPEC-004 5 章）。押すと SDK の窓が開く */
+.chat-band { margin: 2px 0 4px; }
+.chat-band__btn { width: 100%; display: flex; align-items: center; gap: 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text, #eef0f6);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; text-align: left; }
+.chat-band__btn:hover { border-color: var(--accent); }
+.chat-band__label { white-space: nowrap; flex: none; }
+.chat-band__sub { min-width: 0; font-size: 10.5px; font-weight: 500; color: var(--muted); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 横長の画面（PC・横向きのスマホ）はサムネイルの比率（1200:630）を崩さずに並べる。
    カードの幅は「列で割った幅」と「行で割った高さから逆算した幅」の小さいほう。

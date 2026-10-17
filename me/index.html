@@ -60,6 +60,13 @@
     <h2>RTA の記録</h2>
     <ul class="runs" id="run-list"></ul>
     <p class="muted" id="run-empty" hidden>まだ記録がありません。</p>
+  </section>
+
+  <!-- SPEC-004: 全体チャットの自分の発言（ログイン中だけ）。消すと部屋からも消える -->
+  <section id="chat" hidden>
+    <h2>チャットの発言</h2>
+    <ul class="runs" id="chat-list"></ul>
+    <p class="muted" id="chat-empty" hidden>まだ発言はありません。</p>
     <p class="note"><a href="../rta/">RTA ランキングを見る</a>。「参考記録」は 15 分以上操作がなかった記録で、ランキングには載りません。</p>
   </section>
 
@@ -179,6 +186,32 @@
     });
   }
 
+  // SPEC-004: 自分の発言（直近 100 件）と削除
+  function renderChat() {
+    if (!BG.getUser()) { $('chat').hidden = true; return; }
+    fetch('/api/me/chat', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { msgs: null }; }).then(function (r) {
+      if (!r.msgs) { $('chat').hidden = true; return; }
+      var ul = $('chat-list');
+      ul.textContent = '';
+      r.msgs.forEach(function (m) {
+        var li = document.createElement('li');
+        var head = document.createElement('div');
+        var text = document.createElement('span'); text.textContent = m.text; head.appendChild(text);
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'secondary'; del.textContent = '消す'; del.style.marginLeft = '8px';
+        del.addEventListener('click', function () {
+          fetch('/api/chat/messages/' + encodeURIComponent(m.id), { method: 'DELETE', credentials: 'same-origin' }).then(function (res) { if (res.ok || res.status === 404) renderChat(); else fail('消せませんでした。'); });
+        });
+        head.appendChild(del);
+        var sub = document.createElement('small');
+        sub.textContent = m.game + ' ・ ' + new Date(m.at).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
+        li.appendChild(head); li.appendChild(sub);
+        ul.appendChild(li);
+      });
+      $('chat-empty').hidden = !!r.msgs.length;
+      $('chat').hidden = false;
+    }).catch(function () {});
+  }
+
   function render() {
     var user = BG.getUser();
     $('loading').hidden = true;
@@ -195,7 +228,7 @@
     fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (r) { $('banned').hidden = !r.banned; }).catch(function () {});
   }
 
-  BG.onChange(function () { render(); renderBanned(); renderScores(); renderTrophies(); renderRuns(); });
+  BG.onChange(function () { render(); renderBanned(); renderScores(); renderTrophies(); renderRuns(); renderChat(); });
   BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
     if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
     render();
@@ -203,6 +236,7 @@
     renderScores();
     renderTrophies();
     renderRuns();
+    renderChat();
   });
 
   $('login').addEventListener('click', function () {

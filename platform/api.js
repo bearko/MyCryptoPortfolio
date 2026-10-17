@@ -25,6 +25,10 @@
 //   GET    /api/score/ranking  総合ランキング（?game= でタイトル別）
 //   GET    /api/me/scores      自分のタイトルスコアと総合スコア
 //   /api/admin/*               管理画面（SPEC-003。platform/admin.js）
+//   GET    /api/chat/ws        全体チャットの接続（WebSocket。SPEC-004。platform/chat.js）
+//   GET    /api/chat/messages  直近 50 件（?after= で続き。WebSocket が使えないときの予備）
+//   GET    /api/me/chat        自分の発言
+//   DELETE /api/chat/messages/<id> 自分の発言を消す（管理者はだれのでも）
 //
 // 締め出したアカウント（表 bans。SPEC-003 5 章）は、ランキングから隠し、成績・トロフィー・RTA を 403 で受け付けない。
 // Cookie（どちらも Domain=.bearko.games・HttpOnly・Secure・SameSite=Lax）：
@@ -35,6 +39,7 @@ import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
+import { cleanGame } from './chat.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
 export const GUEST_TTL = 90 * 86400e3;
@@ -81,7 +86,7 @@ function parseCookies(header) {
   return out;
 }
 
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], log }) {
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, log }) {
   const allowed = (origin) => !!origin && (ORIGIN_RE.test(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
@@ -179,6 +184,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     stmts.push(db.prepare('DELETE FROM sessions WHERE user_id = ?1').bind(userId));
     stmts.push(db.prepare('DELETE FROM users WHERE id = ?1').bind(userId));
     await db.batch(stmts);
+    // 退会した人の発言は部屋からも消す（SPEC-004 3.5）
+    if (chatRoom) await chatRoom.purge(userId).catch(() => {});
   }
 
   async function createGuest() {
@@ -188,6 +195,20 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
   }
 
   const isBanned = async (userId) => !!(await db.prepare('SELECT 1 AS b FROM bans WHERE user_id = ?1').bind(userId).first());
+
+  // ---------------------------------------------------------------- 全体チャット（SPEC-004）。部屋は Durable Object が 1 つ（platform/chat.js）
+  const room = () => chat.get(chat.idFromName('global'));
+  const roomJson = async (path, init) => {
+    const res = await room().fetch(new Request(`https://chat${path}`, init));
+    return { status: res.status, body: await res.json().catch(() => ({})) };
+  };
+  const chatRoom = chat
+    ? {
+        list: () => roomJson('/admin/list'),
+        remove: (id, uid, admin) => roomJson('/delete', { method: 'POST', body: JSON.stringify({ id, uid, admin }) }),
+        purge: (uid) => roomJson('/purge', { method: 'POST', body: JSON.stringify({ uid }) }),
+      }
+    : null;
 
   // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）。
   // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）
@@ -518,7 +539,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null });
-  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: ['https://bearko.games', ...extraOrigins], ...(log ? { log } : {}) });
+  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: ['https://bearko.games', ...extraOrigins], chat: chatRoom, ...(log ? { log } : {}) });
 
   async function handle(req) {
     const url = new URL(req.url);
@@ -540,6 +561,37 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/config') return reply(req, 200, { googleClientId: clientId });
 
     if (path.startsWith('/api/admin/')) return admin(req, method, path, url, body);
+
+    // ---- 全体チャット（SPEC-004）。本人の確認はここで済ませ、部屋には { uid, name, game, banned } を渡す
+    if (path === '/api/chat/ws' || path === '/api/chat/messages' || path === '/api/me/chat' || path.startsWith('/api/chat/messages/')) {
+      if (!chatRoom) return reply(req, 503, { error: 'chat' });
+    }
+    if (method === 'GET' && path === '/api/chat/ws') {
+      if ((req.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return reply(req, 426, { error: 'upgrade' });
+      if (!allowed(req.headers.get('origin'))) return reply(req, 403, { error: 'origin' });
+      const s = await login(req);
+      const user = s ? { uid: s.userId, name: s.name ?? null, banned: await isBanned(s.userId) } : {};
+      user.game = cleanGame(url.searchParams.get('game'));
+      return room().fetch(new Request(`https://chat/ws?u=${encodeURIComponent(JSON.stringify(user))}`, { headers: { Upgrade: 'websocket' } }));
+    }
+    if (method === 'GET' && path === '/api/chat/messages') {
+      const r = await roomJson(`/messages?after=${encodeURIComponent(url.searchParams.get('after') || '0')}`);
+      return reply(req, r.status, r.body);
+    }
+    if (method === 'GET' && path === '/api/me/chat') {
+      const s = await login(req);
+      if (!s) return reply(req, 401, { error: 'login' });
+      const r = await roomJson(`/mine?uid=${encodeURIComponent(s.userId)}`);
+      return reply(req, r.status, r.body);
+    }
+    if (method === 'DELETE' && path.startsWith('/api/chat/messages/')) {
+      const id = Number(path.slice('/api/chat/messages/'.length));
+      if (!Number.isInteger(id) || id <= 0) return reply(req, 400, { error: 'id' });
+      const s = await login(req);
+      if (!s) return reply(req, 401, { error: 'login' });
+      const r = await chatRoom.remove(id, s.userId, adminSubs.includes(s.sub));
+      return reply(req, r.status, r.body);
+    }
 
     if (method === 'GET' && path === '/api/me') {
       const s = await login(req);

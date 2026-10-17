@@ -9,6 +9,8 @@
 //   GET  /api/admin/bans            締め出し中の一覧
 //   POST /api/admin/ban             { userId, reason } 締め出す
 //   POST /api/admin/unban           { userId } 解除する
+//   GET  /api/admin/chat            全体チャットの直近 200 件（SPEC-004）
+//   POST /api/admin/chat/delete     { id } 発言を消す
 //
 // 締め出しの効き目（ランキングから隠す・記録を受け付けない）は api.js の側にある。
 
@@ -55,7 +57,7 @@ export function cleanReason(raw) {
  * 管理の API。api.js の handle から /api/admin/* を渡される。
  * portalOrigins：管理の API を受ける Origin（bearko.games の画面だけ。ゲームのサブドメインからは読ませない）
  */
-export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], log = console.log }) {
+export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], chat = null, log = console.log }) {
   const isAdmin = (s) => !!s?.sub && adminSubs.includes(s.sub);
 
   async function scores(req) {
@@ -187,6 +189,21 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
     if (method === 'GET' && path === '/api/admin/users') return users(req, url);
     if (method === 'GET' && path === '/api/admin/bans') return bans(req);
 
+    // 全体チャット（SPEC-004 7 章）：直近の発言と、発言ごとの削除。締め出しは下の /api/admin/ban が部屋にも伝える
+    if (method === 'GET' && path === '/api/admin/chat') {
+      if (!chat) return reply(req, 503, { error: 'chat' });
+      const r = await chat.list();
+      return reply(req, r.status, r.body);
+    }
+    if (method === 'POST' && path === '/api/admin/chat/delete') {
+      if (!chat) return reply(req, 503, { error: 'chat' });
+      const id = Number(body.id);
+      if (!Number.isInteger(id) || id <= 0) return reply(req, 400, { error: 'id' });
+      const r = await chat.remove(id, null, true);
+      if (r.status === 200) audit('chat/delete', { id });
+      return reply(req, r.status, r.body);
+    }
+
     if (method === 'POST' && path === '/api/admin/score/delete') {
       if (typeof body.userId !== 'string' || !ID_RE.test(body.userId) || !SCORERS[body.game]) return reply(req, 400, { error: 'target' });
       const row = await db.prepare('SELECT score FROM title_scores WHERE user_id = ?1 AND game = ?2').bind(body.userId, body.game).first();
@@ -220,6 +237,8 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
         .prepare('INSERT INTO bans (user_id, google_sub, reason, banned_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (user_id) DO UPDATE SET reason = excluded.reason')
         .bind(body.userId, user.google_sub ?? null, reason, now())
         .run();
+      // 締め出した人の発言は部屋からも消し、接続を切る（SPEC-004 3.3）
+      if (chat) await chat.purge(body.userId).catch(() => {});
       audit('ban', { userId: body.userId, reason });
       return reply(req, 200, { ok: true });
     }

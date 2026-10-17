@@ -82,6 +82,14 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
    - Survivor（SPEC-040）が例
 3. タイトルをまたぐ RTA（SPEC-001 6.14）：`platform/rta.js` の `CROSS_REGULATIONS` に区間（数えるレギュレーションと区切り）を足すだけ。ゲーム側の変更はいらない（いつもの計測の区切りを、サーバーが挑戦の区間として数える）
 
+### 3.5 全体チャット（SPEC-004。SDK 1.6.0）
+
+1. 何もしなくても、`init()` のあとに画面の右下へ 💬 が出る（読むだけなら未ログインでも。話すにはログインして名前を決める）
+2. 置き場所を変える：`init({ chat: { position: 'top-right', offset: { x: 16, y: 56 } } })`。通知・RTA の時計・マインちゃんの帯と重ならない隅を選ぶ（SPEC-004 6 章の表）
+3. 遊びの最中は隠す：画面を切り替える関数から `BearkoGames.chat.setVisible(false)` / `setVisible(true)` を呼ぶ（Survivor なら `startBattle` / `returnToTitle`）
+4. 出さない：`init({ chat: false })`。自前の窓を作る（10 buy year! の横のボタン）：`init({ chat: { ui: false } })` のうえで `chat.connect()` / `chat.send(text)` / `chat.onMessage(fn)` / `chat.getMessages()`
+5. 部屋は Durable Object「ChatRoom」（`platform/chat.js`。`wrangler.jsonc` の `durable_objects` と `migrations`）。プレビュー（本番以外のブランチ）には binding が無いので `/api/chat/*` は 503 になる（ゲームは遊べる）
+
 ## 4. 本番の D1（データベース）
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
