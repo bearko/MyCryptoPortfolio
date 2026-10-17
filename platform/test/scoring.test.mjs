@@ -193,13 +193,16 @@ test('Survivor v3：難易度の係数は共通基盤で決める（名前と AB
   assert.equal(v({ regulation: 'ABSOLUTE', absolute: ax(3, 3, 3, 3), regulationMul: 3 }), 15000);
 });
 
-test('Survivor v4：ゲームのバランスの版ごとの係数。v1.1 までの成績（balance なし）は点が変わらない', () => {
+test('Survivor v4：ゲームのバランスの版ごとの係数。v1.1 までの成績（balance なし）は点が変わらない。v1.3（balance 3）は 1/560', () => {
   const v = (extra, reportScore) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, difficulty: 'normal', ...extra });
   assert.equal(v({}, 150000), 10000, 'balance なし：1/30');
   assert.equal(v({ balance: 1 }, 150000), 10000);
   assert.equal(v({ balance: 2 }, 300000), 10000, 'v1.2 のふつうの全クリア 300,000 → 5,000');
   assert.equal(v({ balance: 2, difficulty: 'absolute', absolute: { spawnMul: 2, hpMul: 2, dmgMul: 2, speedMul: 2 } }, 300000), 15000);
-  assert.equal(v({ balance: 3 }, 300000), null, '知らない版');
+  assert.equal(v({ balance: 3 }, 2800000), 10000, 'v1.3 のふつうの全クリア 2,800,000 → 5,000');
+  assert.equal(v({ balance: 3, difficulty: 'absolute', absolute: { spawnMul: 2, hpMul: 2, dmgMul: 2, speedMul: 2 } }, 2800000), 15000);
+  assert.equal(v({ balance: 2 }, 300000), 10000, 'v1.3 を足しても v1.2 の点は変わらない');
+  assert.equal(v({ balance: 4 }, 300000), null, '知らない版');
   assert.equal(v({ balance: 1.5 }, 300000), null);
   assert.equal(s('survivor', { stagesCleared: 2, cleared: false, balance: 2 }), 3000, '節目の点は同じ');
 });
