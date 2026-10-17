@@ -32,6 +32,31 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 705e3 },
     ],
   },
+  // 懐中時計あり（Survivor SPEC-054。SPEC-001 6.15）。RTA のときだけ宝箱から出て、10 秒間ゲーム全体が 2 倍速になる。
+  // 宝箱は 1 ステージ 4 つ（ゲーム内 0:30・1:30・2:30・3:30）なので、ボスまでに縮む実時間は 1 ステージ 40 秒まで（4 分 → 3 分 20 秒）。
+  // ゲームがこちらで計測を始めるようになったら、古い 2 つ（懐中時計なし）を deprecated にする
+  {
+    id: 'survivor-normal-v2',
+    game: 'survivor',
+    name: 'Survivor 全 3 ステージ（懐中時計あり）',
+    rule: 'NORMAL（難易度の調整なし）・ヒーロー自由。宝箱から懐中時計（10 秒間 2 倍速）が出る。ステージ 1 の開始から、全 3 ステージクリアまで',
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: 'ステージ 1 クリア', minMs: 195e3 },
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2 クリア', minMs: 390e3 },
+      { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 585e3 },
+    ],
+  },
+  {
+    id: 'survivor-absolute-2x-v2',
+    game: 'survivor',
+    name: 'Survivor 全 3 ステージ（ABSOLUTE ×2.0・懐中時計あり）',
+    rule: 'ABSOLUTE の 4 軸（出現数・HP・攻撃力・速さ）をすべて ×2.0 に固定・ヒーロー自由。宝箱から懐中時計（10 秒間 2 倍速）が出る。ステージ 1 の開始から、全 3 ステージクリアまで',
+    checkpoints: [
+      { id: 'stage1', kind: 'stage', label: 'ステージ 1 クリア', minMs: 195e3 },
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2 クリア', minMs: 390e3 },
+      { id: 'clear', kind: 'clear', label: '全 3 ステージクリア', minMs: 585e3 },
+    ],
+  },
   {
     id: 'workshop-golden',
     game: 'workshop',
@@ -132,7 +157,7 @@ export const CROSS_REGULATIONS = [
     rule: 'Survivor・Tactics・Workshop・Factory・Fortress・DeckBattle の RTA を、好きな順に、最初の区切りまで走る。各タイトルのルールはそのタイトルの RTA と同じ。公式タイムは 6 区間のタイムの合計（タイトルを移る時間は数えない）。挑戦を始めてから 24 時間以内に、6 区間とも終える',
     windowMs: CROSS_WINDOW_MS,
     segments: [
-      { game: 'survivor', regulations: ['survivor-normal'], checkpoint: 'stage1', label: 'Survivor ステージ 1 クリア' },
+      { game: 'survivor', regulations: ['survivor-normal', 'survivor-normal-v2'], checkpoint: 'stage1', label: 'Survivor ステージ 1 クリア' },
       { game: 'tactics', regulations: ['tactics-ch1', 'tactics-all5'], checkpoint: 'ch1', label: 'Tactics 第 1 章クリア' },
       { game: 'workshop', regulations: ['workshop-golden'], checkpoint: 'epic', label: 'Workshop Epic 解放' },
       { game: 'factory', regulations: ['factory-lv5'], checkpoint: 'lv2', label: 'Factory 工房 Lv.2' },

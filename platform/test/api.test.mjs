@@ -456,6 +456,31 @@ test('RTA：Survivor ABSOLUTE ×2.0 のレギュレーション', async () => {
   assert.equal(runs[0].timeMs, 15 * MIN);
 });
 
+test('RTA：Survivor 懐中時計あり（v2）のレギュレーション', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  for (const [v2, v1] of [['survivor-normal-v2', 'survivor-normal'], ['survivor-absolute-2x-v2', 'survivor-absolute-2x']]) {
+    const reg = res.body.regulations.find((r) => r.id === v2);
+    assert.deepEqual([reg.game, reg.checkpoints.map((c) => c.id)], ['survivor', ['stage1', 'stage2', 'clear']]);
+    assert.ok(res.body.regulations.some((r) => r.id === v1), 'ゲームが切り替わるまで、懐中時計なしも受け付ける');
+    // 宝箱 4 つの懐中時計で 1 ステージ 40 秒まで縮む → 4 分 − 40 秒 ＝ 3 分 20 秒から 5 秒引く
+    assert.deepEqual(REGULATION_BY_ID[v2].checkpoints.map((c) => c.minMs), [195e3, 390e3, 585e3]);
+  }
+
+  const { mk, tick } = rtaSetup();
+  const b = mk();
+  let runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal-v2' })).body.runId;
+  tick(3 * MIN + 10e3);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'stage1', igtMs: 1, idleMs: 1000 })).body.rejected, true, '3 分 10 秒は速すぎる');
+  runId = (await b.call('POST', '/api/rta/start', { regulation: 'survivor-normal-v2' })).body.runId;
+  for (const cp of ['stage1', 'stage2', 'clear']) {
+    tick(3 * MIN + 25e3);
+    await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: cp, igtMs: 1, idleMs: 1000 });
+  }
+  const run = (await b.call('GET', '/api/me/rta')).body.runs.find((r) => r.regulation === 'survivor-normal-v2' && r.timeMs);
+  assert.equal(run.timeMs, 3 * (3 * MIN + 25e3), '1 ステージ 3 分 25 秒なら記録になる');
+  assert.ok(crossSegmentOf(CROSS_BY_ID['cross-first6'], 'survivor-normal-v2', 'stage1') >= 0, '横断 RTA の Survivor の区間にも数える');
+});
+
 test('RTA：Tactics のレギュレーション（IGT はターン数）', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const ch1 = res.body.regulations.find((r) => r.id === 'tactics-ch1');

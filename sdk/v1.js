@@ -3,6 +3,7 @@
  *
  *   <script src="https://bearko.games/sdk/v1.js"></script>
  *   await BearkoGames.init({ game: 'tactics', version: '1.2.0' });
+ *   BearkoGames.setToastPosition({ position: 'top', offset: 48 });   // 通知を画面の上に出す（既定は下。1.5.0）
  *   BearkoGames.getUser();          // { id, name } か null
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
@@ -20,7 +21,7 @@
   if (window.BearkoGames) return;
 
   var ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
-  var state = { base: 'https://bearko.games', game: null, version: null, user: null, guest: null, hasAccount: false, ready: false, ui: true, defs: null };
+  var state = { base: 'https://bearko.games', game: null, version: null, user: null, guest: null, hasAccount: false, ready: false, ui: true, defs: null, toastPos: 'bottom', toastOffset: 0 };
   var listeners = [];
   var trophyListeners = [];
 
@@ -83,7 +84,7 @@
     });
   }
 
-  // ---------------------------------------------------------------- 通知（画面の下に小さく出す）
+  // ---------------------------------------------------------------- 通知（画面の下に小さく出す。setToastPosition で上にも出せる）
   var toastHost = null;
   function toastRoot() {
     if (toastHost) return toastHost.shadowRoot;
@@ -94,6 +95,7 @@
       '<style>' +
       ':host{all:initial}' +
       '.wrap{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483647;display:grid;gap:8px;width:min(92vw,360px);pointer-events:none;font-family:"M PLUS 1p",system-ui,sans-serif}' +
+      '.wrap.top{bottom:auto;top:max(16px,env(safe-area-inset-top))}' +
       '.t{pointer-events:auto;background:#151926;color:#eef0f6;border:1px solid rgba(167,139,250,.6);border-radius:12px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:in .25s ease-out}' +
       '.k{font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:.04em}' +
       '.n{font-size:15px;font-weight:700;margin-top:2px}' +
@@ -106,10 +108,22 @@
       '.timer b{color:#a78bfa;font-size:11px;margin-right:6px}' +
       'button{font:inherit;font-size:12px;font-weight:700;border:0;border-radius:8px;padding:6px 10px;background:#a78bfa;color:#140f24;cursor:pointer}' +
       '@keyframes in{from{opacity:0;transform:translateY(8px)}}' +
+      '.wrap.top .t{animation-name:in-top}@keyframes in-top{from{opacity:0;transform:translateY(-8px)}}' +
       '@media (prefers-reduced-motion:reduce){.t{animation:none}}' +
       '</style><div class="wrap" role="status" aria-live="polite"></div>';
     document.body.appendChild(toastHost);
+    applyToastPosition();
     return root;
+  }
+  // 通知の置き場所（結果画面のボタンを隠さないよう、ゲームが上に寄せられる）
+  function applyToastPosition() {
+    if (!toastHost) return;
+    var wrap = toastHost.shadowRoot.querySelector('.wrap');
+    var top = state.toastPos === 'top';
+    wrap.classList.toggle('top', top);
+    var side = top ? 'top' : 'bottom';
+    wrap.style.top = wrap.style.bottom = '';
+    if (state.toastOffset > 0) wrap.style[side] = 'calc(' + Math.round(state.toastOffset) + 'px + env(safe-area-inset-' + side + '))';
   }
   function showTrophyToast(def, account, total) {
     if (!state.ui || !document.body) return;
@@ -337,7 +351,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.4.0',
+    version: '1.5.0',
     rta: rtaApi,
 
     /**
@@ -373,14 +387,27 @@
     /** 総合スコアの対象タイトル → { ok, games: [{ id, name, kind, status }] } */
     getScoreGames: function () { return call('GET', '/api/score/games'); },
 
-    /** 最初に 1 回。{ game, version, apiBase? }。ログイン状態を読みに行く */
+    /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset? }。ログイン状態を読みに行く */
     init: function (opts) {
       opts = opts || {};
       state.game = opts.game || null;
       state.version = opts.version || null;
       if (opts.ui === false) state.ui = false;
+      if (opts.toast) api.setToastPosition({ position: opts.toast, offset: opts.toastOffset });
       if (opts.apiBase) state.base = String(opts.apiBase).replace(/\/+$/, '');
       return refresh().then(function (r) { state.ready = true; return r; });
+    },
+
+    /**
+     * 通知（トロフィー・RTA の記録・自己ベスト）の置き場所。{ position: 'top' | 'bottom', offset: 端からの px }。
+     * 既定は下。結果画面のボタンと重なるゲームは上に寄せる（1.5.0）
+     */
+    setToastPosition: function (opts) {
+      opts = opts || {};
+      state.toastPos = opts.position === 'top' ? 'top' : 'bottom';
+      var off = Number(opts.offset);
+      state.toastOffset = isFinite(off) && off > 0 ? Math.min(off, 2000) : 0;
+      try { applyToastPosition(); } catch (e) { console.warn('[BearkoGames] toast', e); }
     },
 
     /** ログイン中なら { id, name }、していなければ null */
