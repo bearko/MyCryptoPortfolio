@@ -33,7 +33,7 @@ await page.addInitScript(({ seed, bot }) => {
     const b = s.battle, p = b.player;
     if (window.__botKind === 'circle') {
       // 世界の中を楕円に回り続ける（定番の動き）。近すぎる敵・弾だけ避け、近くの宝石は拾う
-      const RX = 360, RY = 580;
+      const RX = b.arena ? 170 : 360, RY = b.arena ? 280 : 580;   // Survivor SPEC-079：ボス戦の枠（1/4）の中では小さく回る
       const a = Math.atan2(p.y / RY, p.x / RX);
       const rr = Math.hypot(p.x / RX, p.y / RY);
       let fx = -Math.sin(a) * RX / RY, fy = Math.cos(a);
@@ -49,6 +49,17 @@ await page.addInitScript(({ seed, bot }) => {
         hazards.push({ x: x0 + ux * sx, y: y0 + uy * sx, r: 30, row: true, nx: -uy, ny: ux });
       }
       for (const pu of g12.punches || []) if (!pu.done) for (const h of pu.holes) hazards.push({ x: h.x, y: h.y, r: 40 });
+      // Survivor SPEC-080：ボスの突進の通り道（線分）と、叩きつけの円も避ける
+      for (const boss of b.enemies) {
+        const a = boss.isBoss ? boss.mv?.act : null;
+        if (!a) continue;
+        if (a.kind === 'charge' && (a.phase === 'windup' || a.phase === 'dash')) {
+          const rem = a.len - (a.phase === 'dash' ? a.run : 0);
+          const sx = Math.max(0, Math.min(rem, (p.x - boss.x) * a.dx + (p.y - boss.y) * a.dy));
+          hazards.push({ x: boss.x + a.dx * sx, y: boss.y + a.dy * sx, r: boss.r + 14, row: true, nx: -a.dy, ny: a.dx });
+        }
+        if (a.kind === 'slam' && a.phase === 'windup') hazards.push({ x: boss.x, y: boss.y, r: a.radius + 6 });
+      }
       for (const hz of hazards) {
         const dx = p.x - hz.x, dy = p.y - hz.y, d = Math.hypot(dx, dy) || 1;
         const lim = hz.r + 40;
@@ -60,7 +71,8 @@ await page.addInitScript(({ seed, bot }) => {
         if (d < lim) { const w = ((lim - d) / lim) * 4; fx += dx / d * w; fy += dy / d * w; }
       }
       let g = null, gd = 1e9;
-      for (const m of [...b.gems, ...(b.items || [])]) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
+      // Survivor SPEC-081：ボス戦の宝箱から出るマジックカードも拾う
+      for (const m of [...b.gems, ...(b.items || []), ...(b.magicCards || [])]) { const d = Math.hypot(m.x - p.x, m.y - p.y); if (d < gd) { gd = d; g = m; } }
       if (g && gd < 140) { fx += (g.x - p.x) / gd * 0.8; fy += (g.y - p.y) / gd * 0.8; }
       for (const c of b.enemies) { if (c.propKind !== 'chest') continue; const d = Math.hypot(c.x - p.x, c.y - p.y) || 1; if (d < 450) { fx += (c.x - p.x) / d * 1.2; fy += (c.y - p.y) / d * 1.2; } }
       const n = Math.hypot(fx, fy) || 1; return { x: fx / n, y: fy / n };
