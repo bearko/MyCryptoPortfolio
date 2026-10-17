@@ -447,3 +447,13 @@ test('RTA：Tactics のレギュレーション（IGT はターン数）', async
   assert.equal(end.body.finished, true);
   assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 42, 'ターン数をそのまま残す');
 });
+
+test('RTA：Fortress のレギュレーション（レベル 01〜09）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'fortress-all');
+  assert.equal(reg.game, 'fortress');
+  assert.deepEqual(reg.checkpoints.map((c) => c.id), ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'clear']);
+  const def = REGULATION_BY_ID['fortress-all'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
+});
