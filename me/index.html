@@ -35,6 +35,13 @@
     </form>
     <p class="note" id="name-msg"></p>
 
+    <h2>アイコン</h2>
+    <div class="row avatar-row">
+      <div class="avatar" id="avatar" aria-label="いまのアイコン"></div>
+      <button class="secondary" id="avatar-btn" type="button">アイコンを変える</button>
+    </div>
+    <p class="note">bearko.games 全体（すべてのゲームとチャット）で同じアイコンになります。各ゲームのマイページからも変えられます。</p>
+
     <div class="actions">
       <button class="secondary" id="logout" type="button">ログアウト</button>
     </div>
@@ -232,6 +239,7 @@
   BG.init({ game: 'portal', apiBase: location.origin }).then(function (r) {
     if (!r.ok) fail('通信できませんでした。時間をおいて開き直してください。');
     render();
+    renderAvatar();
     renderBanned();
     renderScores();
     renderTrophies();
@@ -244,6 +252,18 @@
     BG.login().then(function (r) { if (!r.ok && r.error !== 'closed') fail('ログインできませんでした。'); });
   });
   $('logout').addEventListener('click', function () { BG.logout(); });
+  // SPEC-005 5.3：共通のアイコン。選ぶ窓は SDK（各ゲームも同じ窓を呼ぶ）
+  function renderAvatar() {
+    var u = BG.getUser();
+    var box = $('avatar');
+    if (!box) return;
+    box.textContent = '';
+    var url = u && BG.avatarUrl(u.avatar);
+    if (url) { var img = document.createElement('img'); img.alt = ''; img.src = url; img.addEventListener('error', function () { box.textContent = (u.name || '?').slice(0, 1); }); box.appendChild(img); }
+    else box.textContent = u && u.name ? u.name.slice(0, 1) : '?';
+  }
+  BG.onChange(renderAvatar);
+  $('avatar-btn').addEventListener('click', function () { BG.openAvatarPicker(); });
   $('name-form').addEventListener('submit', function (e) {
     e.preventDefault();
     BG.setName($('name').value).then(function (r) {
