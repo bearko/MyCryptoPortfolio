@@ -1,11 +1,12 @@
 // bearko.games 共通基盤の API（SPEC-001）。段階 1：共通ログイン・仮アカウント・マイページ。
 //
 //   GET    /api/config         { googleClientId }
-//   GET    /api/me             { user: {id, name} | null, guest: {id} | null }
+//   GET    /api/me             { user: {id, name, avatar} | null, guest: {id} | null }
 //   POST   /api/guest          仮アカウントを用意する（なければ作る）→ { guest: {id} }
 //   POST   /api/auth/google    { credential } Google でログイン → { user, created, merged }
 //   POST   /api/auth/logout    この端末のログインを終える
 //   POST   /api/me/name        { name } 表示名を変える
+//   POST   /api/me/avatar      { id } アイコンを変える（"hero:1001" / "ext:5106" / null。SPEC-005 5.3。全ゲーム共通）
 //   DELETE /api/me             退会（アカウントと記録をすべて消す）
 //   GET    /api/trophies       トロフィーの定義 { games, trophies }
 //   GET    /api/me/trophies    { account: 'login'|'guest'|null, trophies: [{id, at}] }
@@ -26,7 +27,8 @@
 //   GET    /api/me/scores      自分のタイトルスコアと総合スコア
 //   /api/admin/*               管理画面（SPEC-003。platform/admin.js）
 //   GET    /api/chat/ws        全体チャットの接続（WebSocket。SPEC-004。platform/chat.js）
-//   GET    /api/chat/messages  直近 50 件（?after= で続き。WebSocket が使えないときの予備）
+//   GET    /api/chat/messages  直近の親 50 件と返信（?after= で新しいもの、?before= で遡る、?order=likes でいいね順。SPEC-005）
+//   GET    /api/chat/stats     タイトルごとの直近 24 時間の件数（にぎわい。SPEC-005 5.5）
 //   GET    /api/me/chat        自分の発言
 //   DELETE /api/chat/messages/<id> 自分の発言を消す（管理者はだれのでも）
 //
@@ -39,7 +41,7 @@ import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
-import { cleanGame } from './chat.js';
+import { cleanGame, cleanAvatar } from './chat.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
 export const GUEST_TTL = 90 * 86400e3;
@@ -120,7 +122,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
     const hash = await sha256(token);
     const row = await db
-      .prepare('SELECT s.user_id, s.expires_at, u.name, u.google_sub FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1 AND s.kind = ?2')
+      .prepare('SELECT s.user_id, s.expires_at, u.name, u.google_sub, u.avatar FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1 AND s.kind = ?2')
       .bind(hash, kind)
       .first();
     if (!row || row.expires_at <= now()) return null;
@@ -130,7 +132,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         db.prepare('UPDATE users SET last_seen = ?1 WHERE id = ?2').bind(now(), row.user_id),
       ]);
     }
-    return { hash, userId: row.user_id, name: row.name, sub: row.google_sub };
+    return { hash, userId: row.user_id, name: row.name, sub: row.google_sub, avatar: row.avatar ?? null };
   }
 
   async function newSession(userId, kind, ttl) {
@@ -538,7 +540,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
-  const publicUser = (s) => ({ id: s.userId, name: s.name ?? null });
+  const publicUser = (s) => ({ id: s.userId, name: s.name ?? null, avatar: s.avatar ?? null });
   const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: ['https://bearko.games', ...extraOrigins], chat: chatRoom, ...(log ? { log } : {}) });
 
   async function handle(req) {
@@ -563,20 +565,30 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (path.startsWith('/api/admin/')) return admin(req, method, path, url, body);
 
     // ---- 全体チャット（SPEC-004）。本人の確認はここで済ませ、部屋には { uid, name, game, banned } を渡す
-    if (path === '/api/chat/ws' || path === '/api/chat/messages' || path === '/api/me/chat' || path.startsWith('/api/chat/messages/')) {
+    if (path === '/api/chat/ws' || path === '/api/chat/messages' || path === '/api/chat/stats' || path === '/api/me/chat' || path.startsWith('/api/chat/messages/')) {
       if (!chatRoom) return reply(req, 503, { error: 'chat' });
     }
     if (method === 'GET' && path === '/api/chat/ws') {
       if ((req.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return reply(req, 426, { error: 'upgrade' });
       if (!allowed(req.headers.get('origin'))) return reply(req, 403, { error: 'origin' });
       const s = await login(req);
-      const user = s ? { uid: s.userId, name: s.name ?? null, banned: await isBanned(s.userId) } : {};
+      const user = s ? { uid: s.userId, name: s.name ?? null, avatar: s.avatar ?? null, banned: await isBanned(s.userId) } : {};
       user.game = cleanGame(url.searchParams.get('game'));
       return room().fetch(new Request(`https://chat/ws?u=${encodeURIComponent(JSON.stringify(user))}`, { headers: { Upgrade: 'websocket' } }));
     }
     if (method === 'GET' && path === '/api/chat/messages') {
-      const r = await roomJson(`/messages?after=${encodeURIComponent(url.searchParams.get('after') || '0')}`);
+      const q = new URLSearchParams();
+      for (const k of ['after', 'before', 'order', 'limit']) if (url.searchParams.get(k)) q.set(k, url.searchParams.get(k));
+      const s = await login(req);
+      if (s) q.set('uid', s.userId);   // 本人が押したいいねも返す
+      const r = await roomJson(`/messages?${q}`);
       return reply(req, r.status, r.body);
+    }
+    if (method === 'GET' && path === '/api/chat/stats') {
+      const r = await roomJson('/stats');
+      const res = reply(req, r.status, r.body);
+      if (r.status === 200) res.headers.set('Cache-Control', 'public, max-age=60');
+      return res;
     }
     if (method === 'GET' && path === '/api/me/chat') {
       const s = await login(req);
@@ -612,10 +624,10 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!verifyGoogle) return reply(req, 503, { error: 'not_configured' });
       const claims = await verifyGoogle(body.credential);
       if (!claims) return reply(req, 401, { error: 'credential' });
-      let user = await db.prepare('SELECT id, name FROM users WHERE google_sub = ?1').bind(claims.sub).first();
+      let user = await db.prepare('SELECT id, name, avatar FROM users WHERE google_sub = ?1').bind(claims.sub).first();
       const created = !user;
       if (!user) {
-        user = { id: randomToken().slice(0, 32), name: null };
+        user = { id: randomToken().slice(0, 32), name: null, avatar: null };
         await db.prepare('INSERT INTO users (id, google_sub, name, created_at, last_seen) VALUES (?1, ?2, NULL, ?3, ?3)').bind(user.id, claims.sub, now()).run();
         // 退会する前に締め出されていた会員番号なら、新しいアカウントにも付け直す（SPEC-003 5 章）
         await db
@@ -636,7 +648,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const old = await login(req);
       if (old) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(old.hash).run();
       cookies.push(cookie('bg_session', await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
-      return reply(req, 200, { user: { id: user.id, name: user.name ?? null }, created, merged: !!g, mergedTrophies }, cookies);
+      return reply(req, 200, { user: { id: user.id, name: user.name ?? null, avatar: user.avatar ?? null }, created, merged: !!g, mergedTrophies }, cookies);
     }
 
     if (method === 'POST' && path === '/api/auth/logout') {
@@ -651,7 +663,18 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const name = cleanName(body.name);
       if (!name) return reply(req, 400, { error: 'name' });
       await db.prepare('UPDATE users SET name = ?1 WHERE id = ?2').bind(name, s.userId).run();
-      return reply(req, 200, { user: { id: s.userId, name } });
+      return reply(req, 200, { user: { id: s.userId, name, avatar: s.avatar ?? null } });
+    }
+
+    // SPEC-005 5.3：共通のプレイヤーアイコン。資産リポジトリのヒーロー／エクステンションの id。null で既定の絵に戻す
+    if (method === 'POST' && path === '/api/me/avatar') {
+      const s = await login(req);
+      if (!s) return reply(req, 401, { error: 'login' });
+      if (body.id != null && typeof body.id !== 'string') return reply(req, 400, { error: 'avatar' });
+      const id = body.id == null ? null : cleanAvatar(body.id);
+      if (body.id != null && !id) return reply(req, 400, { error: 'avatar' });
+      await db.prepare('UPDATE users SET avatar = ?1 WHERE id = ?2').bind(id, s.userId).run();
+      return reply(req, 200, { user: { id: s.userId, name: s.name ?? null, avatar: id } });
     }
 
     if (method === 'DELETE' && path === '/api/me') {

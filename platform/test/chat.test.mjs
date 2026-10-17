@@ -6,7 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { ChatRoom, cleanText, cleanGame, userFromParam, denyReason, rateLimited, MAX_TEXT, KEEP, KEEP_MS, HISTORY, MIN_GAP_MS, BURST } from '../chat.js';
+import { ChatRoom, cleanText, cleanGame, cleanAvatar, userFromParam, denyReason, rateLimited, MAX_TEXT, KEEP, KEEP_MS, HISTORY, MIN_GAP_MS, BURST, LIKE_BURST, EDIT_BURST, BURST_MS } from '../chat.js';
 import { createApi } from '../api.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -50,8 +50,8 @@ function room(now = () => Date.parse('2026-10-17T00:00:00Z')) {
   return { ctx, room: r };
 }
 const join_ = (ctx, room, att) => { const ws = fakeWs(att); ctx.acceptWebSocket(ws, att.uid ? [att.uid] : []); return ws; };
-const ALICE = { uid: 'a'.repeat(32), name: 'alice', game: 'survivor', banned: false };
-const BOB = { uid: 'b'.repeat(32), name: 'bob', game: 'portal', banned: false };
+const ALICE = { uid: 'a'.repeat(32), name: 'alice', avatar: 'hero:1001', game: 'survivor', banned: false };
+const BOB = { uid: 'b'.repeat(32), name: 'bob', avatar: null, game: 'portal', banned: false };
 
 test('本文：制御文字を落とし、1〜200 文字。ゲームの札', () => {
   assert.equal(cleanText('  こんにちは\u0000\n '), 'こんにちは');
@@ -69,8 +69,12 @@ test('本文：制御文字を落とし、1〜200 文字。ゲームの札', () 
 
 test('本人の情報と、発言できない理由', () => {
   assert.deepEqual(userFromParam(JSON.stringify(ALICE)), ALICE);
-  assert.deepEqual(userFromParam('{broken'), { uid: null, name: null, game: 'portal', banned: false });
-  assert.deepEqual(userFromParam(JSON.stringify({ uid: 'x y', name: 'n' })), { uid: null, name: null, game: 'portal', banned: false }, '変な id は未ログイン扱い');
+  assert.deepEqual(userFromParam('{broken'), { uid: null, name: null, avatar: null, game: 'portal', banned: false });
+  assert.deepEqual(userFromParam(JSON.stringify({ uid: 'x y', name: 'n' })), { uid: null, name: null, avatar: null, game: 'portal', banned: false }, '変な id は未ログイン扱い');
+  assert.equal(userFromParam(JSON.stringify({ ...ALICE, avatar: 'bad' })).avatar, null, '変なアイコンは既定の絵');
+  assert.equal(cleanAvatar('ext:5106'), 'ext:5106');
+  assert.equal(cleanAvatar('hero:'), null);
+  assert.equal(cleanAvatar('http://x'), null);
   assert.equal(denyReason({}), 'login');
   assert.equal(denyReason({ uid: 'u', name: null }), 'name');
   assert.equal(denyReason({ uid: 'u', name: 'n', banned: true }), 'banned');
@@ -87,28 +91,28 @@ test('部屋：発言は全員に配り、連投は止め、消すのは本人�
   const a = join_(ctx, r, ALICE), b = join_(ctx, r, BOB), guest = join_(ctx, r, { uid: null, name: null, game: 'portal' });
   r.webSocketMessage(a, JSON.stringify({ t: 'msg', text: ' hello ' }));
   assert.equal(a.sent.length, 1);
-  assert.deepEqual(b.sent[0], { t: 'msg', id: 1, uid: ALICE.uid, name: 'alice', game: 'survivor', text: 'hello', at: t });
+  assert.deepEqual(b.sent[0], { t: 'msg', id: 1, uid: ALICE.uid, name: 'alice', avatar: 'hero:1001', game: 'survivor', text: 'hello', at: t, parent: null, editedAt: null, likes: 0 });
   assert.deepEqual(guest.sent[0], b.sent[0], '未ログインでも読める');
   // 2 秒以内はだめ
   t += 1000;
   r.webSocketMessage(a, JSON.stringify({ t: 'msg', text: 'again' }));
-  assert.deepEqual(a.sent.at(-1), { t: 'err', code: 'rate' });
+  assert.deepEqual(a.sent.at(-1), { t: 'err', code: 'rate', op: 'msg', id: null });
   assert.equal(b.sent.length, 1);
   t += MIN_GAP_MS;
   r.webSocketMessage(a, JSON.stringify({ t: 'msg', text: 'again' }));
   assert.equal(b.sent.length, 2);
   // 未ログイン・名無し・締め出しは送れない
   r.webSocketMessage(guest, JSON.stringify({ t: 'msg', text: 'hi' }));
-  assert.deepEqual(guest.sent.at(-1), { t: 'err', code: 'login' });
+  assert.deepEqual(guest.sent.at(-1), { t: 'err', code: 'login', op: 'msg', id: null });
   const noname = join_(ctx, r, { uid: 'c'.repeat(32), name: null, game: 'portal', banned: false });
   r.webSocketMessage(noname, JSON.stringify({ t: 'msg', text: 'hi' }));
-  assert.deepEqual(noname.sent.at(-1), { t: 'err', code: 'name' });
+  assert.deepEqual(noname.sent.at(-1), { t: 'err', code: 'name', op: 'msg', id: null });
   const banned = join_(ctx, r, { ...BOB, uid: 'd'.repeat(32), banned: true });
   r.webSocketMessage(banned, JSON.stringify({ t: 'msg', text: 'hi' }));
-  assert.deepEqual(banned.sent.at(-1), { t: 'err', code: 'banned' });
+  assert.deepEqual(banned.sent.at(-1), { t: 'err', code: 'banned', op: 'msg', id: null });
   // 長すぎ・壊れた JSON・msg 以外は無視か long
   r.webSocketMessage(a, JSON.stringify({ t: 'msg', text: 'x'.repeat(201) }));
-  assert.deepEqual(a.sent.at(-1), { t: 'err', code: 'long' });
+  assert.deepEqual(a.sent.at(-1), { t: 'err', code: 'long', op: 'msg', id: null });
   const before = b.sent.length;
   r.webSocketMessage(a, 'not json'); r.webSocketMessage(a, JSON.stringify({ t: 'ping' }));
   assert.equal(b.sent.length, before);
@@ -198,7 +202,7 @@ test('API：WebSocket 以外の入口と、自分の発言の削除', async () =
   const { api, room: r, tick } = setup();
   const b = browser(api);
   // 読むのはだれでも
-  assert.deepEqual((await b.call('GET', '/api/chat/messages')).body, { msgs: [] });
+  assert.deepEqual((await b.call('GET', '/api/chat/messages')).body, { msgs: [], liked: [] });
   const alice = await loginAs(b, 'alice-sub', 'alice');
   r.post({ uid: alice.id, name: 'alice', game: 'survivor', banned: false }, 'hello');
   tick(5000);
@@ -236,10 +240,19 @@ test('API：接続の入口は Origin と Upgrade を見る。本人の情報を
   const orig = r.fetch.bind(r);
   r.fetch = (req) => { got = new URL(req.url); return orig(req); };
   assert.equal((await b.call('GET', '/api/chat/ws?game=survivor', undefined, { headers: { upgrade: 'websocket' } })).status, 501);
-  assert.deepEqual(userFromParam(got.searchParams.get('u')), { uid: null, name: null, game: 'survivor', banned: false }, '未ログインでも読める');
+  assert.deepEqual(userFromParam(got.searchParams.get('u')), { uid: null, name: null, avatar: null, game: 'survivor', banned: false }, '未ログインでも読める');
   const alice = await loginAs(b, 'alice-sub', 'alice');
   await b.call('GET', '/api/chat/ws?game=Bad', undefined, { headers: { upgrade: 'websocket' } });
-  assert.deepEqual(userFromParam(got.searchParams.get('u')), { uid: alice.id, name: 'alice', game: 'portal', banned: false });
+  assert.deepEqual(userFromParam(got.searchParams.get('u')), { uid: alice.id, name: 'alice', avatar: null, game: 'portal', banned: false });
+  // アイコンを決めると、接続のときに部屋へ渡る（SPEC-005 5.3）
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'ext:5106' })).status, 200);
+  assert.deepEqual((await b.call('GET', '/api/me')).body.user, { id: alice.id, name: 'alice', avatar: 'ext:5106' });
+  await b.call('GET', '/api/chat/ws?game=survivor', undefined, { headers: { upgrade: 'websocket' } });
+  assert.equal(userFromParam(got.searchParams.get('u')).avatar, 'ext:5106');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'nope' })).status, 400);
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: null })).status, 200, 'null で既定の絵に戻す');
+  assert.equal((await b.call('GET', '/api/me')).body.user.avatar, null);
+  assert.equal((await browser(api).call('POST', '/api/me/avatar', { id: 'hero:1001' })).status, 401);
   assert.equal(ctx.sockets.length, 0);
 });
 
@@ -281,4 +294,114 @@ test('API：部屋が無い構成（chat を渡さない）では 503', async ()
   const b = browser(api);
   assert.equal((await b.call('GET', '/api/chat/messages')).status, 503);
   assert.equal((await b.call('GET', '/api/chat/ws', undefined, { headers: { upgrade: 'websocket' } })).status, 503);
+});
+
+// ---------------------------------------------------------------- SPEC-005：返信・いいね・編集・遡る・にぎわい
+test('部屋：返信は親の下に 1 段。親を消すと返信も消える。いいねは 1 人 1 回で数だけ配る', () => {
+  let t = Date.parse('2026-10-17T00:00:00Z');
+  const { ctx, room: r } = room(() => t);
+  const a = join_(ctx, r, ALICE), b = join_(ctx, r, BOB), guest = join_(ctx, r, { uid: null, name: null, game: 'portal' });
+  const root = r.post(ALICE, 'root').msg;
+  t += MIN_GAP_MS;
+  assert.equal(r.post(ALICE, 'reply', 999).err, 'parent', '無い親には付けられない');
+  const rep1 = r.post(BOB, 'reply 1', root.id).msg;
+  assert.equal(rep1.parent, root.id);
+  t += MIN_GAP_MS;
+  const rep2 = r.post(ALICE, 'reply to reply', rep1.id).msg;
+  assert.equal(rep2.parent, root.id, '返信への返信は同じ親の下');
+  assert.deepEqual(r.recent(HISTORY).map((m) => [m.id, m.parent]), [[root.id, null], [rep1.id, root.id], [rep2.id, root.id]], '親のあとに返信');
+  // いいね
+  r.webSocketMessage(guest, JSON.stringify({ t: 'like', id: root.id }));
+  assert.deepEqual(guest.sent.at(-1), { t: 'err', code: 'login', op: 'like', id: root.id });
+  r.webSocketMessage(b, JSON.stringify({ t: 'like', id: root.id }));
+  assert.deepEqual(a.sent.at(-1), { t: 'like', id: root.id, n: 1 });
+  assert.deepEqual(b.sent.at(-1), { t: 'liked', id: root.id, on: true }, '押した本人には on も');
+  r.webSocketMessage(b, JSON.stringify({ t: 'like', id: root.id }));
+  assert.equal(r.recent(HISTORY)[0].likes, 1, '2 度押しても 1');
+  r.webSocketMessage(a, JSON.stringify({ t: 'like', id: root.id }));
+  assert.equal(r.recent(HISTORY)[0].likes, 2);
+  assert.deepEqual(r.likedBy(BOB.uid, [root.id, rep1.id]), [root.id]);
+  assert.deepEqual(r.hello(BOB).liked, [root.id]);
+  assert.equal(r.hello(BOB).you.avatar, null);
+  assert.equal(r.hello(ALICE).you.avatar, 'hero:1001');
+  r.webSocketMessage(b, JSON.stringify({ t: 'like', id: root.id, on: false }));
+  assert.deepEqual(a.sent.at(-1), { t: 'like', id: root.id, n: 1 });
+  assert.deepEqual(b.sent.at(-1), { t: 'liked', id: root.id, on: false });
+  assert.equal(r.like(BOB, 999).err, 'not_found');
+  // いいねの連投
+  for (let i = 0; i < LIKE_BURST; i++) { t += 10; r.like({ ...BOB, uid: 'z'.repeat(32) }, i % 2 ? root.id : rep1.id, i % 4 < 2); }
+  assert.equal(r.like({ ...BOB, uid: 'z'.repeat(32) }, root.id).err, 'rate');
+  // 親を消すと返信も消える
+  assert.deepEqual(r.remove(root.id, ALICE.uid), { ok: true });
+  assert.equal(r.count(), 0);
+  assert.equal(r.sql.exec('SELECT COUNT(*) AS n FROM likes').one().n, 0, 'いいねの行も片づく');
+});
+
+test('部屋：編集は本人だけ。編集済みの印を付けて全員に配る。同じ本文なら何もしない', () => {
+  let t = Date.parse('2026-10-17T00:00:00Z');
+  const { ctx, room: r } = room(() => t);
+  const a = join_(ctx, r, ALICE), b = join_(ctx, r, BOB);
+  const m = r.post(ALICE, 'first').msg;
+  r.webSocketMessage(b, JSON.stringify({ t: 'edit', id: m.id, text: 'hack' }));
+  assert.deepEqual(b.sent.at(-1), { t: 'err', code: 'owner', op: 'edit', id: m.id });
+  t += 1000;
+  r.webSocketMessage(a, JSON.stringify({ t: 'edit', id: m.id, text: ' fixed ' }));
+  assert.deepEqual(b.sent.at(-1), { t: 'edit', id: m.id, text: 'fixed', editedAt: t });
+  assert.equal(r.recent(HISTORY)[0].editedAt, t);
+  assert.equal(r.recent(HISTORY)[0].text, 'fixed');
+  assert.equal(r.edit(ALICE, m.id, 'fixed').same, true);
+  assert.equal(r.edit(ALICE, m.id, '').err, 'long');
+  assert.equal(r.edit(ALICE, 999, 'x').err, 'not_found');
+  assert.equal(r.edit({ ...ALICE, banned: true }, m.id, 'x').err, 'banned');
+  // 編集の連投（10 分に 30 件）
+  for (let i = 0; i < EDIT_BURST; i++) { t += MIN_GAP_MS; const x = r.post(ALICE, `e${i}`).msg; r.edit(ALICE, x.id, `e${i}!`); }
+  assert.equal(r.edit(ALICE, m.id, 'again').err, 'rate');
+  t += BURST_MS + 1;
+  assert.equal(r.edit(ALICE, m.id, 'again').editedAt, t);
+});
+
+test('部屋：遡る（before）・いいね順・にぎわい・締め出しでいいねの数も戻る', () => {
+  let t = Date.parse('2026-10-17T00:00:00Z');
+  const { room: r } = room(() => t);
+  const ids = [];
+  for (let i = 0; i < 7; i++) { t += MIN_GAP_MS; ids.push(r.post(i % 2 ? ALICE : BOB, `m${i}`).msg.id); }
+  t += MIN_GAP_MS;
+  r.post(ALICE, 'reply to m0', ids[0]);
+  assert.deepEqual(r.recent(3).map((m) => m.text), ['m4', 'm5', 'm6'], '親 3 件（古い → 新しい）');
+  assert.deepEqual(r.recent(3, 0, { before: ids[4] }).map((m) => m.text), ['m1', 'm2', 'm3']);
+  assert.deepEqual(r.recent(3, 0, { before: ids[1] }).map((m) => m.text), ['m0', 'reply to m0'], '遡った親の返信も付く');
+  // いいね順
+  for (const u of ['p', 'q', 'r']) r.like({ ...BOB, uid: u.repeat(32) }, ids[2]);
+  r.like({ ...BOB, uid: 'p'.repeat(32) }, ids[5]);
+  assert.deepEqual(r.recent(2, 0, { order: 'likes' }).map((m) => [m.text, m.likes]), [['m2', 3], ['m5', 1]]);
+  // にぎわい：直近 24 時間をタイトルごとに
+  assert.deepEqual(r.stats(), { games: { survivor: 4, portal: 4 }, total: 8 }, 'ALICE（survivor）3 件＋返信 1 件、BOB（portal）4 件');
+  t += 86400e3;
+  assert.deepEqual(r.stats().games, {});
+  // 締め出し：その人の発言・返信・押したいいねが戻る
+  assert.equal(r.purge('p'.repeat(32)).deleted, 0);
+  assert.equal(r.recent(HISTORY).find((m) => m.id === ids[2]).likes, 2);
+  assert.equal(r.recent(HISTORY).find((m) => m.id === ids[5]).likes, 0);
+  r.purge(BOB.uid);
+  assert.equal(r.recent(HISTORY).some((m) => m.text === 'reply to m0'), false, 'BOB の m0 への返信も消える');
+  // 30 日・2,000 件（trim）：親が消えた返信は残らない
+  t += KEEP_MS + 1;
+  assert.equal(r.trim(), 0);
+});
+
+test('API：遡る・いいね順・にぎわい・本人のいいね', async () => {
+  const { api, room: r, tick } = setup();
+  const b = browser(api);
+  const alice = await loginAs(b, 'alice-sub', 'alice');
+  const A = { uid: alice.id, name: 'alice', avatar: null, game: 'survivor', banned: false };
+  const ids = [];
+  for (let i = 0; i < 4; i++) { tick(5000); ids.push(r.post(A, `m${i}`).msg.id); }
+  r.like(A, ids[1]);
+  const page = (await b.call('GET', `/api/chat/messages?before=${ids[3]}&limit=2`)).body;
+  assert.deepEqual(page.msgs.map((m) => m.text), ['m1', 'm2']);
+  assert.deepEqual(page.liked, [ids[1]], 'ログインしていれば自分のいいねも');
+  assert.deepEqual((await b.call('GET', '/api/chat/messages?order=likes&limit=1')).body.msgs.map((m) => m.text), ['m1']);
+  const st = await b.call('GET', '/api/chat/stats');
+  assert.deepEqual(st.body, { games: { survivor: 4 }, total: 4 });
+  assert.deepEqual((await browser(api).call('GET', '/api/chat/messages?limit=1')).body.liked, [], '未ログインは空');
 });

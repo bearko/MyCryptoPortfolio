@@ -99,7 +99,7 @@ test('Google でログイン：初回は作る・2 回目は同じアカウン�
   assert.equal(first.body.merged, true);
   assert.ok(b.jar.bg_session && !b.jar.bg_guest, 'ログイン Cookie が付き、仮アカウントの Cookie は消える');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users').get().n, 1, '仮アカウントは消える');
-  assert.deepEqual((await b.call('GET', '/api/me')).body, { user: { id: first.body.user.id, name: null }, guest: null });
+  assert.deepEqual((await b.call('GET', '/api/me')).body, { user: { id: first.body.user.id, name: null, avatar: null }, guest: null });
 
   const other = browser(api); // 別の端末
   const again = await other.call('POST', '/api/auth/google', { credential: 'ok:sub-1' });
