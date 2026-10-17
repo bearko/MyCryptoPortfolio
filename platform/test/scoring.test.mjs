@@ -5,8 +5,8 @@ import { SCORERS } from '../scoring/index.js';
 import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v2.js';
 
 const s = (game, m) => SCORERS[game].score(m)?.score ?? null;
-// Fortress のふつうのクリア：体力 2/3 が残る・15 スロットに 7 体・早呼びなし
-const FORTRESS_TYPICAL = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+// Fortress のふつうのクリア（v3、自動プレイの実測）：体力 54% が残る・スロットを埋める・早呼びなし
+const FORTRESS_TYPICAL = { hpLeft: 54, maxHp: 100, heroesUsed: 15, slots: 15 };
 const FORTRESS_LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'];
 
 test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリア）≒ 10,000', () => {
@@ -89,6 +89,18 @@ test('Fortress v2：レベルごとの自己ベストの合計。早呼びのボ
   assert.deepEqual(SCORERS.fortress.score({ levels: {} }), { score: 0, milestone: 0, performance: 0 });
 });
 
+test('Fortress v3：ふつうのクリアの基準は自動プレイの実測（体力＋空き ≒ 0.54）', () => {
+  assert.equal(SCORERS.fortress.version, 'v3');
+  const all = (e) => ({ levels: Object.fromEntries(FORTRESS_LEVELS.map((id) => [id, e])) });
+  assert.equal(s('fortress', all(FORTRESS_TYPICAL)), 10000, 'ふつうに全クリア ≒ 10,000');
+  // 実測の 5 シードの平均（各レベルの初クリア）：体力 0.93 / 0.62 / 0.62 / 0.44 / 0.52 / 0.28 / 0.43 / 0.50 / 0.52、空き 0
+  const measured = [0.93, 0.62, 0.62, 0.44, 0.52, 0.28, 0.43, 0.5, 0.52];
+  const m = { levels: Object.fromEntries(FORTRESS_LEVELS.map((id, i) => [id, { hpLeft: Math.round(measured[i] * 100), maxHp: 100, heroesUsed: 15, slots: 15 }])) };
+  assert.ok(Math.abs(s('fortress', m) - 10000) < 300, `実測の平均で ${s('fortress', m)}`);
+  // 縛り（体力を減らさず 4 体）は伸び続ける（上限なし）
+  assert.ok(s('fortress', all({ hpLeft: 100, maxHp: 100, heroesUsed: 4, slots: 15 })) > 20000);
+});
+
 test('Fortress v2：v1 の成績（1 レベルずつ）を束ねて、レベルごとの自己ベストにする', () => {
   const { combine } = SCORERS.fortress;
   const v1 = (levelId, hpLeft, heroesUsed, won = true) => ({ levelId, won, hpLeft, maxHp: 3, heroesUsed, slots: 15 });
@@ -96,12 +108,12 @@ test('Fortress v2：v1 の成績（1 レベルずつ）を束ねて、レベル�
   assert.deepEqual(Object.keys(merged.levels), ['L1', 'L2'], '負けとありえない成績は入らない');
   assert.equal(merged.levels.L1.hpLeft, 3, 'L1 は点の高いほう');
   assert.equal(s('fortress', merged), s('fortress', { levels: { L1: merged.levels.L1 } }) + s('fortress', { levels: { L2: merged.levels.L2 } }));
-  assert.equal(s('fortress', v1('L1', 2, 7)), s('fortress', { levels: { L1: FORTRESS_TYPICAL } }), 'v1 の形もそのまま計算できる');
+  assert.equal(s('fortress', v1('L1', 2, 7)), s('fortress', { levels: { L1: { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 } } }), 'v1 の形もそのまま計算できる');
   // 前回の自己ベスト ＋ 今回：下がらない
-  const prev = combine([{ levels: { L1: { ...FORTRESS_TYPICAL, hpLeft: 3 }, L2: FORTRESS_TYPICAL } }]);
+  const prev = combine([{ levels: { L1: { ...FORTRESS_TYPICAL, hpLeft: 90 }, L2: FORTRESS_TYPICAL } }]);
   const next = combine([prev, { levels: { L1: FORTRESS_TYPICAL, L3: FORTRESS_TYPICAL } }]);
   assert.deepEqual(Object.keys(next.levels), ['L1', 'L2', 'L3']);
-  assert.equal(next.levels.L1.hpLeft, 3);
+  assert.equal(next.levels.L1.hpLeft, 90);
 });
 
 test('10 buy year：難易度の係数', () => {
@@ -290,9 +302,9 @@ test('API：Fortress は前回の自己ベストと束ねる（古いセーブ�
   assert.equal((await b('POST', '/api/score/submit', fort({ L1: { ...typ, earlyBonus: -1 } }), FORT)).status, 400);
 });
 
-test('API：Fortress を v1 から v2 に計算し直す（1 レベルずつの生の成績を束ねる）', async () => {
+test('API：Fortress を v1 からいまの版に計算し直す（1 レベルずつの生の成績を束ねる）', async () => {
   const { sqlite, api } = setup();
-  const typ = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+  const typ = FORTRESS_TYPICAL;
   // v1 のころに保存された成績（自己ベストは L5 の 1 回だけ）。90 日より古いものは掃除で先に消えるので、新しい日付で入れる
   const NOW = Date.parse('2026-10-16T00:00:00Z');
   sqlite.prepare("INSERT INTO users (id, google_sub, created_at, last_seen) VALUES ('u1', 'g1', 0, 0)").run();
@@ -305,7 +317,7 @@ test('API：Fortress を v1 から v2 に計算し直す（1 レベルずつの�
   assert.equal(r.recomputed, 1);
   const ts = sqlite.prepare("SELECT score, formula, play_id FROM title_scores WHERE user_id = 'u1'").get();
   const want = SCORERS.fortress.score({ levels: { L1: typ, L2: typ, L3: typ, L4: typ, L5: typ } }).score;
-  assert.deepEqual([ts.score, ts.formula], [want, 'v2']);
+  assert.deepEqual([ts.score, ts.formula], [want, SCORERS.fortress.version]);
   assert.equal(want, 5500, 'ふつうにクリアした成績なら、v1 の「L5 クリア」と同じ点');
   const plays = sqlite.prepare("SELECT id, metrics FROM plays WHERE user_id = 'u1'").all();
   assert.equal(plays.length, 1, '束ねた 1 つだけ残る');
