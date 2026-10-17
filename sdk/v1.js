@@ -399,7 +399,7 @@
       '.foot .msg{flex:1;font-size:12px;color:#9aa1b5}' +
       '.note{font-size:11px;color:#f9a8a8;padding:0 12px 6px;min-height:14px}' +
       '.empty{color:#6b7280;font-size:12px;text-align:center;padding:24px 8px}' +
-      '@media (max-width:639px){.panel{left:0!important;right:0!important;top:auto!important;bottom:0!important;width:100%;max-height:60vh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}}' +
+      '@media (max-width:639px){.panel{left:0;right:0;top:auto;bottom:0;width:auto;max-height:none;height:60vh;border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}}' +
       '@keyframes in{from{opacity:0;transform:translateY(8px)}}' +
       '@media (prefers-reduced-motion:reduce){.panel.open{animation:none}}' +
       '</style>' +
@@ -410,6 +410,7 @@
     root.querySelector('.btn').addEventListener('click', function () { if (chat.open) chatClose(); else chatOpen(); });
     root.querySelector('.x').addEventListener('click', chatClose);
     document.body.appendChild(chat.host);
+    window.addEventListener('resize', applyChatPosition);   // 1.6.2: 窓（PC）とシート（スマホ）の境目をまたいだら置き直す
     applyChatPosition();
     return root;
   }
@@ -423,10 +424,48 @@
     [btn, panel].forEach(function (el) { el.style.left = el.style.right = el.style.top = el.style.bottom = ''; });
     btn.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
     btn.style[sy] = 'calc(' + y + 'px + env(safe-area-inset-' + sy + '))';
-    panel.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
-    panel.style[sy] = 'calc(' + (y + 58) + 'px + env(safe-area-inset-' + sy + '))';
+    if (chatIsSheet()) {
+      panel.style.height = '';   // 1.6.2: スマホでは下から出るシート。キーボードが出たら chatFitSheet が見えている高さに合わせる
+      chatFitSheet();
+    } else {
+      panel.style[sx] = 'calc(' + x + 'px + env(safe-area-inset-' + sx + '))';
+      panel.style[sy] = 'calc(' + (y + 58) + 'px + env(safe-area-inset-' + sy + '))';
+    }
     chat.host.style.display = chat.visible ? '' : 'none';
     btn.style.display = chat.button ? '' : 'none';   // 1.6.1: { button: false } は 💬 を出さず、窓はゲームのボタンから open()
+  }
+
+  /** スマホ（狭い画面）では窓を下から出るシートにする（CSS の @media と同じ境目） */
+  function chatIsSheet() {
+    return typeof window !== 'undefined' && window.innerWidth <= 639;
+  }
+
+  /**
+   * 1.6.2: シートを「いま見えている範囲」（visualViewport）に収める。
+   * スマホでキーボードが出ると見える範囲が縮むが、position:fixed の窓は縮まず、入力欄がキーボードの下に隠れていた。
+   * Chrome が入力欄を見せようと visual viewport をずらすと、窓ごと上へ流れて何を打っているか分からなくなっていた。
+   * 窓の上端と高さを visualViewport の offsetTop / height から決めるので、入力欄は常にキーボードのすぐ上に来る
+   */
+  function chatFitSheet() {
+    if (!chat.host) return;
+    var panel = chat.host.shadowRoot.querySelector('.panel');
+    var vv = window.visualViewport;
+    if (!chatIsSheet()) return;   // PC の窓の位置は applyChatPosition が決める（ここでは触らない）
+    if (!chat.open || !vv) { panel.style.top = panel.style.bottom = panel.style.height = ''; return; }
+    var list = panel.querySelector('.list');
+    var atBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 40;   // 読み返している途中なら、その位置を保つ
+    var gap = Math.max(48, Math.round(vv.height * 0.12));   // 上に少し残して、ゲームが見えるままにする
+    panel.style.top = Math.round(vv.offsetTop + gap) + 'px';
+    panel.style.bottom = 'auto';
+    panel.style.height = Math.round(vv.height - gap) + 'px';
+    if (list && atBottom) list.scrollTop = list.scrollHeight;
+  }
+
+  function chatSheetWatch(on) {
+    var vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    if (on && !chat.sheetWatching) { vv.addEventListener('resize', chatFitSheet); vv.addEventListener('scroll', chatFitSheet); chat.sheetWatching = true; }
+    if (!on && chat.sheetWatching) { vv.removeEventListener('resize', chatFitSheet); vv.removeEventListener('scroll', chatFitSheet); chat.sheetWatching = false; }
   }
 
   function chatMount() {
@@ -530,9 +569,13 @@
     clearTimeout(chat.closeTimer);
     chatConnect();
     chatRender();
+    chatSheetWatch(true);
+    chatFitSheet();
     if (chat.host) {
       var input = chat.host.shadowRoot.querySelector('.foot input');
-      if (input) { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }
+      var coarse = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      // 1.6.2: 指で触る端末では、押したときだけキーボードを出す（開いた瞬間に出ると、窓がキーボードの下に隠れる）
+      if (input && !coarse) { try { input.focus({ preventScroll: true }); } catch (e) { /* 古い環境 */ } }
     }
     if (!was) chatToggled(true);
   }
@@ -540,6 +583,8 @@
   function chatClose() {
     var was = chat.open;
     chat.open = false;
+    chatSheetWatch(false);
+    chatFitSheet();
     chatRender();
     if (was) chatToggled(false);
     clearTimeout(chat.closeTimer);
@@ -682,7 +727,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.6.1',
+    version: '1.6.2',
     rta: rtaApi,
 
     /**
