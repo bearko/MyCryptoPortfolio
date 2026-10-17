@@ -11,7 +11,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 |---|---|---|---|---|---|---|
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
-| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応 | 対応 | SPEC-039・040・041 |
+| Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0） | 対応（v2） | SPEC-039・040・041・048 |
 | Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 未対応 | 対応 | SPEC-120・121 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
 | Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
@@ -117,7 +117,17 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 - RTA の最短時間を待たずに確かめるときは `curl "localhost:8788/__skew?add=300000"` でサーバーの時計を進める
 - Google ログインは偽物：`POST /api/auth/google` に `{"credential":"ok:<好きな文字>"}` を送るとログインできる
 
-### 6.3 本番
+### 6.3 係数の実測（自動プレイ）
+
+```
+(cd ../mycryptosurvivor && python3 -m http.server 8790)
+node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの番号・seed・動き方・選び方・ABSOLUTE の倍率
+```
+
+- 本物のゲームを `page.clock` で早回しして自動プレイし、活動レポートのスコアを 1 行の JSON で出す（1 回 1 分ほど）。Survivor の係数 1/30 はこれで確かめた（SPEC-002 3.2）
+- ほかのゲームでも、ゲームの時間が `requestAnimationFrame`・`performance.now`・`setTimeout` で進むなら同じ作りで測れる。ボットがうまく動かない回（武器が当たらない・宝石を拾わない）は「ふつう」から外す
+
+### 6.4 本番
 
 - マージ後、そのコミットの Workers Builds（GitHub のチェック）が成功したか見る
 - `https://bearko.games/api/score/games` などを開いて、新しい定義が出ているか見る（キャッシュに注意。`?v=` を付ける）
@@ -134,7 +144,7 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 
 タイトル別の課題と改善点は作者のドキュメント「タイトル別：RTA・総合スコアに向けた課題と改善点」にまとめてある。主なもの：
 
-- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる）
+- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。Survivor は自動プレイで確かめた：6.3）
 - Fortress を「レベルごとの自己ベストの合計」にするか
 - Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
