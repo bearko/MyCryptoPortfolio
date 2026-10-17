@@ -2,19 +2,20 @@
 //   kind 'run'：1 回の挑戦ごとに送る。'progress'：積み上げ（進み具合のいまの値を送る）
 import * as tactics from './tactics.v2.js';
 import * as survivor from './survivor.v2.js';
-import * as fortress from './fortress.v1.js';
+import * as fortress from './fortress.v2.js';
 import * as deckbattle from './deckbattle.v1.js';
 import * as education from './education.v2.js';
 import * as workshop from './workshop.v1.js';
 import * as tenbuy from './10buy.v1.js';
 import * as factory from './factory.v1.js';
 
-const v = (mod, version = 'v1') => ({ version, kind: mod.KIND, score: mod.score });
+// combine：成績を束ねる関数を持つタイトル（レベルごとの自己ベストの合計など）は、共通基盤が前回の自己ベストと束ねてから計算する
+const v = (mod, version = 'v1') => ({ version, kind: mod.KIND, score: mod.score, ...(mod.combine ? { combine: mod.combine } : {}) });
 
 export const SCORERS = {
   tactics: v(tactics, 'v2'), // v2：レギュレーション倍率を共通基盤の難易度の係数に（SPEC-002 3.1）
   survivor: v(survivor, 'v2'), // v2：ABSOLUTE の倍率の上限 2.0
-  fortress: v(fortress),
+  fortress: v(fortress, 'v2'), // v2：レベルごとの自己ベストの合計と早呼びのボーナス（SPEC-002 3.3）
   deckbattle: v(deckbattle),
   education: v(education, 'v2'), // v2：ゲームクリアと加点（MyCryptoEducation#1）
   workshop: v(workshop),

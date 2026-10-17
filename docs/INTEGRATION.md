@@ -2,7 +2,7 @@
 
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
-- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）
+- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）、[SPEC-003](specs/SPEC-003-admin.md)（管理画面・締め出し）
 - 最終更新：2026-10-17
 
 ## 1. いまの状態
@@ -12,11 +12,11 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | ポータル・共通基盤 | bearko/MyCryptoPortfolio（`claude/game-portfolio-page-4afqbc`） | bearko.games | — | — | — | このファイル |
 | Tactics | bearko/mycryptotactics（`main`） | tactics.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-008・SPEC-009・SPEC-015 |
 | Survivor | bearko/MyCryptoSurvivor（`main`） | survivor.bearko.games | 対応 | 対応（NORMAL・ABSOLUTE ×2.0） | 対応（v2） | SPEC-039・040・041・048 |
-| Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 未対応 | 対応 | SPEC-120・121 |
+| Fortress | bearko/mycryptofortress（`main`、ゲームは `web/`） | fortress.bearko.games | 対応 | 対応 | 対応（v2） | SPEC-120〜124 |
 | DeckBattle | bearko/mycryptodeckbattle（`main`） | deckbattle.bearko.games | 対応 | 未対応 | 対応 | `docs/platform.md` |
-| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 未対応 | 対応 | `docs/platform-score.md` |
+| Factory | bearko/mycryptofactory（`main`） | factory.bearko.games | 未対応 | 対応 | 対応 | `docs/platform-score.md`・SPEC-003 |
 | Workshop | bearko/MyCryptoWorkshop（`claude/mycryptoheroes-craft-game-vsfplv`） | workshop.bearko.games | 対応 | 対応 | 対応 | `docs/platform-score.md`・`docs/ROADMAP.md` 8.4 |
-| 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 未対応 | 未対応 | 対応 | `docs/17_platform_score.md` |
+| 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 対応 | 未対応 | 対応（継承・師匠は記録だけ） | `docs/17_platform_score.md` |
 | Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 未対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
 | TCG | bearko/MyCryptoTCG（`main`） | tcg.bearko.games | 未対応 | 未対応 | 保留 | — |
 
@@ -28,6 +28,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 |---|---|
 | `platform/worker.js` | Worker の入口。`/api/*` は API、それ以外はポータルの静的ファイル。毎日の掃除（cron） |
 | `platform/api.js` | API 全部（ログイン・仮アカウント・トロフィー・RTA・総合スコア）。上のコメントに一覧 |
+| `platform/admin.js` | 管理画面の API（`/api/admin/*`。SPEC-003）。締め出しの効き目は `api.js` の側 |
 | `platform/trophies.js` | トロフィーの定義と、タイトル ID → サブドメイン（`GAME_HOSTS`） |
 | `platform/rta.js` | RTA のレギュレーションと区切り・最短時間 |
 | `platform/scoring/<タイトル>.v1.js` | 総合スコアの計算式（1 タイトル 1 ファイル）。一覧は `scoring/index.js` |
@@ -35,6 +36,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | `migrations/*.sql` | D1（`bearko-platform`）の表 |
 | `sdk/v1.js` | ゲームが読む SDK（`window.BearkoGames`）。版は `api.version` |
 | `rta/` `score/` `me/` `login/` | ポータルの画面（RTA ランキング・総合ランキング・マイページ・ログイン） |
+| `admin/` | 管理画面（点数の分布・RTA の記録・締め出し。SPEC-003）。どこからもリンクしない |
 | `tools/e2e/` | ローカルで通して確かめる道具（6 章） |
 
 ## 3. ゲームを共通基盤につなぐ手順
@@ -64,6 +66,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
    - `score(metrics)` → `{ score, milestone, performance }`。ありえない値は `null`（受け付けない）
    - 形は SPEC-002 2 章：**節目の点**（最初の節目 1,000・ゲームクリア 5,000）＋ **成績 × 係数**（上限・頭打ちなし。D11）
    - `scoring/index.js` に足し、`platform/test/scoring.test.mjs` の基準プレイ（A ≒ 1,000・B ≒ 10,000）に 1 行足す
+   - 「レベルごとの自己ベストの合計」のように、いくつもの成績を束ねるタイトルは、計算式に `combine(list)`（成績を束ねて 1 つの成績にする純関数）を持たせる。API は前回の自己ベストのもとと今回を束ねてから計算し、版が変わったとき・仮アカウントをまとめたときは生の成績ぜんぶを束ね直す（Fortress v2 が例）
 2. ゲーム：終わったとき（積み上げなら増えたとき）に `BearkoGames.submitScore(metrics, { quiet })`
    - こまめに送るゲームは `{ quiet: true }`（通知なし）で、1 分に 1 回まで
    - 将来の「難易度ごとのレギュレーション」用に、難易度・レギュレーションも `metrics` に入れておく（今は点に効かない）
@@ -81,8 +84,14 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
-- これまでの 0001〜0004 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
-- 本番のデータを消す・書き換える SQL は、作者に確認してから
+- これまでの 0001〜0005 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
+- 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
+
+### 4.1 管理画面（bearko.games/admin/）
+
+- 管理者は Google の会員番号（`sub`）の一覧。Worker の **シークレット** `ADMIN_SUBS`（カンマ区切り）に入れる。`vars` に書くとデプロイで上書きされるので、シークレットにする
+- 自分の会員番号は、ログインして `/admin/` を開くと出る
+- ローカル：`ADMIN_SUBS=admin node tools/e2e/server.mjs` で、`ok:admin` でログインすると管理者
 
 ## 5. 進め方の決まり
 
@@ -135,7 +144,7 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 ## 7. はまりどころ
 
 - **PR を作るとき**：この環境では `gh pr create` が使えない（GraphQL）。`gh api repos/<owner>/<repo>/pulls -f title=… -f head=… -f base=…` で作り、`gh api -X PUT repos/<owner>/<repo>/pulls/<n>/merge -f merge_method=squash` でマージする
-- **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は別の原因でプレビューが失敗している（未調査）
+- **プレビュービルド**：本番以外のブランチは `npx wrangler preview` でビルドされ、設定ファイルに空の `"previews": {}` がないと失敗する。設定ファイル（`wrangler.jsonc`）がない Tactics・Survivor・TCG はプレビューが失敗したまま（本番は成功）。Fortress は設定とゲームが `web/` の下にあり、プレビューのコマンドがリポジトリの直下で動くため失敗していた。直下に `wrangler.jsonc`（`assets.directory: ./web/dist` と、`web/dist` を作る `build.command`）を置いて直した（Fortress の SPEC-124）
 - **Cloudflare の本番のブランチ**：ダッシュボードの Worker → Settings → Build → Branch control の「Production branch」。プレビューの設定画面（Tracking branch）と間違えやすい
 - **サンドボックスから本番のサイトに curl できない**（プロキシで 403）。本番の確認は WebFetch か、作者に見てもらう
 - **成績はゲームの自己申告**：範囲の確認はしているが改ざんは防げない（カジュアルなランキングとして割り切っている）
@@ -144,8 +153,10 @@ node tools/e2e/survivor-autoplay.mjs 8790 2 1 circle owned 1   # ヒーローの
 
 タイトル別の課題と改善点は作者のドキュメント「タイトル別：RTA・総合スコアに向けた課題と改善点」にまとめてある。主なもの：
 
-- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。Survivor は自動プレイで確かめた：6.3）
-- Fortress を「レベルごとの自己ベストの合計」にするか
-- Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
+- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。公開後は管理画面の分布も見る。Survivor は自動プレイで確かめた：6.3）
+- ~~管理画面（点数の分布・記録の削除・締め出し）~~（2026-10-17 済み。SPEC-003）
+- DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
-- Factory のセーブとクリアの条件（#94）、TCG の連戦（#5）、Education のゲームクリア（#1）
+- 同じ条件で競うレギュレーション（10 buy year の週替わりチャレンジ。案は SPEC-002 6.1）
+- ~~Factory のセーブとクリアの条件（#94）~~（2026-10-17 済み。Factory v1.0.0）、TCG の連戦（#5）、Education のゲームクリア（#1）
+- Factory の RTA（`factory-lv5`）の最短時間を、作者の通しプレイの記録から引き上げる（いまは理屈の下限。SPEC-001 6.10）

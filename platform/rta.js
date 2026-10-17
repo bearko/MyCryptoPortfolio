@@ -65,6 +65,35 @@ export const REGULATIONS = [
       { id: 'clear', kind: 'clear', label: '全 5 章クリア', minMs: 120e3 },
     ],
   },
+  {
+    id: 'factory-lv5',
+    game: 'factory',
+    name: 'Factory 工房 Lv.5',
+    rule: 'はじめから（セーブなし）。2018 年 12 月 1 週の開始から、期限（8 年）内に工房 Lv.5 まで。速さは 2 倍速まで。再読み込みすると計測は消える',
+    checkpoints: [
+      { id: 'lv2', kind: 'milestone', label: '工房 Lv.2', minMs: 4e3 },
+      { id: 'lv3', kind: 'milestone', label: '工房 Lv.3', minMs: 6e3 },
+      { id: 'lv4', kind: 'milestone', label: '工房 Lv.4', minMs: 10e3 },
+      { id: 'clear', kind: 'clear', label: '工房 Lv.5（クリア）', minMs: 15e3 },
+    ],
+  },
+  {
+    id: 'fortress-all',
+    game: 'fortress',
+    name: 'Fortress レベル 01〜09',
+    rule: '新しいセーブ（引き継ぎなし）・3 倍速に固定（5 倍速は使えない）。RTA で始めてから、レベル 01〜09 を順にクリアするまで（負けてもやり直せる）。IGT はレベルを遊んだ時間の合計',
+    checkpoints: [
+      { id: 'L1', kind: 'stage', label: 'レベル 01 クリア', minMs: 20e3 },
+      { id: 'L2', kind: 'stage', label: 'レベル 02 クリア', minMs: 35e3 },
+      { id: 'L3', kind: 'stage', label: 'レベル 03 クリア', minMs: 50e3 },
+      { id: 'L4', kind: 'stage', label: 'レベル 04 クリア', minMs: 65e3 },
+      { id: 'L5', kind: 'stage', label: 'レベル 05 クリア', minMs: 85e3 },
+      { id: 'L6', kind: 'stage', label: 'レベル 06 クリア', minMs: 105e3 },
+      { id: 'L7', kind: 'stage', label: 'レベル 07 クリア', minMs: 120e3 },
+      { id: 'L8', kind: 'stage', label: 'レベル 08 クリア', minMs: 140e3 },
+      { id: 'clear', kind: 'clear', label: 'レベル 09 クリア（全レベル）', minMs: 160e3 },
+    ],
+  },
 ];
 
 export const REGULATION_BY_ID = Object.fromEntries(REGULATIONS.map((r) => [r.id, r]));

@@ -203,6 +203,8 @@ test('トロフィー：そのゲームのサブドメインからしか受け�
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'fortress.level01' }, { origin: 'https://fortress.bearko.games' })).status, 200);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'workshop.clear' })).status, 403, 'tactics から workshop のトロフィーは送れない');
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'workshop.clear' }, { origin: 'https://workshop.bearko.games' })).status, 200);
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' })).status, 403, 'tactics から 10 buy year のトロフィーは送れない');
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: '10buy.clear' }, { origin: 'https://10-buy-year.bearko.games' })).status, 200);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'cross.two' })).status, 400);
   assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'nope' })).status, 400);
 });
@@ -403,6 +405,16 @@ test('RTA：Workshop のレギュレーション', async () => {
   assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });
 
+test('RTA：Factory のレギュレーション', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'factory-lv5');
+  assert.equal(reg.game, 'factory');
+  assert.deepEqual(reg.checkpoints.map((c) => c.id), ['lv2', 'lv3', 'lv4', 'clear']);
+  const def = REGULATION_BY_ID['factory-lv5'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
+});
+
 test('RTA：レギュレーションの定義', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const reg = res.body.regulations.find((r) => r.id === 'survivor-normal');
@@ -457,4 +469,14 @@ test('RTA：Tactics のレギュレーション（IGT はターン数）', async
   const end = await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'ch1', igtMs: 42, idleMs: 1000 }, opt);
   assert.equal(end.body.finished, true);
   assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 42, 'ターン数をそのまま残す');
+});
+
+test('RTA：Fortress のレギュレーション（レベル 01〜09）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'fortress-all');
+  assert.equal(reg.game, 'fortress');
+  assert.deepEqual(reg.checkpoints.map((c) => c.id), ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'clear']);
+  const def = REGULATION_BY_ID['fortress-all'];
+  for (let i = 1; i < def.checkpoints.length; i++) assert.ok(def.checkpoints[i].minMs > def.checkpoints[i - 1].minMs);
+  assert.equal(def.checkpoints.at(-1).kind, 'clear');
 });

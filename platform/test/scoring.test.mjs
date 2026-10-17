@@ -5,12 +5,15 @@ import { SCORERS } from '../scoring/index.js';
 import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v1.js';
 
 const s = (game, m) => SCORERS[game].score(m)?.score ?? null;
+// Fortress のふつうのクリア：体力 2/3 が残る・15 スロットに 7 体・早呼びなし
+const FORTRESS_TYPICAL = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+const FORTRESS_LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'];
 
 test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリア）≒ 10,000', () => {
   const cases = [
     ['tactics', { chaptersCleared: 1, cleared: false }, { chaptersCleared: 5, cleared: true, finalScore: 20000 }],
     ['survivor', { stagesCleared: 1, cleared: false }, { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1 }],
-    ['fortress', { levelId: 'L1', won: true, hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 }, { levelId: 'L9', won: true, hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 }],
+    ['fortress', { levels: { L1: FORTRESS_TYPICAL } }, { levels: Object.fromEntries(FORTRESS_LEVELS.map((id) => [id, FORTRESS_TYPICAL])) }],
     ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: 180, avgBattleSec: 30 }])) }],
     ['education', { cards: 47, cells: 12, heroes: 1, titles: 1, cleared: false }, { cards: 469, cells: 40, heroes: 6, titles: 4, cleared: true }],
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
@@ -40,6 +43,7 @@ test('節目の点は決まった点', () => {
   assert.equal(s('factory', { factoryLevel: 5 }), 5000);
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
   assert.equal(s('10buy', { years: 4, netWorth: 1e9 }), 400, '10 年に届かなければ年数 × 100 だけ');
+  assert.equal(s('10buy', { years: 10, netWorth: 5e7, legacy: 'cap_sales', mentor: true }), s('10buy', { years: 10, netWorth: 5e7 }), '継承・師匠は記録するだけで、点に効かない（SPEC-002 3.8）');
 });
 
 test('Education：クリアは 5,000、称号・英雄・マス・カードは加点（v2）', () => {
@@ -60,6 +64,35 @@ test('Fortress：体力が残るほど・ヒーローが少ないほど高い', 
   const f = (hpLeft, used) => s('fortress', { levelId: 'L9', won: true, hpLeft, maxHp: 3, heroesUsed: used, slots: 15 });
   assert.ok(f(3, 7) > f(2, 7));
   assert.ok(f(2, 4) > f(2, 7));
+});
+
+test('Fortress v2：レベルごとの自己ベストの合計。早呼びのボーナスは 1 GUM ＝ 1 点', () => {
+  const all = (e) => ({ levels: Object.fromEntries(FORTRESS_LEVELS.map((id) => [id, e])) });
+  assert.equal(SCORERS.fortress.score(all(FORTRESS_TYPICAL)).milestone, 5000, '全レベルの節目 ＝ 5,000');
+  assert.equal(s('fortress', all({ ...FORTRESS_TYPICAL, earlyBonus: 200 })) - s('fortress', all(FORTRESS_TYPICAL)), 1800, '9 レベル × 200');
+  assert.ok(s('fortress', { levels: { L1: FORTRESS_TYPICAL, L2: FORTRESS_TYPICAL } }) > s('fortress', { levels: { L1: FORTRESS_TYPICAL } }), 'クリアしたレベルが増えるほど高い');
+  // v1 の「レベル n をクリア」の節目は、v2 の L1〜Ln の節目の合計と同じ
+  const v1Milestone = (n) => 500 + (n - 1) * 562.5;
+  for (const n of [1, 5, 9]) {
+    const levels = Object.fromEntries(FORTRESS_LEVELS.slice(0, n).map((id) => [id, FORTRESS_TYPICAL]));
+    assert.equal(SCORERS.fortress.score({ levels }).milestone, Math.round(v1Milestone(n)));
+  }
+  assert.deepEqual(SCORERS.fortress.score({ levels: {} }), { score: 0, milestone: 0, performance: 0 });
+});
+
+test('Fortress v2：v1 の成績（1 レベルずつ）を束ねて、レベルごとの自己ベストにする', () => {
+  const { combine } = SCORERS.fortress;
+  const v1 = (levelId, hpLeft, heroesUsed, won = true) => ({ levelId, won, hpLeft, maxHp: 3, heroesUsed, slots: 15 });
+  const merged = combine([v1('L1', 1, 7), v1('L1', 3, 5), v1('L2', 2, 7), v1('L3', 0, 0, false), { levelId: 'L4', won: true, hpLeft: 0, maxHp: 3, heroesUsed: 1, slots: 15 }]);
+  assert.deepEqual(Object.keys(merged.levels), ['L1', 'L2'], '負けとありえない成績は入らない');
+  assert.equal(merged.levels.L1.hpLeft, 3, 'L1 は点の高いほう');
+  assert.equal(s('fortress', merged), s('fortress', { levels: { L1: merged.levels.L1 } }) + s('fortress', { levels: { L2: merged.levels.L2 } }));
+  assert.equal(s('fortress', v1('L1', 2, 7)), s('fortress', { levels: { L1: FORTRESS_TYPICAL } }), 'v1 の形もそのまま計算できる');
+  // 前回の自己ベスト ＋ 今回：下がらない
+  const prev = combine([{ levels: { L1: { ...FORTRESS_TYPICAL, hpLeft: 3 }, L2: FORTRESS_TYPICAL } }]);
+  const next = combine([prev, { levels: { L1: FORTRESS_TYPICAL, L3: FORTRESS_TYPICAL } }]);
+  assert.deepEqual(Object.keys(next.levels), ['L1', 'L2', 'L3']);
+  assert.equal(next.levels.L1.hpLeft, 3);
 });
 
 test('10 buy year：難易度の係数', () => {
@@ -205,6 +238,65 @@ test('API：積み上げのタイトルは生の成績をふやさない。計�
   const r = await api.cleanup();
   assert.equal(r.recomputed, 1);
   assert.equal(sqlite.prepare("SELECT score FROM title_scores WHERE game = 'education'").get().score, SCORERS.education.score({ cards: 30 }).score);
+});
+
+const fort = (levels) => ({ game: 'fortress', metrics: { levels } });
+const FORT = 'https://fortress.bearko.games';
+
+test('API：Fortress は前回の自己ベストと束ねる（古いセーブ・別の端末から送っても下がらない）', async () => {
+  const { sqlite, browser } = setup();
+  const b = browser();
+  const typ = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+  // v1 のゲーム（1 レベルずつ送る）がまだ残っていても足し上がる
+  await b('POST', '/api/score/submit', { game: 'fortress', metrics: { levelId: 'L1', won: true, ...typ } }, FORT);
+  const r2 = await b('POST', '/api/score/submit', { game: 'fortress', metrics: { levelId: 'L2', won: true, ...typ } }, FORT);
+  assert.equal(r2.body.score, SCORERS.fortress.score({ levels: { L1: typ, L2: typ } }).score);
+  assert.equal(r2.body.improved, true);
+  // 別の端末（L3 しか持っていない）
+  const r3 = await b('POST', '/api/score/submit', fort({ L3: typ }), FORT);
+  assert.equal(r3.body.score, SCORERS.fortress.score({ levels: { L1: typ, L2: typ, L3: typ } }).score);
+  // L1 を前より悪く送っても下がらない
+  const r4 = await b('POST', '/api/score/submit', fort({ L1: { ...typ, hpLeft: 1 } }), FORT);
+  assert.deepEqual([r4.body.score, r4.body.improved], [r3.body.score, false]);
+  assert.ok(sqlite.prepare("SELECT COUNT(*) n FROM plays WHERE game = 'fortress'").get().n <= 2, '積み上げなので生の成績はふやさない');
+  assert.equal((await b('POST', '/api/score/submit', fort({ L0: typ }), FORT)).status, 400);
+  assert.equal((await b('POST', '/api/score/submit', fort({ L1: { ...typ, earlyBonus: -1 } }), FORT)).status, 400);
+});
+
+test('API：Fortress を v1 から v2 に計算し直す（1 レベルずつの生の成績を束ねる）', async () => {
+  const { sqlite, api } = setup();
+  const typ = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+  // v1 のころに保存された成績（自己ベストは L5 の 1 回だけ）。90 日より古いものは掃除で先に消えるので、新しい日付で入れる
+  const NOW = Date.parse('2026-10-16T00:00:00Z');
+  sqlite.prepare("INSERT INTO users (id, google_sub, created_at, last_seen) VALUES ('u1', 'g1', 0, 0)").run();
+  const ins = sqlite.prepare("INSERT INTO plays (user_id, game, metrics, formula, score, created_at) VALUES ('u1', 'fortress', ?, 'v1', 0, ?)");
+  for (const id of ['L1', 'L2', 'L3', 'L4', 'L5']) ins.run(JSON.stringify({ levelId: id, won: true, ...typ }), NOW);
+  ins.run(JSON.stringify({ levelId: 'L6', won: false, hpLeft: 0, maxHp: 3, heroesUsed: 9, slots: 12 }), NOW);
+  const best = sqlite.prepare("SELECT MAX(id) id FROM plays").get().id - 1;
+  sqlite.prepare("INSERT INTO title_scores (user_id, game, score, milestone, performance, formula, play_id, updated_at) VALUES ('u1', 'fortress', 5500, 2750, 2750, 'v1', ?, 0)").run(best);
+  const r = await api.cleanup();
+  assert.equal(r.recomputed, 1);
+  const ts = sqlite.prepare("SELECT score, formula, play_id FROM title_scores WHERE user_id = 'u1'").get();
+  const want = SCORERS.fortress.score({ levels: { L1: typ, L2: typ, L3: typ, L4: typ, L5: typ } }).score;
+  assert.deepEqual([ts.score, ts.formula], [want, 'v2']);
+  assert.equal(want, 5500, 'ふつうにクリアした成績なら、v1 の「L5 クリア」と同じ点');
+  const plays = sqlite.prepare("SELECT id, metrics FROM plays WHERE user_id = 'u1'").all();
+  assert.equal(plays.length, 1, '束ねた 1 つだけ残る');
+  assert.equal(plays[0].id, ts.play_id);
+  assert.deepEqual(Object.keys(JSON.parse(plays[0].metrics).levels), ['L1', 'L2', 'L3', 'L4', 'L5']);
+});
+
+test('API：Fortress の仮アカウントをまとめると、両方のレベルを束ねる', async () => {
+  const { browser } = setup();
+  const typ = { hpLeft: 2, maxHp: 3, heroesUsed: 7, slots: 15 };
+  const other = browser();
+  await other('POST', '/api/auth/google', { credential: 'sub-f' });
+  await other('POST', '/api/score/submit', fort({ L1: typ, L2: typ }), FORT);
+  const b = browser();
+  await b('POST', '/api/score/submit', fort({ L3: typ }), FORT); // 仮アカウント
+  await b('POST', '/api/auth/google', { credential: 'sub-f' });
+  const me = await b('GET', '/api/me/scores');
+  assert.equal(me.body.total, SCORERS.fortress.score({ levels: { L1: typ, L2: typ, L3: typ } }).score);
 });
 
 test('API：退会で点も消える', async () => {
