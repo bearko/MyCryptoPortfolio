@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SCORERS } from '../scoring/index.js';
-import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v1.js';
+import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v2.js';
 
 const s = (game, m) => SCORERS[game].score(m)?.score ?? null;
 // Fortress のふつうのクリア：体力 2/3 が残る・15 スロットに 7 体・早呼びなし
@@ -14,7 +14,7 @@ test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリ
     ['tactics', { chaptersCleared: 1, cleared: false }, { chaptersCleared: 5, cleared: true, finalScore: 20000 }],
     ['survivor', { stagesCleared: 1, cleared: false }, { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1 }],
     ['fortress', { levels: { L1: FORTRESS_TYPICAL } }, { levels: Object.fromEntries(FORTRESS_LEVELS.map((id) => [id, FORTRESS_TYPICAL])) }],
-    ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: 180, avgBattleSec: 30 }])) }],
+    ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: 312, avgBattleSec: 10 }])) }],
     ['education', { cards: 47, cells: 12, heroes: 1, titles: 1, cleared: false }, { cards: 469, cells: 40, heroes: 6, titles: 4, cleared: true }],
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
     ['10buy', { years: 10, netWorth: -100000, difficulty: 'normal' }, { years: 10, netWorth: 5e7, difficulty: 'normal' }],
@@ -44,6 +44,15 @@ test('節目の点は決まった点', () => {
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
   assert.equal(s('10buy', { years: 4, netWorth: 1e9 }), 400, '10 年に届かなければ年数 × 100 だけ');
   assert.equal(s('10buy', { years: 10, netWorth: 5e7, legacy: 'cap_sales', mentor: true }), s('10buy', { years: 10, netWorth: 5e7 }), '継承・師匠は記録するだけで、点に効かない（SPEC-002 3.8）');
+});
+
+test('DeckBattle v2：戦力 × 0.6 ＋ 1,900 ÷ 平均秒（ボットの実測。v1 の生の成績もそのまま計算し直せる）', () => {
+  const d = (nodes) => s('deckbattle', { nodesCleared: Object.keys(nodes), nodes });
+  assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), Math.round(1000 + 178 * 0.6 + 1900 / 11.5), '最初のノード（実測の中央）');
+  assert.ok(d({ 'kindai-jp': { power: 200, avgBattleSec: 11.5 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '強いほど高い');
+  assert.ok(d({ 'kindai-jp': { power: 178, avgBattleSec: 8 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '速いほど高い');
+  assert.equal(d({ 'ex-corsica': { power: 205, avgBattleSec: 8 } }), Math.round(5000 / 3 + 205 * 0.6 + 1900 / 8), '特別ステージ');
+  assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 0.5 } }), null, '1 秒より短い平均はありえない');
 });
 
 test('Education：クリアは 5,000、称号・英雄・マス・カードは加点（v2）', () => {
