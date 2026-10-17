@@ -2,6 +2,7 @@
 //   node tools/e2e/server.mjs            → http://localhost:8788 （ポータル + /api/*）
 // ゲームを別のポートで配信して、ブラウザから https://bearko.games と https://<game>.bearko.games を
 // ここに向けて確かめる（game-check.mjs）。Google ログインは偽物：credential が "ok:<sub>" なら通る。
+//   ADMIN_SUBS=admin node tools/e2e/server.mjs → /admin/ に "ok:admin" でログインすると管理者（SPEC-003）
 //   GET /__skew?add=<ms>  サーバーの時計を進める（RTA の最短時間を待たずに確かめるため）
 import { createServer } from 'node:http';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -31,6 +32,8 @@ const api = createApi({
   verifyGoogle: async (c) => (c?.startsWith('ok:') ? { sub: c.slice(3) } : null),
   // ゲームを http://localhost:8790 で直接開いたときも受け付ける（ふつうは https://<game>.bearko.games に向けるので要らない）
   extraOrigins: [`http://localhost:${PORT}`, 'http://localhost:8790'],
+  // 管理画面（SPEC-003）：ADMIN_SUBS=admin で起動し、credential "ok:admin" でログインすると管理者
+  adminSubs: (process.env.ADMIN_SUBS || '').split(',').filter(Boolean),
 });
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml' };

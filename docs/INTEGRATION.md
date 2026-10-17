@@ -2,7 +2,7 @@
 
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
-- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）
+- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）、[SPEC-003](specs/SPEC-003-admin.md)（管理画面・締め出し）
 - 最終更新：2026-10-17
 
 ## 1. いまの状態
@@ -28,6 +28,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 |---|---|
 | `platform/worker.js` | Worker の入口。`/api/*` は API、それ以外はポータルの静的ファイル。毎日の掃除（cron） |
 | `platform/api.js` | API 全部（ログイン・仮アカウント・トロフィー・RTA・総合スコア）。上のコメントに一覧 |
+| `platform/admin.js` | 管理画面の API（`/api/admin/*`。SPEC-003）。締め出しの効き目は `api.js` の側 |
 | `platform/trophies.js` | トロフィーの定義と、タイトル ID → サブドメイン（`GAME_HOSTS`） |
 | `platform/rta.js` | RTA のレギュレーションと区切り・最短時間 |
 | `platform/scoring/<タイトル>.v1.js` | 総合スコアの計算式（1 タイトル 1 ファイル）。一覧は `scoring/index.js` |
@@ -35,6 +36,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | `migrations/*.sql` | D1（`bearko-platform`）の表 |
 | `sdk/v1.js` | ゲームが読む SDK（`window.BearkoGames`）。版は `api.version` |
 | `rta/` `score/` `me/` `login/` | ポータルの画面（RTA ランキング・総合ランキング・マイページ・ログイン） |
+| `admin/` | 管理画面（点数の分布・RTA の記録・締め出し。SPEC-003）。どこからもリンクしない |
 | `tools/e2e/` | ローカルで通して確かめる道具（6 章） |
 
 ## 3. ゲームを共通基盤につなぐ手順
@@ -81,8 +83,14 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
-- これまでの 0001〜0004 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
-- 本番のデータを消す・書き換える SQL は、作者に確認してから
+- これまでの 0001〜0005 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
+- 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
+
+### 4.1 管理画面（bearko.games/admin/）
+
+- 管理者は Google の会員番号（`sub`）の一覧。Worker の **シークレット** `ADMIN_SUBS`（カンマ区切り）に入れる。`vars` に書くとデプロイで上書きされるので、シークレットにする
+- 自分の会員番号は、ログインして `/admin/` を開くと出る
+- ローカル：`ADMIN_SUBS=admin node tools/e2e/server.mjs` で、`ok:admin` でログインすると管理者
 
 ## 5. 進め方の決まり
 
@@ -134,8 +142,9 @@ node tools/e2e/game-check.mjs survivor / "BearkoGames.submitScore({ stagesCleare
 
 タイトル別の課題と改善点は作者のドキュメント「タイトル別：RTA・総合スコアに向けた課題と改善点」にまとめてある。主なもの：
 
-- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる）
+- 係数の確認（作者の通しプレイで「ふつうにクリア」の成績を確かめる。公開後は管理画面の分布も見る）
 - Fortress を「レベルごとの自己ベストの合計」にするか
+- ~~管理画面（点数の分布・記録の削除・締め出し）~~（2026-10-17 済み。SPEC-003）
 - Fortress・DeckBattle の RTA、タイトルをまたぐ RTA
 - 難易度ごとのレギュレーションと、積み上げ（スキルツリー・継承・周回）の扱い
 - Factory のセーブとクリアの条件（#94）、TCG の連戦（#5）、Education のゲームクリア（#1）
