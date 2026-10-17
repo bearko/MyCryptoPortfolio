@@ -106,7 +106,8 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 | `unlockTrophy(id)` | トロフィーの獲得を送る |
 | `rta.start({ regulation })` / `rta.checkpoint(id, { igtMs })` / `rta.abort()` | RTA の計測（6.6）。最後のチェックポイントを送ると、その計測は終わる |
 | `setToastPosition({ position: "top" \| "bottom", offset })` | 通知（トロフィー・RTA の記録・自己ベスト）の置き場所。既定は下。`init({ toast, toastOffset })` でも決められる（SDK 1.5.0）。結果画面のボタンと通知が重なるゲームは上に寄せる |
-| `chat.open()` / `chat.close()` / `chat.setVisible(on)` / `chat.setPosition({ position, offset })` / `chat.send(text)` / `chat.onMessage(fn)` / `chat.connect()` / `chat.disconnect()` / `chat.getMessages()` | 全体チャット（SPEC-004。SDK 1.6.0）。`init({ chat })` で置き場所、`chat: false` で出さない、`{ ui: false }` で自前の窓 |
+| `chat.open()` / `chat.close()` / `chat.collapse(on)` / `chat.setVisible(on)` / `chat.setPosition({ position, offset, layout, dockMin })` / `chat.layout()` / `chat.setSort('new' \| 'likes')` / `chat.setFilter(game)` / `chat.loadMore()` / `chat.mount(el, { composerAt, title })` / `chat.send(text)` / `chat.reply(id, text)` / `chat.like(id)` / `chat.edit(id, text)` / `chat.remove(id)` / `chat.onMessage(fn)` / `chat.onToggle(fn)` / `chat.onCompose(fn)` / `chat.stats()` | 全体チャット（SPEC-004・SPEC-005。SDK 1.7.0）。PC はドック、スマホはシート。`init({ chat })` で置き場所、`chat: false` で出さない、`{ layout: 'float' }` で 1.x の窓、`{ ui: false }` で自前の窓 |
+| `setAvatar(id)` / `avatarUrl(id)` / `openAvatarPicker()` | 共通のプレイヤーアイコン（SPEC-005 5.3。SDK 1.7.0）。`getUser()` に `avatar` |
 
 守ること：
 
@@ -568,6 +569,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 | 2026-10-17 | 1.4 | Factory のトロフィー 4 つ・Education のトロフィー 4 つ（9.4。作者の決定 2026-10-17）。`factory.clear`・`education.clear` が増えるので「征服王の偉業」には両方のクリアも要る（すでに持っている人からは消さない） |
 | 2026-10-17 | 1.5 | 4.6：仮アカウントがまだないあいだの書き込みは、SDK が最初の 1 つの返事を待ってから送る（SDK 1.3.1。同時に送ると仮アカウントが増える不具合を直す） |
 | 2026-10-17 | 1.6 | 6.14：タイトルをまたぐ RTA（`cross-first6`：6 タイトルの最初の区切りの合計・24 時間。作者の決定 2026-10-17、Issue #30） |
+| 2026-10-17 | 1.9 | 5 章：SDK 1.7.0 の `chat`（ドック・いいね・返信・編集。SPEC-005）と共通アイコン |
 | 2026-10-17 | 1.8 | 5 章：SDK 1.6.0 の `chat`（全体チャット。SPEC-004） |
 | 2026-10-17 | 1.7 | 5 章：SDK 1.5.0 の `setToastPosition`（通知を上にも出せる。Survivor の結果画面のボタンが隠れるため）。6.15：Survivor 懐中時計ありのレギュレーション 2 つ。6.14 の Survivor の区間に `survivor-normal-v2` |
 | 2026-10-17 | 1.8 | 6.16：Survivor v1.2 のレギュレーション 2 つ（`survivor-normal-v3`・`survivor-absolute-2x-v3`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v3` |
