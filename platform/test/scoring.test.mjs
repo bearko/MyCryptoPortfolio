@@ -42,8 +42,7 @@ test('節目の点は決まった点', () => {
   assert.equal(s('deckbattle', { nodesCleared: [...MAIN_NODES, ...SPECIAL_NODES] }), 10000);
   assert.equal(s('factory', { factoryLevel: 5 }), 5000);
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
-  assert.equal(s('10buy', { years: 4, netWorth: 1e9 }), 400, '10 年に届かなければ年数 × 100 だけ');
-  assert.equal(s('10buy', { years: 10, netWorth: 5e7, legacy: 'cap_sales', mentor: true }), s('10buy', { years: 10, netWorth: 5e7 }), '継承・師匠は記録するだけで、点に効かない（SPEC-002 3.8）');
+  assert.equal(s('10buy', { years: 4, netWorth: -1e6 }), 400, '途中で終わって純資産がマイナスなら年数 × 100 だけ');
 });
 
 test('DeckBattle v2：戦力 × 0.6 ＋ 1,900 ÷ 平均秒（ボットの実測。v1 の生の成績もそのまま計算し直せる）', () => {
@@ -132,11 +131,27 @@ test('Factory v2：係数は自動プレイの実測（期限までふつうに�
   assert.equal(f(120, 0, {}), 9000, '速さは伸び続ける（上限なし）');
 });
 
-test('10 buy year：難易度の係数', () => {
+test('10 buy year v2：難易度の係数（0.9 ／ 1.0 ／ 1.3。SPEC-002 3.8）', () => {
   const m = (difficulty) => s('10buy', { years: 10, netWorth: 5e7, difficulty });
   assert.equal(m('normal'), 10001);
-  assert.equal(m('hard'), 13601);
-  assert.equal(m('easy'), 7301);
+  assert.equal(m('hard'), 12701);
+  assert.equal(m('easy'), 9101);
+  assert.ok(m('hard') > m('normal') && m('normal') > m('easy'), 'きびしいほうが少しだけ得');
+});
+
+test('10 buy year v2：事業売却はクリア・途中で終わった周は成績の 3 割・継承の係数', () => {
+  const clear = s('10buy', { years: 10, netWorth: 5e7 });
+  assert.equal(s('10buy', { years: 8, netWorth: 5e7, ending: 'exit' }), clear, '事業売却（9 年目まで）は遊び切ったのと同じ');
+  assert.equal(s('10buy', { years: 4, netWorth: 5e7, ending: 'bankrupt' }), Math.round(400 + (5e7 / 5555) * 0.3), '途中で終わった周：年数 × 100 ＋ 成績の 3 割');
+  assert.ok(s('10buy', { years: 9, netWorth: 1e8, ending: 'vanish' }) < s('10buy', { years: 10, netWorth: 1e8 }), '途中で終わったほうが得にはならない');
+  const L = (legacy, mentor) => s('10buy', { years: 10, netWorth: 5e7, legacy, mentor });
+  const at = (f) => Math.round(1000 + (5e7 / 5555) * f);
+  assert.equal(L(null, false), clear);
+  assert.equal(L(null, true), at(0.8), '師匠だけ 0.8');
+  assert.equal(L('cap_sales', true), at(0.7), '継承あり 0.7（師匠つきでも同じ）');
+  assert.equal(L('cap_trade', true), at(0.45), '総合商社 0.45');
+  assert.equal(L('cap_dark', false), at(0.5), '裏社会の帝王 0.5');
+  assert.equal(L('<script>', false), clear, '形の合わない ID は継承なし扱い');
 });
 
 test('Tactics v2：倍率の前の点 × 共通基盤の難易度の係数（ゲーム内の倍率は使わない）', () => {

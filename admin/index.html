@@ -235,7 +235,7 @@
         head.appendChild(who(run.name, run.account, run.banned));
         li.appendChild(head);
         li.appendChild(el('small', null,
-          (reg ? reg.name : run.regulation) + ' ・ IGT ' + (run.igtMs == null ? '—' : turns ? run.igtMs + ' ターン' : BG.rta.formatTime(run.igtMs)) +
+          (reg ? reg.name : run.regulation) + ' ・ IGT ' + (run.igtMs == null ? '—' : turns ? run.igtMs + ' ターン' : reg && reg.igt === 'weeks' ? run.igtMs + ' 週' : BG.rta.formatTime(run.igtMs)) +
           ' ・ 一番長い無操作 ' + BG.rta.formatTime(run.maxIdleMs) + ' ・ ' + day(run.at)));
         li.appendChild(el('small', null, run.splits.map(function (s) {
           var cp = reg && reg.checkpoints.filter(function (c) { return c.id === s.checkpoint; })[0];

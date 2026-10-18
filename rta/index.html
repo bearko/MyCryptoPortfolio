@@ -71,6 +71,7 @@
     workshop: 'https://workshop.bearko.games/',
     factory: 'https://factory.bearko.games/',
     fortress: 'https://fortress.bearko.games/',
+    '10buy': 'https://10-buy-year.bearko.games/',
   };
   var regs = [];
   var current = null; // いま表示しているレギュレーション
@@ -130,6 +131,14 @@
     });
   });
 
+  // IGT で並べるレギュレーション（SPEC-001 6.18）：10 buy year は週（1 年 ＝ 48 週。0 週目から数える）
+  function igtText(v, unit) {
+    if (v == null) return '—';
+    if (unit === 'weeks') return v + ' 週（' + (Math.floor(v / 48) + 1) + ' 年目）';
+    if (unit === 'turns') return v + ' ターン';
+    return BG.rta.formatTime(v);
+  }
+
   function fail(text) { $('error').textContent = text; $('error').hidden = !text; }
 
   function show(regId) {
@@ -154,7 +163,7 @@
         if (e.me) li.className = 'me';
         var rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = e.rank;
         var name = document.createElement('span'); name.className = 'name'; name.textContent = e.name || '名無し';
-        var time = document.createElement('span'); time.className = 'time'; time.textContent = BG.rta.formatTime(e.timeMs);
+        var time = document.createElement('span'); time.className = 'time'; time.textContent = r.rankBy === 'igt' ? igtText(e.igtMs, r.igt) + '　' + BG.rta.formatTime(e.timeMs) : BG.rta.formatTime(e.timeMs);
         var at = document.createElement('small'); at.textContent = new Date(e.at).toLocaleDateString('ja-JP');
         li.appendChild(rank); li.appendChild(name); li.appendChild(time); li.appendChild(at);
         ol.appendChild(li);
@@ -162,7 +171,7 @@
       ol.hidden = !r.entries.length;
       $('empty').hidden = !!r.entries.length;
       $('mine').hidden = !r.me;
-      if (r.me) $('mine').textContent = 'あなたの自己ベスト：' + BG.rta.formatTime(r.me.timeMs) + '（' + r.me.rank + ' 位）';
+      if (r.me) $('mine').textContent = 'あなたの自己ベスト：' + (r.rankBy === 'igt' ? igtText(r.me.igtMs, r.igt) + '・' : '') + BG.rta.formatTime(r.me.timeMs) + '（' + r.me.rank + ' 位）';
     });
   }
 
