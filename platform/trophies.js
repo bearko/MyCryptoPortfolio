@@ -37,6 +37,8 @@ export const GAME_NAMES = {
 //   titles / clears / book / allClear / allExt / visits / visitsAll：タイトル横断の条件（crossTrophiesFor が判定）
 //   judge：共通基盤の出来事で渡すもの（welcome・login・avatar・chat・rtarun・crossrta）
 //   visit：そのタイトルの来訪（SDK が最初の操作で送る。/api/trophies/visit）
+//   chapter：名鑑の章（SPEC-008 5.2。省くと第 1 章）。タイトルが増えたら、足すヒーローを chapter: 2 にして第 2 章とする。
+//     名鑑の枚数（book）はその章のヒーローだけを数える。trueClear は、その章の最後の 1 枚（真のゲームクリアの記録。一度得たら消えない）
 export const TROPHIES = [
   // tactics
   { id: 'tactics.ch1', game: 'tactics', no: 1, name: '遼来遼来', nameFrom: '張遼のパッシブスキル', avatar: 'hero:1003', avatarName: '張遼', description: '第 1 章のボスを倒す', formerAvatars: ['hero:2011'] },
@@ -146,7 +148,7 @@ export const TROPHIES = [
   { id: 'cross.crossrta', game: 'cross', no: 97, name: '燕返し', nameFrom: '佐々木小次郎のパッシブスキル', avatar: 'hero:4004', avatarName: '佐々木小次郎', description: 'タイトルをまたぐ RTA を完走する', judge: 'crossrta' },
   { id: 'cross.allclear', game: 'cross', no: 98, name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', avatar: 'hero:5017', avatarName: 'アレキサンダー', description: '対応しているすべてのタイトルでゲームクリア', allClear: true },
   { id: 'cross.allext', game: 'cross', no: 99, name: '富嶽三十六景', nameFrom: '葛飾北斎のパッシブスキル', avatar: 'hero:5024', avatarName: '葛飾北斎', description: 'エクステンションのアチーブメントをすべて集める', allExt: true },
-  { id: 'cross.book99', game: 'cross', no: 100, name: '中国統一', nameFrom: '始皇帝のパッシブスキル', avatar: 'hero:5018', avatarName: '始皇帝', description: 'ヒーロー名鑑のほかの 99 枚をすべて埋める', book: 99 },
+  { id: 'cross.book99', game: 'cross', no: 100, name: '中国統一', nameFrom: '始皇帝のパッシブスキル', avatar: 'hero:5018', avatarName: '始皇帝', description: 'ヒーロー名鑑のほかの 99 枚をすべて埋める', book: 99, trueClear: true },
 
   // ---- エクステンション（すべて Epic 以上。SPEC-008 2.3）
   { id: 'tactics.visit', game: 'tactics', name: '五事七計', nameFrom: 'エクステンション「兵法書」のスキル', avatar: 'ext:4016', avatarName: '兵法書', description: 'MyCryptoTactics を遊ぶ', visit: true },
@@ -233,31 +235,38 @@ export function canUseAvatar(id, ownedTrophyIds) {
 // ---- SPEC-008：来訪（タイトル → アチーブメント ID）・名鑑・横断の判定 ----
 export const VISIT_TROPHY = Object.fromEntries(TROPHIES.filter((t) => t.visit).map((t) => [t.game, t.id]));
 export const HERO_TROPHIES = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero');
+/** 名鑑の章（SPEC-008 5.2）。書いていなければ第 1 章 */
+export function chapterOf(t) {
+  return t.chapter || 1;
+}
 export const EXT_TROPHIES = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext');
 
 // 持っているトロフィー ID から、新たに得られる横断のアチーブメントを返す（judge のものは出来事で渡すので、ここでは見ない）
-export function crossTrophiesFor(ownedIds) {
+// list を渡すと、その定義で判定する（テストで第 2 章を試すため。ふだんは TROPHIES）
+export function crossTrophiesFor(ownedIds, list = TROPHIES) {
+  const byId = list === TROPHIES ? TROPHY_BY_ID : Object.fromEntries(list.map((t) => [t.id, t]));
+  const exts = list.filter((t) => kindOf(t.avatar) === 'ext');
   const owned = new Set(ownedIds);
   const heroTitles = new Set();   // ヒーロー（節目）を呼び戻したタイトル
   const clearedTitles = new Set();
   const visited = new Set();
-  let heroes = 0;
+  const heroes = {};   // 章 → 持っているヒーローの数
   for (const id of owned) {
-    const t = TROPHY_BY_ID[id];
+    const t = byId[id];
     if (!t) continue;
-    if (kindOf(t.avatar) === 'hero') heroes++;
+    if (kindOf(t.avatar) === 'hero') heroes[chapterOf(t)] = (heroes[chapterOf(t)] || 0) + 1;
     if (t.game === 'cross') continue;
     if (kindOf(t.avatar) === 'hero') heroTitles.add(t.game);
     if (t.clear) clearedTitles.add(t.game);
     if (t.visit) visited.add(t.game);
   }
-  const clearTitles = new Set(TROPHIES.filter((t) => t.clear).map((t) => t.game));
-  const visitTitles = Object.keys(VISIT_TROPHY);
+  const clearTitles = new Set(list.filter((t) => t.clear).map((t) => t.game));
+  const visitTitles = [...new Set(list.filter((t) => t.visit).map((t) => t.game))];
   const earned = [];
   // この回で増えた横断のものも数えに入れる（名鑑の枚数・すべてのエクステンション）。増えなくなるまで回す
   for (let more = true; more;) {
     more = false;
-    for (const t of TROPHIES) {
+    for (const t of list) {
       if (t.game !== 'cross' || owned.has(t.id) || t.judge) continue;
       let ok = false;
       if (t.titles) ok = heroTitles.size >= t.titles;
@@ -265,12 +274,12 @@ export function crossTrophiesFor(ownedIds) {
       else if (t.allClear) ok = clearTitles.size > 0 && [...clearTitles].every((g) => clearedTitles.has(g));
       else if (t.visits) ok = visited.size >= t.visits;
       else if (t.visitsAll) ok = visitTitles.every((g) => visited.has(g));
-      else if (t.allExt) ok = EXT_TROPHIES.every((e) => owned.has(e.id));
-      else if (t.book) ok = heroes >= t.book;   // book99 は自分を除く 99 枚＝ほかのすべて
+      else if (t.allExt) ok = exts.every((e) => owned.has(e.id));
+      else if (t.book) ok = (heroes[chapterOf(t)] || 0) >= t.book;   // 同じ章のヒーローだけを数える。book99 は自分を除く 99 枚＝ほかのすべて
       if (ok) {
         earned.push(t.id);
         owned.add(t.id);
-        if (kindOf(t.avatar) === 'hero') heroes++;
+        if (kindOf(t.avatar) === 'hero') heroes[chapterOf(t)] = (heroes[chapterOf(t)] || 0) + 1;
         more = true;
       }
     }

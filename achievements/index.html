@@ -6,6 +6,14 @@
 <title>アチーブメント — MyCrypto Games</title>
 <meta name="description" content="bearko.games のアチーブメント。ゲームを遊んで、マイクリのヒーローとエクステンションを呼び戻そう。">
 <meta name="theme-color" content="#0a0a0f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="アチーブメント — MyCrypto Games">
+<meta property="og:description" content="ゲームを遊ぶ情熱で、マイクリのヒーロー 100 人を呼び戻そう。ヒーロー名鑑をすべて埋めると、真のゲームクリア。">
+<meta property="og:url" content="https://bearko.games/achievements/">
+<meta property="og:image" content="https://bearko.games/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="https://raw.githubusercontent.com/bearko/mycryptoheroes/main/Image/Icons/mch_icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,15 +51,19 @@
   <section class="panel" id="panel" role="tabpanel" aria-labelledby="tab-hero">
     <div class="complete" id="complete" hidden>
       <p class="complete-k">COMPLETE</p>
-      <p class="complete-n">ヒーロー名鑑 完成 — 真のゲームクリア</p>
+      <p class="complete-n" id="complete-n">ヒーロー名鑑 完成 — 真のゲームクリア</p>
       <p class="complete-d" id="complete-date"></p>
     </div>
 
     <div class="progress">
+      <p class="chapter" id="chapter" hidden></p>
       <p class="progress-n"><b id="got">–</b><span class="slash">/</span><span id="total">–</span></p>
       <div class="bar" role="progressbar" id="bar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="bar-fill"></span></div>
       <ul class="by-rarity" id="by-rarity" aria-label="レアリティごとの獲得数"></ul>
+      <button class="share-btn" id="share-btn" type="button">名鑑を共有</button>
     </div>
+
+    <p class="news" id="news" role="status" hidden></p>
 
     <nav class="filters" id="filters" aria-label="タイトルでしぼる"></nav>
 
@@ -68,6 +80,16 @@
 <!-- 1 枚の詳細（押すと開く） -->
 <dialog class="relic" id="relic" aria-labelledby="relic-name">
   <div class="relic-in" id="relic-body"></div>
+</dialog>
+
+<!-- 真のゲームクリア（SPEC-008 6.1） -->
+<dialog class="relic finale" id="finale" aria-label="真のゲームクリア">
+  <div class="relic-in" id="finale-body"></div>
+</dialog>
+
+<!-- 名鑑の共有（SPEC-008 6.3） -->
+<dialog class="relic share" id="share" aria-label="名鑑を共有">
+  <div class="relic-in" id="share-body"></div>
 </dialog>
 
 <p class="error" id="error" hidden></p>

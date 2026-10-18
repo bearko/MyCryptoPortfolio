@@ -16,7 +16,7 @@
 | **2 定義の組み直し** | 名鑑 100 枚（`no`）・エクステンション 39 個（Epic 以上）、今の 30 個をヒーローに、`formerAvatars`、横断の判定、来訪（SDK 1.10.0）、共通基盤が渡すもの（ログイン・アイコン・チャット・RTA・マインの話）、`firstHero`、D1 の移行、ログインが要る画面、「トロフィー」→「アチーブメント」 | MyCryptoPortfolio | **実装済み**（台帳の中身は作者の確認待ち：[ACHIEVEMENT_CATALOG.md](ACHIEVEMENT_CATALOG.md)） |
 | **3 ゲーム側** | 新しい ID を送る（SPEC-008 5.1）。ゲームの画面の「トロフィー」を「アチーブメント」に | 各タイトル。Workshop の `workshop.day1` は実装済み。推す 3 本（Survivor・Fortress・Workshop）を先に、続いて Tactics・Factory・Education・10 buy year・DeckBattle | **実装済み**（各リポジトリの `claude/achievement-system-overhaul-zzt7gf`。共通基盤の公開のあとにマージ） |
 | **4 マインの案内** | 初来訪で 3 タイトルを紹介 → 最初のヒーロー（`firstHero`）でゲームの中から呼ぶ → 戻ってきたらヒーローの話とアチーブメントへ・`cross.welcome`（SPEC-008 4 章）。3 タイトルの所要時間を実測 | MyCryptoPortfolio（ポータル・SDK）、`ui: false` のゲーム | **実装済み**（`js/guide.js`・SDK 1.10.0。所要時間の実測は公開後） |
-| **5 仕上げ** | 真のクリアの演出と記録、獲得の瞬間に額縁へ飾る演出、名鑑の共有（OGP）、タイトルが増えたときの「第 2 章」、TCG とのつなぎ（Rare 以下は TCG の中だけ） | MyCryptoPortfolio・TCG | 段階 4 のあと |
+| **5 仕上げ** | 真のクリアの演出と記録・獲得の瞬間に額縁へ飾る演出・名鑑の共有（画像と OGP）・タイトルが増えたときの「第 2 章」（`chapter`）。TCG とのつなぎ（Rare 以下は TCG の中だけ）は TCG の SPEC で | MyCryptoPortfolio・TCG | **実装済み（TCG を除く）**（SPEC-008 5.2・6 章） |
 
 ## 公開の順番（段階 2）
 
@@ -43,5 +43,6 @@
 | 日付 | 内容 |
 |---|---|
 | 2026-10-18 | 初版（段階 0〜5。段階 1 を実装） |
+| 2026-10-18 | 段階 5（TCG を除く）を実装。段階 1〜4 は公開済み（MyCryptoPortfolio #74、各タイトルの PR） |
 | 2026-10-18 | 作者が台帳を承認。段階 3（8 タイトル）と段階 4（マインの案内）を実装 |
 | 2026-10-18 | 作者の決定を反映し、段階 2 を実装（名鑑 100 枚・エクステンション 39 個・ログインが要る画面・来訪・移行）。Workshop の `workshop.day1` |

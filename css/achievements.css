@@ -259,3 +259,45 @@ h1 {
 .niche.hello .frame { box-shadow: 0 0 0 3px #15120c, 0 0 0 5px var(--gold), 0 0 36px rgba(255, 220, 140, .7); animation: hello 1.6s ease-in-out 3; }
 @keyframes hello { 50% { box-shadow: 0 0 0 3px #15120c, 0 0 0 6px var(--gold-hi), 0 0 56px rgba(255, 230, 160, .95); } }
 @media (prefers-reduced-motion: reduce) { .niche.hello .frame { animation: none; } }
+
+/* ───────── 章・共有・前から増えたもの（SPEC-008 6 章） ───────── */
+.chapter { margin: 0 0 2px; text-align: center; font-family: var(--serif); font-weight: 800; color: var(--gold); letter-spacing: .2em; font-size: .85rem; }
+.share-btn { display: block; margin: 12px auto 0; padding: 7px 16px; border-radius: 999px; cursor: pointer; font-weight: 700; font-size: .8rem;
+  background: transparent; color: var(--gold); border: 1px solid rgba(232, 196, 106, .55); transition: transform .12s var(--ease), background .2s; }
+.share-btn:hover { background: rgba(232, 196, 106, .1); }
+.share-btn:active { transform: scale(.96); }
+.filters .chap { color: var(--gold); border-color: rgba(232, 196, 106, .4); }
+.news { margin: 12px 0 0; text-align: center; font-size: .84rem; color: var(--gold-hi); }
+.news::before { content: "✦ "; color: var(--gold); }
+
+/* 前に開いたときから増えたもの：上から額縁に収まり、NEW の札 */
+.niche.placed .frame { animation: place .9s cubic-bezier(.2, .9, .3, 1.2) both; animation-delay: calc(.2s + var(--i, 0) * 25ms); }
+.niche.placed .frame img { animation: place-img .9s ease-out both; animation-delay: calc(.35s + var(--i, 0) * 25ms); }
+@keyframes place { 0% { transform: translateY(-26px) scale(.9); box-shadow: 0 0 0 3px #15120c, 0 0 0 4px var(--rc), 0 0 46px var(--rc); } 60% { transform: translateY(2px); } 100% { transform: none; } }
+@keyframes place-img { from { filter: brightness(3) drop-shadow(0 0 12px #fff); } }
+.frame .new { position: absolute; bottom: 7px; right: 7px; font-family: var(--latin); font-weight: 700; font-size: .55rem; letter-spacing: .12em;
+  color: #1d1608; background: var(--gold-hi); border-radius: 4px; padding: 1px 5px; box-shadow: 0 0 10px rgba(255, 230, 160, .7); }
+.ext .frame .new { bottom: auto; top: 4px; right: 4px; }
+
+/* 真のゲームクリア */
+.finale { --rc: var(--r-legendary); width: min(94vw, 520px); }
+.fin-k { margin: 6px 0 0; font-family: var(--latin); letter-spacing: .42em; color: var(--gold); font-weight: 700; }
+.fin-t { margin: 6px 0 0; font-family: var(--serif); font-weight: 800; font-size: 1.4rem; background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.parade { margin: 14px -20px 0; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.parade-track { display: inline-flex; gap: 6px; animation: parade calc(var(--n, 50) * .35s) linear infinite; }
+.parade-track img { width: 64px; height: 64px; image-rendering: pixelated; flex: none; }
+@keyframes parade { to { transform: translateX(-50%); } }
+.fin-talk { display: flex; gap: 12px; align-items: flex-end; text-align: left; margin-top: 12px; }
+.fin-mine { width: 96px; height: 128px; image-rendering: pixelated; flex: none; }
+.fin-talk p { margin: 0 0 8px; font-size: .9rem; line-height: 1.7; }
+.fin-d { color: var(--muted); font-size: .8rem; margin: 8px 0 0; }
+
+/* 共有 */
+.share { width: min(94vw, 560px); }
+.share-t { font-family: var(--serif); font-weight: 800; margin: 4px 0 12px; }
+.share-img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.share .note { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .niche.placed .frame, .niche.placed .frame img, .parade-track { animation: none; }
+}
