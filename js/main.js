@@ -18,7 +18,7 @@ const circled = (n) => (n === 0 ? '⓪' : String.fromCodePoint(0x245f + n));
 // ───────── 一覧 ─────────
 $('count').textContent = GAMES.length;
 grid.innerHTML = ALL.map((g) => `
-  <button class="card${g === ASSETS ? ' asset' : ''}" style="--c:${g.accent}" data-id="${g.id}"
+  <button class="card${g === ASSETS ? ' asset' : ''}${g.playable === false ? ' wip' : ''}" style="--c:${g.accent}" data-id="${g.id}"
           aria-label="${esc(g.title)}（${esc(g.genre)}）の詳細">
     <span class="thumb">
       <img src="${thumb(g)}" alt="" loading="${g.no <= 4 ? 'eager' : 'lazy'}" decoding="async">
@@ -70,7 +70,9 @@ function render(g) {
     </div>
 
     <div class="actions">
-      <a class="btn play" href="${g.url}" target="_blank" rel="noopener">${esc(g.playLabel || 'プレイする')} ↗</a>
+      ${g.playable === false
+        ? `<span class="btn play" role="link" aria-disabled="true">${esc(g.status)}のため、まだ遊べません</span>`
+        : `<a class="btn play" href="${g.url}" target="_blank" rel="noopener">${esc(g.playLabel || 'プレイする')} ↗</a>`}
       ${isAsset ? '' : `<a class="btn sub" href="${g.repo}" target="_blank" rel="noopener">GitHub</a>`}
     </div>
 

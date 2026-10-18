@@ -31,12 +31,21 @@ button { font: inherit; color: inherit; }
   height: 100dvh;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;   /* 見出し・いまの会話の流れ（SPEC-005）・一覧・注記 */
-  gap: 10px;
+  /* 行は決め打ちにする。流れの帯は発言がないと hidden（display:none）になり、自動で並べると
+     一覧が auto の行に入って高さ 0 になる（サムネイルが消え、横長では幅も 0 になる）。
+     帯が消えても隙間が二重にならないよう、行の間は gap ではなく margin-top で空ける */
+  --vgap: 10px;
+  row-gap: 0;
   padding: max(10px, env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right))
            max(8px, env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
   max-width: 1440px;
   margin: 0 auto;
 }
+
+.top { grid-row: 1; }
+.ticker { grid-row: 2; margin-top: var(--vgap); }
+.grid { grid-row: 3; margin-top: var(--vgap); }
+.foot { grid-row: 4; margin-top: var(--vgap); }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .top-links { display: flex; align-items: center; gap: 12px; flex: none; }
@@ -46,6 +55,9 @@ button { font: inherit; color: inherit; }
 .brand-icon { width: 40px; height: 40px; image-rendering: pixelated; flex: none;
   background: var(--panel-2); border-radius: 10px; border: 1px solid var(--line); }
 h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-height: 1.1; }
+/* サイト全体が試験公開（α版）であることを見出しに出す */
+.alpha { display: inline-block; vertical-align: .25em; margin-left: 4px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0; color: var(--accent); border: 1px solid var(--accent); background: rgba(167, 139, 250, .1); }
 .tagline { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
 .tagline b { color: var(--text); }
 .gh { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
@@ -91,6 +103,13 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .card .badge { position: absolute; top: 6px; right: 6px; z-index: 1; font-size: 10px; font-weight: 700;
   padding: 2px 7px; border-radius: 999px; background: rgba(11, 13, 20, .82); color: var(--c); border: 1px solid var(--c); }
 .card.asset { border-style: dashed; border-color: rgba(34, 211, 238, .45); }
+/* 開発中（playable: false）。詳細は見られるが、遊べないことが一目で分かるよう灰色にする。
+   色（--c）はカードの style 属性で付くので、ここでは個々の部品の色を上書きする */
+.card.wip .thumb img { filter: grayscale(1) brightness(.55); }
+.card.wip .name, .card.wip .genre { color: var(--muted); }
+.card.wip .no { background: #6b7280; }
+.card.wip .badge { color: #cbd5e1; border-color: #6b7280; }
+.card.wip:hover, .card.wip:focus-visible { transform: none; box-shadow: none; border-color: #6b7280; }
 
 .foot { font-size: 9.5px; line-height: 1.45; color: var(--muted); text-align: center; }
 
@@ -112,7 +131,14 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #c4b5fd; }
 .ticker__av img { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
 @keyframes ticker { to { transform: translateX(-50%); } }
-@media (max-width: 520px) { .chat-link { display: none; } }   /* 狭い画面では見出しの行に入らない。流れの帯と 💬 から行ける */
+@media (max-width: 520px) {
+  .chat-link { display: none; }   /* 狭い画面では見出しの行に入らない。流れの帯と 💬 から行ける */
+  /* 見出しとリンクが 1 行に入らず重なるので、リンクを次の行（右寄せ）に回す */
+  .top { flex-wrap: wrap; row-gap: 6px; }
+  .top-links { margin-left: auto; gap: 8px; }
+  .me-link { padding: 5px 11px; }
+  .gh { width: 32px; height: 32px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .ticker__track { animation: none; }
   .ticker__it + .ticker__it { display: none; }   /* 流さず、最新の 1 件だけ */
@@ -151,7 +177,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   .card .genre { font-size: 12px; }
 }
 @media (min-aspect-ratio: 1/1) and (min-width: 900px) {
-  .app { gap: 16px; padding-top: 20px; padding-bottom: 14px; }
+  .app { --vgap: 16px; padding-top: 20px; padding-bottom: 14px; }
   h1 { font-size: 24px; }
   .tagline { font-size: 13px; }
   .brand-icon { width: 48px; height: 48px; }
@@ -218,6 +244,8 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   border-radius: 12px; font-weight: 900; font-size: 15px; text-decoration: none; border: 1px solid var(--line); }
 .btn.play { flex: 1; background: var(--accent); color: #0b0d14; border-color: transparent; }
 .btn.play:hover { filter: brightness(1.08); }
+.btn.play[aria-disabled="true"] { background: var(--panel-2); color: var(--muted); border-color: var(--line); cursor: not-allowed; font-size: 14px; }
+.btn.play[aria-disabled="true"]:hover { filter: none; }
 .btn.sub { background: var(--panel-2); }
 
 .shots { display: flex; gap: 8px; margin: 16px -18px 4px; padding: 0 18px 6px; overflow-x: auto;
