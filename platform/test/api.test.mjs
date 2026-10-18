@@ -528,6 +528,56 @@ test('RTA：Tactics のレギュレーション（IGT はターン数）', async
   assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 42, 'ターン数をそのまま残す');
 });
 
+test('RTA：10 buy year ステージ 5（ゲーム内の週で並べる。SPEC-001 6.18）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === '10buy-stage5');
+  assert.deepEqual([reg.game, reg.igt, reg.rank, reg.checkpoints.map((c) => c.id)], ['10buy', 'weeks', 'igt', ['stage2', 'stage3', 'stage4', 'clear']]);
+  assert.equal(res.body.regulations.find((r) => r.id === 'survivor-normal').rank, 'time');
+
+  const { mk, tick } = rtaSetup();
+  const opt = { origin: 'https://10-buy-year.bearko.games' };
+  const run = async (b, weeks, gapMs = 2 * MIN) => {
+    const runId = (await b.call('POST', '/api/rta/start', { regulation: '10buy-stage5' }, opt)).body.runId;
+    let last;
+    for (const [i, cp] of ['stage2', 'stage3', 'stage4', 'clear'].entries()) {
+      tick(gapMs);
+      last = (await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: cp, igtMs: weeks[i], idleMs: 1000 }, opt)).body;
+    }
+    return last;
+  };
+  const a = mk(); await a.call('POST', '/api/auth/google', { credential: 'ok:slowreal' }); await a.call('POST', '/api/me/name', { name: 'A' });
+  const b = mk(); await b.call('POST', '/api/auth/google', { credential: 'ok:fastreal' }); await b.call('POST', '/api/me/name', { name: 'B' });
+  const ra = await run(a, [40, 150, 250, 320], 5 * MIN); // 週は少ないが実時間は長い
+  const rb = await run(b, [45, 160, 270, 350], 1 * MIN);
+  assert.equal(ra.finished, true);
+  assert.equal(ra.igtMs, 320);
+  assert.equal(rb.rank, 2, '実時間が短くても、週が多ければ 2 位');
+  const rk = (await a.call('GET', '/api/rta/ranking?regulation=10buy-stage5', undefined, opt)).body;
+  assert.equal(rk.rankBy, 'igt');
+  assert.deepEqual(rk.entries.map((e) => [e.name, e.igtMs]), [['A', 320], ['B', 350]]);
+  assert.deepEqual([rk.me.rank, rk.me.igtMs], [1, 320]);
+  // 同じ人がもっと少ない週で走ったら、そちらが自己ベスト
+  assert.equal((await run(b, [30, 120, 220, 300], 1 * MIN)).best, true);
+  assert.deepEqual((await a.call('GET', '/api/rta/ranking?regulation=10buy-stage5', undefined, opt)).body.entries.map((e) => [e.name, e.igtMs]), [['B', 300], ['A', 320]], '1 人 1 件');
+
+  // ありえない週ははじく：最小の週より少ない・前の区切りより少ない・週がない
+  const c = mk();
+  const bad = async (weeks) => {
+    const runId = (await c.call('POST', '/api/rta/start', { regulation: '10buy-stage5' }, opt)).body.runId;
+    let r;
+    for (const [i, cp] of ['stage2', 'stage3', 'stage4', 'clear'].entries()) {
+      tick(2 * MIN);
+      r = (await c.call('POST', '/api/rta/checkpoint', { runId, checkpoint: cp, igtMs: weeks[i], idleMs: 1000 }, opt)).body;
+      if (r.rejected) return r;
+    }
+    return r;
+  };
+  assert.equal((await bad([5])).rejected, true, 'ステージ 2 は 7 週より前に着けない');
+  assert.equal((await bad([40, 150, 120])).rejected, true, '前の区切りより少ない週');
+  assert.equal((await bad([40, null])).rejected, true, '週を送らない');
+  assert.equal((await bad([40, 150, 250, 50])).rejected, true, 'ステージ 5 は 51 週より前に着けない');
+});
+
 test('RTA：Fortress のレギュレーション（レベル 01〜09）', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const reg = res.body.regulations.find((r) => r.id === 'fortress-all');

@@ -2,7 +2,9 @@
 // ID は変えない。区切りが変わったときは新しい ID を足し、古いものは deprecated: true にする（過去の記録は消さない）。
 //   checkpoints：レギュレーションが通る区切り（決めた順番どおりに送る）
 //     minMs：計測の開始からこれより速く着くのはありえない、という最短時間（6.5）
-//   igt：IGT の単位。省略すると 'ms'（ゲーム内時間）。'turns' はターン数を igtMs の欄にそのまま入れる（Tactics。6.9）
+//   igt：IGT の単位。省略すると 'ms'（ゲーム内時間）。'turns' はターン数を igtMs の欄にそのまま入れる（Tactics。6.9）。'weeks' はゲームの通算の週（10 buy year。6.18）
+//   rank：'igt' なら IGT の少ない順に並べる（同じなら実時間）。省略すると実時間
+//     minIgt：区切りの IGT がこれより小さいのはありえない（rank: 'igt' のとき。前の区切りより小さいのもはじく）
 
 export const IDLE_LIMIT_MS = 15 * 60e3; // これ以上操作がなければ参考記録（6.4）
 export const SERVER_GAP_MS = 20 * 60e3; // 「操作あり」の間隔がこれを超えたら参考記録（15 分＋送信の間隔 5 分）
@@ -153,6 +155,20 @@ export const REGULATIONS = [
     ],
   },
   {
+    id: '10buy-stage5',
+    game: '10buy',
+    name: '10 buy year ステージ 5（週数）',
+    rule: '今週のチャレンジ（ふつう・継承なし・師匠なし・キャリアの型なし）を「RTA で挑む」で始めて、ステージ 5（事業化・多角化）まで。順位はステージ 5 に着いた週（ゲーム内）の少ない順、同じ週なら実時間。ゲームオーバー・事業売却で終わったら中断',
+    igt: 'weeks',
+    rank: 'igt',
+    checkpoints: [
+      { id: 'stage2', kind: 'stage', label: 'ステージ 2（副業安定）', minMs: 30e3, minIgt: 7 },
+      { id: 'stage3', kind: 'stage', label: 'ステージ 3（専業）', minMs: 60e3, minIgt: 11 },
+      { id: 'stage4', kind: 'stage', label: 'ステージ 4（法人化・拡大）', minMs: 120e3, minIgt: 47 },
+      { id: 'clear', kind: 'clear', label: 'ステージ 5（事業化・多角化）', minMs: 180e3, minIgt: 51 },
+    ],
+  },
+  {
     id: 'fortress-all',
     game: 'fortress',
     name: 'Fortress レベル 01〜09',
@@ -240,12 +256,13 @@ export function judgeCrossSegment(cross, attempt, run, regulation, checkpointId,
 // 公開用（GET /api/rta/regulations）。横断 RTA は kind: 'cross'（game は 'cross'、区間を segments に）
 export function publicRegulations() {
   return [
-    ...REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, igt, checkpoints }) => ({
+    ...REGULATIONS.filter((r) => !r.deprecated).map(({ id, game, name, rule, igt, rank, checkpoints }) => ({
       id,
       game,
       name,
       rule,
       igt: igt || 'ms',
+      rank: rank || 'time',
       checkpoints: checkpoints.map(({ id: cid, kind, label }) => ({ id: cid, kind, label })),
     })),
     ...CROSS_REGULATIONS.filter((r) => !r.deprecated).map(({ id, name, rule, windowMs, segments }) => ({
@@ -282,6 +299,15 @@ export function judgeCheckpoint(reg, run, checkpointId, at, idleMs) {
     rejected: elapsedMs < cp.minMs,
     ...activity,
   };
+}
+
+/** IGT で並べるレギュレーションの区切りの IGT が、ありえない値か（純関数。6.18）。prevIgt は前の区切りの IGT（なければ null） */
+export function igtRejected(reg, ord, igt, prevIgt) {
+  const cp = reg.checkpoints[ord];
+  if (!cp || reg.rank !== 'igt') return false;
+  if (igt == null) return true;
+  if (cp.minIgt != null && igt < cp.minIgt) return true;
+  return prevIgt != null && igt < prevIgt;
 }
 
 /** 「操作あり」・区切りを受け取ったときの、参考記録の判定（純関数） */

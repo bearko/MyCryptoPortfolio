@@ -42,7 +42,7 @@
 
 import { presenceKey, PRESENCE_COOKIE, COOKIE_TTL_MS as PRESENCE_TTL_MS } from './presence.js';
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } from './trophies.js';
-import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
+import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
 import { cleanGame, cleanAvatar } from './chat.js';
@@ -67,7 +67,7 @@ export const API_ORIGINS = new Set([...PORTAL_ORIGINS, ...Object.values(GAME_HOS
 export const SESSION_COOKIE = '__Host-bg_session';
 export const GUEST_COOKIE = '__Host-bg_guest';
 const LEGACY_COOKIE = { [SESSION_COOKIE]: 'bg_session', [GUEST_COOKIE]: 'bg_guest' };
-const IGT_MAX = { ms: 1e10, turns: 1e6 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
+const IGT_MAX = { ms: 1e10, turns: 1e6, weeks: 1e4 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
 
 /** 回数の上限を超えたとき（呼ぶ側の fetch が 429 にする） */
 class RateLimited extends Error {}
@@ -278,6 +278,22 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     return (row?.n ?? 0) + 1;
   }
 
+  // IGT で並べるレギュレーション（rank: 'igt'。6.18）：1 人 1 件（IGT が少なく、同じなら実時間が短いもの）
+  const BEST_BY_IGT = `SELECT * FROM (SELECT r.user_id, u.name, r.time_ms, r.igt_ms, r.finished_at, ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY r.igt_ms, r.time_ms, r.finished_at) AS rn FROM rta_runs r JOIN users u ON u.id = r.user_id WHERE ${RANKED}) WHERE rn = 1`;
+  async function rankOfIgt(regulation, igt, timeMs) {
+    const row = await db
+      .prepare(`SELECT COUNT(*) AS n FROM (${BEST_BY_IGT}) WHERE igt_ms < ?2 OR (igt_ms = ?2 AND time_ms < ?3)`)
+      .bind(regulation, igt, timeMs)
+      .first();
+    return (row?.n ?? 0) + 1;
+  }
+  async function myBestIgt(userId, regulation) {
+    return db
+      .prepare("SELECT igt_ms, time_ms FROM rta_runs WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0 ORDER BY igt_ms, time_ms LIMIT 1")
+      .bind(userId, regulation)
+      .first();
+  }
+
   // 自分の計測で、まだ走っているもの
   async function ownRun(req, runId) {
     if (typeof runId !== 'string' || !/^[0-9a-f]{32}$/.test(runId)) return { error: [400, 'run'] };
@@ -302,7 +318,13 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (j.error) return reply(req, 409, { error: j.error });
     const igt = Number.isFinite(Number(body.igtMs)) && body.igtMs !== null ? Math.min(IGT_MAX[reg.igt || 'ms'] ?? IGT_MAX.ms, Math.max(0, Math.round(Number(body.igtMs)))) : null;
 
-    if (j.rejected) {
+    // IGT で並べるレギュレーションは、区切りの IGT がありえない値ならはじく（6.18）
+    let igtBad = false;
+    if (reg.rank === 'igt') {
+      const prev = j.ord > 0 ? await db.prepare('SELECT igt_ms FROM rta_splits WHERE run_id = ?1 AND ord = ?2').bind(run.id, j.ord - 1).first() : null;
+      igtBad = igtRejected(reg, j.ord, igt, prev?.igt_ms ?? null);
+    }
+    if (j.rejected || igtBad) {
       await db.prepare("UPDATE rta_runs SET status = 'rejected', finished_at = ?2 WHERE id = ?1").bind(run.id, at).run();
       return reply(req, 200, { account, finished: true, rejected: true });
     }
@@ -322,7 +344,16 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const out = { account, checkpoint: body.checkpoint, splitMs: j.elapsedMs, finished: j.last, reference: j.reference };
     const cross = await noteCross(run, body.checkpoint, at, j.elapsedMs, j.reference, account);
     if (cross) out.cross = cross;
-    if (j.last) {
+    if (j.last && reg.rank === 'igt') {
+      const prev = await db
+        .prepare("SELECT igt_ms, time_ms FROM rta_runs WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0 AND id <> ?3 ORDER BY igt_ms, time_ms LIMIT 1")
+        .bind(run.user_id, run.regulation, run.id)
+        .first();
+      out.timeMs = j.elapsedMs;
+      out.igtMs = igt;
+      out.best = !j.reference && (!prev || igt < prev.igt_ms || (igt === prev.igt_ms && j.elapsedMs < prev.time_ms));
+      out.rank = account === 'login' && !j.reference ? await rankOfIgt(run.regulation, igt, j.elapsedMs) : null;
+    } else if (j.last) {
       const prev = await db
         .prepare("SELECT MIN(time_ms) AS t FROM rta_runs WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0 AND id <> ?3")
         .bind(run.user_id, run.regulation, run.id)
@@ -919,6 +950,25 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/rta/ranking') {
       const reg = REGULATION_BY_ID[url.searchParams.get('regulation')];
       if (!reg) return reply(req, 400, { error: 'regulation' });
+      if (reg.rank === 'igt') {
+        // IGT（週など）の少ない順、同じなら実時間（6.18）
+        const { results } = await db.prepare(`${BEST_BY_IGT} ORDER BY igt_ms, time_ms, finished_at LIMIT ?2`).bind(reg.id, RANKING_LIMIT).all();
+        const s = await login(req);
+        let rank = 0;
+        let prevKey = null;
+        const entries = results.map((r, i) => {
+          const key = `${r.igt_ms}:${r.time_ms}`;
+          if (key !== prevKey) rank = i + 1;
+          prevKey = key;
+          return { rank, name: r.name ?? null, timeMs: r.time_ms, igtMs: r.igt_ms ?? null, at: r.finished_at, me: !!s && s.userId === r.user_id };
+        });
+        let me = null;
+        if (s) {
+          const best = await myBestIgt(s.userId, reg.id);
+          if (best) me = { rank: await rankOfIgt(reg.id, best.igt_ms, best.time_ms), timeMs: best.time_ms, igtMs: best.igt_ms };
+        }
+        return reply(req, 200, { regulation: reg.id, rankBy: 'igt', igt: reg.igt, entries, me });
+      }
       const { results } = await db
         .prepare(`SELECT r.user_id, u.name, MIN(r.time_ms) AS time_ms, r.igt_ms, r.finished_at FROM rta_runs r JOIN users u ON u.id = r.user_id WHERE ${RANKED} GROUP BY r.user_id ORDER BY time_ms, r.finished_at LIMIT ?2`)
         .bind(reg.id, RANKING_LIMIT)
