@@ -50,6 +50,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
    - SDK が遅れて読まれる可能性があるなら、`load` で読めたら `init` する（Fortress・Workshop の窓口が例）
    - 通知（トロフィー・RTA の記録・自己ベスト）は既定で画面の下に出る。結果画面のボタンと重なるなら `init({ toast: 'top', toastOffset: <px> })` か `BearkoGames.setToastPosition({ position: 'top', offset })` で上に寄せる（SDK 1.5.0。Survivor が例）
 3. 守ること
+   - `init()` すると、ポチゲーポータルへ送る同時接続数のために、操作のあったページから 3 分ごとに「操作あり」を送る（SDK 1.9.0。ゲーム側の作業は無い。止めるなら `init({ presence: false })`。[SPEC-007](specs/SPEC-007-pochi-online-count.md)）
    - **SDK が読めない・通信に失敗しても、ゲームは最後まで遊べる**（例外を出さない。失敗は `console.warn` だけ）
    - ログイン状態は共通基盤が持つ。ゲーム側で Cookie を触らない（Tactics は localStorage も使わない）
    - 1 回の挑戦で同じ成績を何度も送らない（フラグで 1 回だけ）

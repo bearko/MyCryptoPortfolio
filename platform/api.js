@@ -16,6 +16,7 @@
 //   POST   /api/rta/start      { regulation } → { runId, startedAt, account }
 //   POST   /api/rta/checkpoint { runId, checkpoint, igtMs, idleMs } → { splitMs, finished, timeMs, reference, best, rank }
 //   POST   /api/rta/ping       { runId, idleMs } 「操作あり」
+//   POST   /api/presence       { game, page } 同時接続数の「操作あり」（SPEC-007）→ 204
 //   POST   /api/rta/abort      { runId } 中断
 //   GET    /api/rta/ranking?regulation=  ランキング（ログインした人の、参考記録でない自己ベスト。横断 RTA も）
 //   POST   /api/rta/cross/start { regulation } 横断 RTA の挑戦を始める（ポータルから。6.14）→ { attempt }
@@ -39,6 +40,7 @@
 //   古い Domain=.bearko.games の bg_session / bg_guest は読んで、__Host- へ移してから消す（ゲームのサブドメインへ送らない）
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
+import { presenceKey, PRESENCE_COOKIE, COOKIE_TTL_MS as PRESENCE_TTL_MS } from './presence.js';
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } from './trophies.js';
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
@@ -102,7 +104,7 @@ function parseCookies(header) {
 }
 
 // cookieDomain：古い Cookie（Domain=.bearko.games）を消すときだけ使う。guestLimit(req)：仮アカウントを作ってよいか（回数の上限）
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, log }) {
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, presence = null, presenceLimit = null, log }) {
   const allowed = (origin) => !!origin && (API_ORIGINS.has(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
@@ -583,6 +585,15 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/config') return reply(req, 200, { googleClientId: clientId });
 
     if (path.startsWith('/api/admin/')) return admin(req, method, path, url, body);
+
+    // ---- 同時接続数（SPEC-007）。「操作あり」を数える部屋に渡すだけ。D1 は読まない・書かない。アカウントとは結びつけない
+    if (method === 'POST' && path === '/api/presence') {
+      if (!presence) return reply(req, 204);
+      if (presenceLimit && !(await presenceLimit(req))) return reply(req, 429, { error: 'rate' });
+      const k = presenceKey(parseCookies(req.headers.get('cookie'))[PRESENCE_COOKIE], body.page);
+      await presence.get(presence.idFromName('global')).fetch(new Request(`https://presence/beat?at=${now()}`, { method: 'POST', body: JSON.stringify({ k }) }));
+      return reply(req, 204, null, [cookie(PRESENCE_COOKIE, k, PRESENCE_TTL_MS)]);
+    }
 
     // ---- 全体チャット（SPEC-004）。本人の確認はここで済ませ、部屋には { uid, name, game, banned } を渡す
     if (path === '/api/chat/ws' || path === '/api/chat/messages' || path === '/api/chat/stats' || path === '/api/me/chat' || path.startsWith('/api/chat/messages/')) {
