@@ -17,7 +17,7 @@
   <h1>MyCrypto Games にログイン</h1>
 
   <section id="step-login">
-    <p class="lead">1 つのアカウントで、bearko.games のすべてのゲームのランキング・トロフィーに参加できます。</p>
+    <p class="lead">1 つのアカウントで、bearko.games のすべてのゲームのランキング・アチーブメントに参加できます。</p>
     <div id="google-button" class="google"></div>
     <p class="note">保存するのは Google のアカウント識別番号と、あなたが決める表示名だけです。メールアドレスや本名は保存しません。</p>
   </section>
@@ -63,7 +63,7 @@
       window.close();
     }
     if (ret) { location.href = ret; return; }
-    $('done-text').textContent = (user && user.name ? user.name + ' さん、' : '') + 'ログインしました。' + (merged ? 'この端末のトロフィー ' + merged + ' 個を登録しました。' : '');
+    $('done-text').textContent = (user && user.name ? user.name + ' さん、' : '') + 'ログインしました。' + (merged ? 'この端末のアチーブメント ' + merged + ' 個を登録しました。' : '');
     show('step-done');
   }
 

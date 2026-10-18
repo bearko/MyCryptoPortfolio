@@ -34,6 +34,8 @@ index.html          ページ本体（ビルドなし・素の ES Modules）
 css/style.css
 js/games.js         作品の台帳
 js/main.js          一覧と詳細シートの描画
+achievements/       アチーブメント（ヒーロー名鑑・エクステンション。SPEC-008。js/achievements.js・css/achievements.css）
+js/guide.js         マインの案内（初めて来たとき・ヒーローを呼び戻して戻ってきたとき。SPEC-008 4 章）
 assets/thumbs/      サムネイル 1200×630（WebP）
 assets/shots/       スクリーンショット 540×960（9:16・WebP）
 og-image.jpg        このページ自体の OGP

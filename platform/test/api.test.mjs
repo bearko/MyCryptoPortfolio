@@ -170,14 +170,14 @@ test('Google の ID トークン：署名・aud・iss・期限を確かめる', 
   assert.equal(await verify('not.a.token'), null);
 });
 
-import { crossTrophiesFor, TROPHIES } from '../trophies.js';
+import { crossTrophiesFor, TROPHIES, GAME_HOSTS, RARITIES, kindOf, rarityOf } from '../trophies.js';
 
 test('トロフィー：未ログインなら仮アカウントに貯まり、ログインでまとめて本アカウントへ', async () => {
   const { db, api } = setup();
   const b = browser(api);
   const first = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
   assert.equal(first.status, 200);
-  assert.deepEqual(first.body, { account: 'guest', unlocked: ['tactics.ch1'], total: 1 });
+  assert.deepEqual(first.body, { account: 'guest', unlocked: ['tactics.ch1'], total: 1, firstHero: true });
   assert.ok(b.jar['__Host-bg_guest'], '仮アカウントがこのとき作られる');
   const again = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
   assert.deepEqual(again.body.unlocked, [], '同じトロフィーは 1 つ');
@@ -193,7 +193,7 @@ test('トロフィー：未ログインなら仮アカウントに貯まり、�
   assert.equal(login.body.mergedTrophies, 1, '重なった ch1 は 1 つにまとまり、clear だけ増える');
   const mine = await b.call('GET', '/api/me/trophies');
   assert.equal(mine.body.account, 'login');
-  assert.deepEqual(mine.body.trophies.map((t) => t.id).sort(), ['tactics.ch1', 'tactics.clear']);
+  assert.deepEqual(mine.body.trophies.map((t) => t.id).sort(), ['cross.login', 'tactics.ch1', 'tactics.clear'], 'ログインのアチーブメントも付く（SPEC-008）');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users WHERE google_sub IS NULL').get().n, 0, '仮アカウントは消える');
 });
 
@@ -221,12 +221,37 @@ test('横断トロフィー：2 タイトルで「シリーズの入り口」、
 
   const clears = TROPHIES.filter((t) => t.clear).map((t) => t.id);
   assert.deepEqual(crossTrophiesFor(clears.slice(0, -1)).includes('cross.allclear'), false);
-  assert.deepEqual(crossTrophiesFor(clears).sort(), ['cross.allclear', 'cross.four', 'cross.two']);
-  assert.deepEqual(crossTrophiesFor([...clears, 'cross.two', 'cross.four', 'cross.allclear']), [], '持っているものは返さない');
+  // クリアだけで：タイトル数（2・4・8）・クリア数（2・4）・全制覇・名鑑 10 枚（8 + 横断 2 + …）
+  assert.deepEqual(crossTrophiesFor(clears).sort(), ['cross.allclear', 'cross.book10', 'cross.clear2', 'cross.clear4', 'cross.eight', 'cross.four', 'cross.two']);
+  assert.deepEqual(crossTrophiesFor([...clears, ...crossTrophiesFor(clears)]), [], '持っているものは返さない');
   for (const g of ['factory', 'education']) {
     assert.ok(clears.includes(`${g}.clear`), `${g} のクリアも全制覇に要る`);
     assert.equal(crossTrophiesFor(clears.filter((id) => id !== `${g}.clear`)).includes('cross.allclear'), false);
   }
+});
+
+test('アチーブメント（SPEC-008）：名鑑は 100 枚、エクステンションは Epic 以上、横断の判定', async () => {
+  const heroes = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero');
+  const exts = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext');
+  assert.equal(heroes.length, 100, 'ヒーロー名鑑は 100 枚');
+  assert.deepEqual(heroes.map((t) => t.no), Array.from({ length: 100 }, (_, i) => i + 1), '番号は 1〜100 で重ならない');
+  assert.ok(TROPHIES.filter((t) => t.clear).every((t) => kindOf(t.avatar) === 'hero'), 'ゲームクリアはヒーロー');
+  assert.ok(TROPHIES.filter((t) => t.clear).every((t) => rarityOf(t.avatar) === 'Epic'), 'ゲームクリアは Epic');
+  for (const t of exts) assert.ok(['Epic', 'Legendary'].includes(rarityOf(t.avatar)), `${t.id} は Epic 以上（Rare 以下は TCG だけ）`);
+  for (const t of heroes) assert.ok(RARITIES.includes(rarityOf(t.avatar)), `${t.id} は図鑑に出るヒーロー`);
+  const avatars = TROPHIES.map((t) => t.avatar);
+  assert.equal(new Set(avatars).size, avatars.length, '絵は重ならない');
+  for (const g of Object.keys(GAME_HOSTS).filter((g) => g !== 'tcg')) {
+    assert.ok(TROPHIES.some((t) => t.game === g && t.visit), `${g} の来訪`);
+    assert.ok(TROPHIES.some((t) => t.game === g && t.clear), `${g} のクリア`);
+  }
+  // 名鑑の最後の 1 枚は「ほかの 99 枚」。すべてのエクステンションのヒーローも要る
+  const allButLast = heroes.filter((t) => t.id !== 'cross.book99' && t.id !== 'cross.allext').map((t) => t.id);
+  assert.equal(crossTrophiesFor(allButLast).includes('cross.book99'), false, 'エクステンションがそろわないと最後の 1 枚は来ない');
+  const got = crossTrophiesFor([...allButLast, ...exts.map((t) => t.id)]);
+  assert.deepEqual(got, ['cross.allext', 'cross.book99'], 'エクステンションがそろうと、続けて最後の 1 枚');
+  // 来訪
+  assert.deepEqual(crossTrophiesFor(['tactics.visit', 'survivor.visit']), ['cross.visit2']);
 });
 
 test('トロフィーの定義：ID が重ならず、タイトルが登録済み', async () => {
@@ -235,6 +260,26 @@ test('トロフィーの定義：ID が重ならず、タイトルが登録済�
   const res = await browser(setup().api).call('GET', '/api/trophies');
   assert.equal(res.body.trophies.length, TROPHIES.length);
   for (const t of res.body.trophies) assert.ok(res.body.games[t.game], t.id);
+});
+
+test('アチーブメント（SPEC-008）：種類とマイクリのレアリティ、遊ぶ先の URL', async () => {
+  assert.equal(kindOf('hero:5001'), 'hero');
+  assert.equal(kindOf('ext:4031'), 'ext');
+  assert.deepEqual(['hero:1005', 'hero:2011', 'hero:3024', 'hero:4007', 'hero:5016'].map(rarityOf), RARITIES, '千の位がレアリティ');
+  assert.equal(rarityOf('ext:5136'), 'Legendary');
+  assert.equal(rarityOf('ext:12126'), 'Replica', 'Rep 版（雪だるま）');
+  assert.equal(rarityOf('hero:10001'), 'Special');
+  const res = await browser(setup().api).call('GET', '/api/trophies');
+  const byId = Object.fromEntries(res.body.trophies.map((t) => [t.id, t]));
+  assert.deepEqual([byId['tactics.clear'].kind, byId['tactics.clear'].rarity], ['hero', 'Epic'], '武田信玄');
+  assert.deepEqual([byId['tactics.red'].kind, byId['tactics.red'].rarity, byId['tactics.red'].no], ['hero', 'Legendary', 11], '織田信長');
+  assert.deepEqual([byId['deckbattle.firstwin'].kind, byId['deckbattle.firstwin'].rarity], ['ext', 'Epic'], '大西部のブーツ');
+  assert.deepEqual(byId['deckbattle.area1'].formerAvatars, ['ext:4031'], '差し替える前の絵');
+  for (const t of res.body.trophies) {
+    assert.ok(['hero', 'ext'].includes(t.kind), t.id);
+    assert.ok([...RARITIES, 'Replica'].includes(t.rarity), `${t.id} ${t.rarity}`);
+    if (t.game !== 'cross') assert.equal(res.body.gameUrls[t.game], `https://${GAME_HOSTS[t.game]}/`, t.id);
+  }
 });
 
 test('退会でトロフィーも消える', async () => {
@@ -727,14 +772,18 @@ test('SPEC-006 アイコン図鑑：最初からの 3 体と、持っている�
   assert.equal(defs.avatars.default, 'hero:10001');
   assert.deepEqual(defs.avatars.starters.map((a) => a.id), ['hero:10001', 'hero:10002', 'hero:10003']);
   assert.equal(defs.avatars.total, 3 + defs.trophies.length);
-  const sunzi = defs.trophies.find((t) => t.id === 'tactics.ch1');
-  assert.deepEqual([sunzi.avatar, sunzi.avatarName], ['hero:2011', '孫子']);
-  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:10002' })).status, 200, '最初から');
-  const locked = await b.call('POST', '/api/me/avatar', { id: 'hero:2011' });
+  const ch1 = defs.trophies.find((t) => t.id === 'tactics.ch1');
+  assert.deepEqual([ch1.avatar, ch1.avatarName], ['hero:1003', '張遼']);
+  const first = await b.call('POST', '/api/me/avatar', { id: 'hero:10002' });
+  assert.equal(first.status, 200, '最初から');
+  assert.deepEqual(first.body.unlocked, ['cross.avatar'], 'アイコンを変えるとアチーブメント（SPEC-008）');
+  const locked = await b.call('POST', '/api/me/avatar', { id: 'hero:1003' });
   assert.deepEqual([locked.status, locked.body.error], [403, 'locked'], 'まだトロフィーが無い');
-  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:1001' })).status, 403, '図鑑に無い絵');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:1009' })).status, 403, '図鑑に無い絵');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:2011' })).status, 403, '差し替え前の絵も、持っていなければ使えない');
   await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
-  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:2011' })).body.user.avatar, 'hero:2011', 'トロフィーで解放');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:1003' })).body.user.avatar, 'hero:1003', 'トロフィーで解放');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:2011' })).body.user.avatar, 'hero:2011', '差し替え前の絵（孫子）も使える（SPEC-008 5 章）');
   assert.equal((await b.call('POST', '/api/me/avatar', { id: null })).status, 200, '既定の絵に戻す');
 });
 
@@ -764,4 +813,40 @@ test('セキュリティ：古い Domain つきの Cookie は __Host- へ移し�
   assert.deepEqual([(await c.call('POST', '/api/guest', {})).status], [429]);
   assert.equal((await c.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' }, { origin: 'https://tactics.bearko.games' })).status, 429);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users').get().n, 1, '作られていない');
+});
+
+test('アチーブメント（SPEC-008）：来訪は SDK の最初の操作で 1 回、マインの話はポータルから', async () => {
+  const { db, api } = setup();
+  const b = browser(api);
+  const v = await b.call('POST', '/api/trophies/visit', { game: 'tactics' });
+  assert.deepEqual(v.body, { account: 'guest', unlocked: ['tactics.visit'], total: 1 });
+  assert.deepEqual((await b.call('POST', '/api/trophies/visit', { game: 'tactics' })).body.unlocked, [], '2 回目は何も起きない');
+  assert.equal((await b.call('POST', '/api/trophies/visit', { game: 'survivor' })).status, 403, 'ほかのタイトルの来訪は送れない');
+  assert.equal((await b.call('POST', '/api/trophies/visit', { game: 'cross' })).status, 400);
+  const s = await b.call('POST', '/api/trophies/visit', { game: 'survivor' }, { origin: 'https://survivor.bearko.games' });
+  assert.deepEqual(s.body.unlocked, ['survivor.visit', 'cross.visit2'], '2 タイトルを遊ぶ');
+  assert.equal((await b.call('POST', '/api/trophies/welcome', {})).status, 403, 'マインの話はポータルから');
+  assert.deepEqual((await b.call('POST', '/api/trophies/welcome', {}, { origin: 'https://bearko.games' })).body.unlocked, ['cross.welcome']);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users').get().n, 1, '仮アカウントは 1 つ');
+});
+
+test('アチーブメント（SPEC-008）：最初のヒーローで firstHero（マインの呼びかけ）', async () => {
+  const b = browser(setup().api);
+  await b.call('POST', '/api/trophies/visit', { game: 'tactics' });
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' })).body.firstHero, true, '来訪（エクステンション）のあとでも、最初のヒーロー');
+  assert.equal((await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch2' })).body.firstHero, false);
+});
+
+test('アチーブメント（SPEC-008）：移行で、来訪と移したエクステンションを渡す', async () => {
+  const db = d1();
+  const add = db.sqlite.prepare('INSERT INTO user_trophies (user_id, trophy_id, unlocked_at) VALUES (?, ?, ?)');
+  add.run('u1', 'deckbattle.area1', 100);
+  add.run('u1', 'deckbattle.clear', 50);
+  add.run('u1', 'cross.two', 200);
+  add.run('u2', 'factory.lv2', 300);
+  db.sqlite.exec(readFileSync(join(ROOT, 'migrations/0008_achievements.sql'), 'utf8'));
+  const rows = (u) => db.sqlite.prepare('SELECT trophy_id, unlocked_at FROM user_trophies WHERE user_id = ? ORDER BY trophy_id').all(u).map((r) => `${r.trophy_id}@${r.unlocked_at}`);
+  assert.deepEqual(rows('u1'), ['cross.two@200', 'cross.visit2@200', 'deckbattle.area1@100', 'deckbattle.clear@50', 'deckbattle.firstwin@100', 'deckbattle.visit@50']);
+  assert.deepEqual(rows('u2'), ['factory.lv2@300', 'factory.visit@300']);
+  for (const id of ['deckbattle.visit', 'deckbattle.firstwin', 'cross.visit2', 'factory.visit']) assert.ok(TROPHIES.some((t) => t.id === id), id);
 });

@@ -19,8 +19,8 @@
   <section id="loading"><p class="muted">読み込み中…</p></section>
 
   <section id="guest" hidden>
-    <p class="lead">ログインすると、bearko.games のすべてのゲームのランキング・トロフィーに参加できます。ログインしなくても、ゲームは最後まで遊べます。</p>
-    <p class="note" id="guest-note" hidden>この端末に、まだ登録していないトロフィーが <b id="guest-count">0</b> 個あります。ログインすると、トロフィー・総合スコア・RTA の記録がまとめてアカウントに登録されます。</p>
+    <p class="lead">ログインすると、bearko.games のすべてのゲームのランキング・アチーブメントに参加できます。ログインしなくても、ゲームは最後まで遊べます。</p>
+    <p class="note" id="guest-note" hidden>この端末に、まだ登録していないアチーブメントが <b id="guest-count">0</b> 個あります。ログインすると、アチーブメント・総合スコア・RTA の記録がまとめてアカウントに登録されます。</p>
     <button class="primary" id="login" type="button">Google でログイン</button>
   </section>
 
@@ -40,7 +40,7 @@
       <div class="avatar" id="avatar" aria-label="いまのアイコン"></div>
       <button class="secondary" id="avatar-btn" type="button">アイコン図鑑</button>
     </div>
-    <p class="note">トロフィーを取るたびに、使えるアイコンが 1 つ増えます。bearko.games 全体（すべてのゲームとチャット）で同じアイコンになり、各ゲームのマイページからも変えられます。</p>
+    <p class="note">アチーブメントを取るたびに、使えるアイコンが 1 つ増えます。bearko.games 全体（すべてのゲームとチャット）で同じアイコンになり、各ゲームのマイページからも変えられます。</p>
 
     <div class="actions">
       <button class="secondary" id="logout" type="button">ログアウト</button>
@@ -59,8 +59,9 @@
   </section>
 
   <section id="trophies" hidden>
-    <h2>トロフィー <span class="muted" id="trophy-count"></span></h2>
-    <div id="trophy-list"></div>
+    <h2>アチーブメント <span class="muted" id="trophy-count"></span></h2>
+    <p id="trophy-list"></p>
+    <p class="note"><a href="../achievements/">アチーブメントの画面で見る</a></p>
   </section>
 
   <section id="rta" hidden>
@@ -88,40 +89,19 @@
   var BG = window.BearkoGames;
 
   function renderTrophies() {
-    Promise.all([BG.getTrophyDefinitions(), BG.getTrophies(), fetch('/api/trophies').then(function (r) { return r.json(); })]).then(function (x) {
-      var defs = x[0].trophies || [], mine = x[1].ok ? x[1].trophies : [], games = x[2].games || {};
+    Promise.all([BG.getTrophies(), fetch('/api/trophies').then(function (r) { return r.json(); })]).then(function (x) {
+      var defs = x[1].trophies || [], mine = x[0].ok ? x[0].trophies : [];
       var owned = {};
       mine.forEach(function (t) { owned[t.id] = t; });
-      var list = $('trophy-list');
-      list.textContent = '';
-      var order = [];
-      defs.forEach(function (d) { if (order.indexOf(d.game) < 0) order.push(d.game); });
-      order.forEach(function (game) {
-        var h = document.createElement('h3'); h.className = 'game'; h.textContent = games[game] || game;
-        var ul = document.createElement('ul'); ul.className = 'trophies';
-        defs.filter(function (d) { return d.game === game; }).forEach(function (d) {
-          var li = document.createElement('li');
-          li.className = owned[d.id] ? 'got' : 'not';
-          var name = document.createElement('b'); name.textContent = d.name;
-          var desc = document.createElement('span'); desc.textContent = d.description;
-          li.appendChild(name); li.appendChild(desc);
-          if (d.nameFrom) {
-            var from = document.createElement('small');
-            from.textContent = '名前の由来：' + d.nameFrom;
-            li.appendChild(from);
-          }
-          if (owned[d.id]) {
-            var at = document.createElement('small');
-            at.textContent = new Date(owned[d.id].at).toLocaleDateString('ja-JP') + ' 獲得';
-            li.appendChild(at);
-          }
-          ul.appendChild(li);
-        });
-        list.appendChild(h); list.appendChild(ul);
-      });
+      // 一覧はアチーブメントの画面（SPEC-008）に任せ、ここは種類ごとの数だけ
+      var count = function (kind) {
+        var all = defs.filter(function (d) { return d.kind === kind; });
+        return all.filter(function (d) { return owned[d.id]; }).length + ' / ' + all.length;
+      };
+      $('trophy-list').textContent = 'ヒーロー名鑑 ' + count('hero') + '　エクステンション ' + count('ext');
       $('trophy-count').textContent = mine.length + ' / ' + defs.length;
       $('guest-count').textContent = String(mine.length);
-      $('guest-note').hidden = !(x[1].account === 'guest' && mine.length);
+      $('guest-note').hidden = !(x[0].account === 'guest' && mine.length);
       $('trophies').hidden = false;
     });
   }
