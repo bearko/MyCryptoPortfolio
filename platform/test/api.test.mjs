@@ -170,7 +170,7 @@ test('Google の ID トークン：署名・aud・iss・期限を確かめる', 
   assert.equal(await verify('not.a.token'), null);
 });
 
-import { crossTrophiesFor, TROPHIES } from '../trophies.js';
+import { crossTrophiesFor, TROPHIES, GAME_HOSTS, RARITIES, kindOf, rarityOf } from '../trophies.js';
 
 test('トロフィー：未ログインなら仮アカウントに貯まり、ログインでまとめて本アカウントへ', async () => {
   const { db, api } = setup();
@@ -235,6 +235,24 @@ test('トロフィーの定義：ID が重ならず、タイトルが登録済�
   const res = await browser(setup().api).call('GET', '/api/trophies');
   assert.equal(res.body.trophies.length, TROPHIES.length);
   for (const t of res.body.trophies) assert.ok(res.body.games[t.game], t.id);
+});
+
+test('アチーブメント（SPEC-008）：種類とマイクリのレアリティ、遊ぶ先の URL', async () => {
+  assert.equal(kindOf('hero:5001'), 'hero');
+  assert.equal(kindOf('ext:4031'), 'ext');
+  assert.deepEqual(['hero:1005', 'hero:2011', 'hero:3024', 'hero:4007', 'hero:5016'].map(rarityOf), RARITIES, '千の位がレアリティ');
+  assert.equal(rarityOf('ext:5136'), 'Legendary');
+  assert.equal(rarityOf('ext:12126'), 'Replica', 'Rep 版（雪だるま）');
+  assert.equal(rarityOf('hero:10001'), 'Special');
+  const res = await browser(setup().api).call('GET', '/api/trophies');
+  const byId = Object.fromEntries(res.body.trophies.map((t) => [t.id, t]));
+  assert.deepEqual([byId['tactics.clear'].kind, byId['tactics.clear'].rarity], ['hero', 'Legendary'], '織田信長');
+  assert.deepEqual([byId['deckbattle.area1'].kind, byId['deckbattle.area1'].rarity], ['ext', 'Epic'], '大西部のブーツ');
+  for (const t of res.body.trophies) {
+    assert.ok(['hero', 'ext'].includes(t.kind), t.id);
+    assert.ok([...RARITIES, 'Replica'].includes(t.rarity), `${t.id} ${t.rarity}`);
+    if (t.game !== 'cross') assert.equal(res.body.gameUrls[t.game], `https://${GAME_HOSTS[t.game]}/`, t.id);
+  }
 });
 
 test('退会でトロフィーも消える', async () => {

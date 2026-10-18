@@ -74,6 +74,26 @@ export const TROPHIES = [
 
 export const TROPHY_BY_ID = Object.fromEntries(TROPHIES.map((t) => [t.id, t]));
 
+// ---- SPEC-008：アチーブメント（画面ではトロフィーをこう呼ぶ）。ヒーローとエクステンションに分け、マイクリのレアリティを付ける ----
+// 種類はアイコンの絵（hero: / ext:）で決まる。レアリティは手で書かず、マイクリの id の千の位から出す：
+// 1 Common・2 Uncommon・3 Rare・4 Epic・5 Legendary（4 桁の id を持つヒーロー 201・エクステンション 956 で例外なし。2026-10-18 に資産リポジトリで確かめた）。
+// 5 桁の id は図鑑に出ない特別な絵（エクステンションは Rep 版、ヒーローは MCHウォーリアーなど）
+export const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+
+/** アイコンの id（"hero:5001"）→ 'hero' | 'ext' */
+export function kindOf(avatar) {
+  return String(avatar).startsWith('hero:') ? 'hero' : 'ext';
+}
+
+/** アイコンの id → マイクリのレアリティ。図鑑に出ない絵は 'Replica'（エクステンション）／'Special'（ヒーロー） */
+export function rarityOf(avatar) {
+  const [kind, id] = String(avatar).split(':');
+  if (id.length === 4) return RARITIES[Number(id[0]) - 1] || 'Special';
+  return kind === 'ext' ? 'Replica' : 'Special';
+}
+
+export const GAME_URLS = Object.fromEntries(Object.entries(GAME_HOSTS).map(([g, host]) => [g, `https://${host}/`]));
+
 // ---- SPEC-006：アイコン図鑑。最初から使える 3 体と、トロフィー 1 つにつき 1 つ ----
 export const DEFAULT_AVATAR = 'hero:10001';   // MCHウォーリアー（何も選んでいない人の絵）
 export const STARTER_AVATARS = [

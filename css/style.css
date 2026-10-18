@@ -139,6 +139,12 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   .me-link { padding: 5px 11px; }
   .gh { width: 32px; height: 32px; }
 }
+/* アチーブメント（SPEC-008）が増えて 4 つになったので、とても狭い画面では詰めて GitHub を畳む（各作品の詳細から行ける） */
+@media (max-width: 400px) {
+  .top-links { gap: 6px; }
+  .me-link { padding: 4px 9px; font-size: .78rem; }
+  .gh { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .ticker__track { animation: none; }
   .ticker__it + .ticker__it { display: none; }   /* 流さず、最新の 1 件だけ */

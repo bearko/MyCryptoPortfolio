@@ -41,7 +41,7 @@
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
 import { presenceKey, PRESENCE_COOKIE, COOKIE_TTL_MS as PRESENCE_TTL_MS } from './presence.js';
-import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } from './trophies.js';
+import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar, kindOf, rarityOf } from './trophies.js';
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
@@ -754,7 +754,9 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/trophies') {
       const res = reply(req, 200, {
         games: GAME_NAMES,
-        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear, avatar, avatarName }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName })),
+        gameUrls: GAME_URLS,   // SPEC-008 アチーブメントの画面から「このゲームを遊ぶ」
+        // kind / rarity は SPEC-008（アチーブメント）。ヒーローかエクステンションか・マイクリのレアリティ
+        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear, avatar, avatarName }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName, kind: kindOf(avatar), rarity: rarityOf(avatar) })),
         avatars: { default: DEFAULT_AVATAR, starters: STARTER_AVATARS, total: AVATAR_TOTAL },   // SPEC-006 アイコン図鑑
       });
       res.headers.set('Cache-Control', 'public, max-age=300');
