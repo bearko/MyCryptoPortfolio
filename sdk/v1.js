@@ -10,7 +10,7 @@
  *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
  *   BearkoGames.init({ game: 'portal', chat: { layout: 'float' } });        // PC でも右側のドックを使わず 1.x の窓（1.7.0）
  *   BearkoGames.chat.mount(el, { composerAt: 'top' });                 // 自分の場所にタイムラインを描く（1.7.0）
- *   BearkoGames.openAvatarPicker();                                    // アイコンを選ぶ窓（1.7.0。全ゲーム共通）
+ *   BearkoGames.openAvatarPicker();                                    // アイコン図鑑の窓（1.7.0。1.8.0 でトロフィーで解放する図鑑に）
  *   BearkoGames.getUser();          // { id, name, avatar } か null
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
@@ -87,6 +87,8 @@
       if (r.ok) {
         state.defs = {};
         (r.trophies || []).forEach(function (t) { state.defs[t.id] = t; });
+        state.avatars = r.avatars || null;   // SPEC-006：{ default, starters, total }
+        state.gameNames = r.games || {};
       }
       return state.defs || {};
     });
@@ -108,6 +110,7 @@
       '.k{font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:.04em}' +
       '.n{font-size:15px;font-weight:700;margin-top:2px}' +
       '.g{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:12px;color:#9aa1b5}' +
+      '.a{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:#f6e2a0}.a img{width:28px;height:28px;image-rendering:pixelated;border-radius:50%;background:#1d2233}' +
       '.s{font-size:12px;color:#c9cde0;margin-top:4px;line-height:1.5}' +
       '.n.time{font-variant-numeric:tabular-nums;font-size:22px}' +
       'a{color:#c4b5fd;font-size:12px;font-weight:700}' +
@@ -142,6 +145,13 @@
       var k = document.createElement('div'); k.className = 'k'; k.textContent = 'トロフィー獲得';
       var n = document.createElement('div'); n.className = 'n'; n.textContent = def ? def.name : '';
       el.appendChild(k); el.appendChild(n);
+      // SPEC-006：トロフィーごとにアイコンが 1 つ解放される
+      if (def && def.avatar && avatarUrl(def.avatar)) {
+        var a = document.createElement('div'); a.className = 'a';
+        var ai = document.createElement('img'); ai.alt = ''; ai.src = avatarUrl(def.avatar);
+        var at = document.createElement('span'); at.textContent = 'アイコン「' + (def.avatarName || '') + '」が使えるようになりました';
+        a.appendChild(ai); a.appendChild(at); el.appendChild(a);
+      }
       if (account === 'guest') {
         var g = document.createElement('div'); g.className = 'g';
         var msg = document.createElement('span'); msg.textContent = '未登録のトロフィー ' + total + ' 個';
@@ -373,10 +383,11 @@
   var ASSET_BASE = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
   var CHAT_ERR = { rate: '少し待ってから送ってください', login: 'ログインすると参加できます', name: '名前を決めると参加できます', banned: 'このアカウントは発言できません', long: '1〜200 文字で送ってください', parent: 'その発言はもうありません', not_found: 'その発言はもうありません', owner: '自分の発言だけ直せます' };
 
-  /** アイコンの id（"hero:1001" / "ext:5106"）→ 絵の URL。合わなければ null（既定の絵） */
+  /** アイコンの id（"hero:1001" / "ext:5106"）→ 絵の URL。何も選んでいなければ既定の MCHウォーリアー（SPEC-006） */
+  var DEFAULT_AVATAR = 'hero:10001';
   function avatarUrl(id) {
-    var m = /^(hero|ext):([0-9]{1,6})$/.exec(String(id || ''));
-    if (!m) return null;
+    var m = /^(hero|ext):([0-9]{1,6})$/.exec(String(id || DEFAULT_AVATAR));
+    if (!m) m = /^(hero|ext):([0-9]{1,6})$/.exec(DEFAULT_AVATAR);
     return ASSET_BASE + (m[1] === 'hero' ? 'Image/Heroes/' : 'Image/Extensions/') + m[2] + '.png';
   }
 
@@ -1009,99 +1020,159 @@
     if (chat.ws) { chatDisconnect(); if (chat.open) chatConnect(); }
   }
 
-  // ---------------------------------------------------------------- アイコン選び（SPEC-005 5.3）
-  var picker = { host: null, data: null, tab: 'heroes', q: '' };
+  // ---------------------------------------------------------------- アイコン図鑑（SPEC-005 5.3 → SPEC-006）
+  // 最初から使える 3 体と、トロフィー 1 つにつき 1 つ。持っていないものは灰色で、獲得の条件（タイトルとトロフィー）を出す
+  var picker = { host: null, owned: null, sel: null, msg: '' };
   var PICKER_CSS =
     ':host{all:initial}' +
     '.pk{position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-family:"M PLUS 1p",system-ui,sans-serif;font-size:13px;color:#eef0f6}' +
-    '.pkb{width:min(560px,96vw);height:min(640px,92vh);background:#151926;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}' +
-    '.pkh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
-    '.pkh .k{font-weight:700;flex:1}.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;font-family:inherit}' +
-    '.pkn{font-size:11px;color:#f9a8a8;padding:8px 12px 0;line-height:1.5}' +
-    '.pkt{display:flex;gap:6px;padding:8px 12px;align-items:center}' +
-    '.pkt button{font:inherit;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:999px;padding:5px 12px;background:none;color:#9aa1b5;cursor:pointer;font-family:inherit}' +
-    '.pkt button.on{background:#a78bfa;color:#140f24;font-weight:700;border-color:#a78bfa}' +
-    '.pkt input{flex:1;min-width:0;font:inherit;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0b0d14;color:#eef0f6;font-family:inherit}' +
-    '.pkg{flex:1;overflow-y:auto;padding:8px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;align-content:start}' +
-    '.it{display:flex;flex-direction:column;align-items:center;gap:4px;background:#0b0d14;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 4px;cursor:pointer;color:#9aa1b5;font:inherit;font-size:10px;font-family:inherit;min-width:0}' +
-    '.it:hover{border-color:#a78bfa;color:#eef0f6}.it.on{border-color:#f472b6;color:#eef0f6}' +
+    '.pkb{width:min(600px,96vw);height:min(680px,92vh);background:#151926;border:1px solid rgba(167,139,250,.6);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}' +
+    '.pkh{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)}' +
+    '.pkh .k{font-weight:700;flex:1}.pkh .cnt{font-size:12px;color:#9aa1b5}.pkh .cnt b{color:#f6e2a0;font-size:15px}' +
+    '.bar{height:4px;background:rgba(255,255,255,.08);margin:0 12px;border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#a78bfa,#f6e2a0)}' +
+    '.x{background:none;border:0;color:#9aa1b5;font-size:20px;line-height:1;cursor:pointer;font-family:inherit}' +
+    '.pkn{font-size:11px;color:#9aa1b5;padding:8px 12px 0;line-height:1.5}' +
+    '.pkg{flex:1;overflow-y:auto;padding:4px 12px 10px}' +
+    '.sec{font-size:11px;font-weight:700;color:#9aa1b5;margin:10px 0 6px;display:flex;gap:6px;align-items:baseline}.sec em{font-style:normal;font-weight:500;color:#6b7280}' +
+    '.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px}' +
+    '.it{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;background:#0b0d14;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 4px 6px;cursor:pointer;color:#cfd3e0;font:inherit;font-size:10px;font-family:inherit;min-width:0}' +
+    '.it:hover{border-color:#a78bfa}.it.on{border-color:#f472b6;box-shadow:0 0 0 1px #f472b6}.it.sel{border-color:#f6e2a0}' +
     '.it img{width:48px;height:48px;image-rendering:pixelated}' +
-    '.it span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-    '.pkf{display:flex;gap:8px;padding:8px 12px;border-top:1px solid rgba(255,255,255,.08);align-items:center}' +
-    '.pkf .cur{display:flex;align-items:center;gap:8px;flex:1;font-size:12px;color:#9aa1b5}' +
-    '.pkf .cur img{width:32px;height:32px;image-rendering:pixelated;border-radius:50%;background:#1d2233}' +
-    '.pkf button{font:inherit;font-size:12px;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:7px 12px;background:none;color:#9aa1b5;cursor:pointer;font-family:inherit}' +
-    '.pkf button:hover{color:#eef0f6}' +
-    '.empty{grid-column:1/-1;color:#6b7280;text-align:center;padding:24px}';
+    '.it span{max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;text-align:center;line-height:1.25;word-break:break-all}' +
+    '.it.lock{color:#6b7280}.it.lock img{filter:grayscale(1) brightness(.45)}' +
+    '.it.lock::after{content:"🔒";position:absolute;top:4px;right:5px;font-size:11px;opacity:.8}' +
+    '.it .now{position:absolute;top:3px;left:4px;font-size:9px;font-weight:700;color:#f472b6}' +
+    '.det{border-top:1px solid rgba(255,255,255,.08);padding:10px 12px;display:flex;gap:10px;align-items:center;min-height:64px;box-sizing:border-box}' +
+    '.det img{width:48px;height:48px;image-rendering:pixelated;border-radius:50%;background:#1d2233;flex:none}.det img.lock{filter:grayscale(1) brightness(.45)}' +
+    '.det .tx{flex:1;min-width:0;line-height:1.5}.det .nm{font-weight:700}.det .cd{font-size:11px;color:#9aa1b5}.det .cd b{color:#f6e2a0;font-weight:700}.det .er{font-size:11px;color:#f9a8a8}' +
+    '.det button{font:inherit;font-size:13px;font-weight:700;border:0;border-radius:8px;padding:9px 16px;background:linear-gradient(180deg,#c4b5fd,#8b5cf6);color:#140f24;cursor:pointer;font-family:inherit;white-space:nowrap}' +
+    '.det button:disabled{background:#2a2f42;color:#6b7280;cursor:default}' +
+    '.empty{color:#6b7280;text-align:center;padding:24px}';
 
-  function pickerLoad() {
-    if (picker.data) return Promise.resolve(picker.data);
-    return fetch(state.base + '/assets/avatars.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-      picker.data = d && d.heroes ? d : { heroes: [], exts: [] };
-      return picker.data;
-    }).catch(function () { picker.data = { heroes: [], exts: [] }; return picker.data; });
-  }
   function pickerClose() {
     if (picker.host) { picker.host.remove(); picker.host = null; }
+  }
+  /** 図鑑の項目（最初からの 3 体 → タイトルごとのトロフィー）。{ id, name, trophy, open } */
+  function pickerItems() {
+    var defs = state.defs || {}, av = state.avatars;
+    if (!av) return [];
+    var owned = picker.owned || {};
+    var out = (av.starters || []).map(function (a) { return { id: a.id, name: a.name, trophy: null, open: true }; });
+    Object.keys(defs).forEach(function (k) {
+      var t = defs[k];
+      if (t.avatar) out.push({ id: t.avatar, name: t.avatarName || '', trophy: t, open: !!owned[t.id] });
+    });
+    return out;
+  }
+  function pickerSelect(it) {
+    var root = picker.host && picker.host.shadowRoot;
+    if (!root) return;
+    picker.sel = it ? it.id : null;
+    var det = root.querySelector('.det');
+    det.textContent = '';
+    var cur = state.user ? state.user.avatar || DEFAULT_AVATAR : DEFAULT_AVATAR;
+    if (!it) { it = pickerItems().filter(function (x) { return x.id === cur; })[0] || { id: cur, name: '', open: true }; }
+    var img = document.createElement('img'); img.alt = ''; img.src = avatarUrl(it.id); if (!it.open) img.className = 'lock';
+    var tx = document.createElement('div'); tx.className = 'tx';
+    var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = (it.name || 'いまのアイコン') + (it.open ? '' : '（未獲得）');
+    var cd = document.createElement('div'); cd.className = 'cd';
+    if (it.trophy) {
+      var g = (state.gameNames || {})[it.trophy.game] || it.trophy.game;
+      cd.appendChild(document.createTextNode((it.open ? '獲得：' : '獲得条件：') + g + ' のトロフィー '));
+      var b = document.createElement('b'); b.textContent = '「' + it.trophy.name + '」'; cd.appendChild(b);
+      if (!it.open && it.trophy.description) cd.appendChild(document.createTextNode(' — ' + it.trophy.description));
+    } else cd.textContent = '最初から使える';
+    tx.appendChild(nm); tx.appendChild(cd);
+    if (picker.msg) { var er = document.createElement('div'); er.className = 'er'; er.textContent = picker.msg; tx.appendChild(er); }
+    var go = document.createElement('button'); go.type = 'button';
+    go.textContent = it.id === cur ? '使っている' : (it.open ? 'これにする' : 'まだ使えない');
+    go.disabled = it.id === cur || !it.open;
+    go.addEventListener('click', function () {
+      picker.msg = '';
+      api.setAvatar(it.id).then(function (r) {
+        if (r.ok) { pickerRender(); return; }
+        picker.msg = r.error === 'login' || r.status === 401 ? 'ログインするとアイコンを決められます' : r.error === 'locked' ? 'このアイコンのトロフィーがまだありません' : '変えられませんでした。時間をおいてもう一度';
+        pickerSelect(it);
+      });
+    });
+    det.appendChild(img); det.appendChild(tx); det.appendChild(go);
   }
   function pickerRender() {
     if (!picker.host) return;
     var root = picker.host.shadowRoot;
-    var grid = root.querySelector('.pkg');
-    grid.textContent = '';
-    var cur = state.user ? state.user.avatar : null;
-    var kind = picker.tab === 'exts' ? 'ext' : 'hero';
-    var list = (picker.data && picker.data[picker.tab]) || [];
-    var q = picker.q.trim().toLowerCase();
-    var shown = 0;
-    list.forEach(function (row) {
-      if (q && String(row[1]).toLowerCase().indexOf(q) < 0 && String(row[2]).toLowerCase().indexOf(q) < 0 && String(row[0]).indexOf(q) < 0) return;
-      if (shown >= 400) return;   // 絞らずに全部出すと重いので、400 件まで。名前で絞れば届く
-      shown++;
-      var id = kind + ':' + row[0];
-      var it = document.createElement('button'); it.type = 'button'; it.className = 'it' + (cur === id ? ' on' : ''); it.title = row[1] + ' / ' + row[2];
-      var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = avatarUrl(id);
-      var nm = document.createElement('span'); nm.textContent = row[1] || row[2] || String(row[0]);
-      it.appendChild(img); it.appendChild(nm);
-      it.addEventListener('click', function () {
-        api.setAvatar(id).then(function (r) { if (r.ok) pickerClose(); else root.querySelector('.pkn').textContent = r.error === 'login' || r.status === 401 ? 'ログインするとアイコンを決められます' : '変えられませんでした。時間をおいてもう一度'; });
-      });
-      grid.appendChild(it);
+    var box = root.querySelector('.pkg');
+    box.textContent = '';
+    var items = pickerItems();
+    var cur = state.user ? state.user.avatar || DEFAULT_AVATAR : DEFAULT_AVATAR;
+    var total = (state.avatars && state.avatars.total) || items.length;
+    var got = items.filter(function (x) { return x.open; }).length;
+    root.querySelector('.cnt').innerHTML = '';
+    var cb = document.createElement('b'); cb.textContent = String(got);
+    root.querySelector('.cnt').appendChild(cb);
+    root.querySelector('.cnt').appendChild(document.createTextNode(' / ' + total));
+    root.querySelector('.bar i').style.width = (total ? Math.round(got / total * 100) : 0) + '%';
+    if (!items.length) { var e = document.createElement('div'); e.className = 'empty'; e.textContent = picker.owned ? '読めませんでした。時間をおいて開き直してください' : '読んでいます…'; box.appendChild(e); return; }
+    // まとまり：最初から / タイトルごと（トロフィーの並び）/ 横断
+    var groups = [], byKey = {};
+    items.forEach(function (it) {
+      var key = it.trophy ? it.trophy.game : '_start';
+      if (!byKey[key]) { byKey[key] = { key: key, items: [] }; groups.push(byKey[key]); }
+      byKey[key].items.push(it);
     });
-    if (!shown) { var e = document.createElement('div'); e.className = 'empty'; e.textContent = picker.data ? '見つかりません' : '読んでいます…'; grid.appendChild(e); }
-    root.querySelectorAll('.pkt button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === picker.tab); });
-    var curBox = root.querySelector('.cur');
-    curBox.textContent = '';
-    var url = avatarUrl(cur);
-    if (url) { var ci = document.createElement('img'); ci.alt = ''; ci.src = url; curBox.appendChild(ci); }
-    var ct = document.createElement('span'); ct.textContent = url ? 'いまのアイコン' : 'いまは既定の絵（名前の 1 文字目）'; curBox.appendChild(ct);
+    groups.forEach(function (gr) {
+      var h = document.createElement('div'); h.className = 'sec';
+      var gname = gr.key === '_start' ? '最初から' : ((state.gameNames || {})[gr.key] || gr.key);
+      h.textContent = gname;
+      var em = document.createElement('em'); em.textContent = gr.items.filter(function (x) { return x.open; }).length + ' / ' + gr.items.length; h.appendChild(em);
+      var grid = document.createElement('div'); grid.className = 'grid';
+      gr.items.forEach(function (it) {
+        var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-id', it.id);
+        b.className = 'it' + (it.open ? '' : ' lock') + (cur === it.id ? ' on' : '') + (picker.sel === it.id ? ' sel' : '');
+        b.title = it.open ? it.name : (it.trophy ? '「' + it.trophy.name + '」で解放' : '');
+        b.setAttribute('aria-label', it.open ? it.name : 'まだ使えないアイコン');
+        var img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = avatarUrl(it.id);
+        var nm = document.createElement('span'); nm.textContent = it.open ? it.name : (it.trophy ? it.trophy.name : '？？？');
+        if (cur === it.id) { var now = document.createElement('i'); now.className = 'now'; now.textContent = '使用中'; b.appendChild(now); }
+        b.appendChild(img); b.appendChild(nm);
+        b.addEventListener('click', function () { picker.msg = ''; pickerSelect(it); pickerMark(); });
+        grid.appendChild(b);
+      });
+      box.appendChild(h); box.appendChild(grid);
+    });
+    pickerSelect(items.filter(function (x) { return x.id === picker.sel; })[0] || null);
   }
-  /** アイコンを選ぶ窓。bearko.games 全体（すべてのゲームとチャット）のアイコンが変わる */
+  function pickerMark() {
+    var root = picker.host && picker.host.shadowRoot;
+    if (!root) return;
+    root.querySelectorAll('.it').forEach(function (b) { b.classList.toggle('sel', b.getAttribute('data-id') === picker.sel); });
+  }
+  /** アイコン図鑑の窓。bearko.games 全体（すべてのゲームとチャット）のアイコンが変わる */
   function openAvatarPicker() {
     if (!document.body) return;
     pickerClose();
-    picker.tab = 'heroes'; picker.q = '';
+    picker.sel = null; picker.msg = ''; picker.owned = null;
     picker.host = document.createElement('div');
     picker.host.setAttribute('data-bearko-games', 'avatar-picker');
     var root = picker.host.attachShadow({ mode: 'open' });
     root.innerHTML =
       '<style>' + PICKER_CSS + '</style>' +
-      '<div class="pk"><div class="pkb" role="dialog" aria-label="アイコンを選ぶ">' +
-      '<div class="pkh"><span class="k">アイコンを選ぶ</span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
-      '<div class="pkn">bearko.games 全体のアイコンが変わります（すべてのゲームとチャットに効きます）</div>' +
-      '<div class="pkt"><button type="button" data-tab="heroes">ヒーロー</button><button type="button" data-tab="exts">エクステンション</button><input type="search" placeholder="名前で絞る" autocomplete="off"></div>' +
+      '<div class="pk"><div class="pkb" role="dialog" aria-label="アイコン図鑑">' +
+      '<div class="pkh"><span class="k">アイコン図鑑</span><span class="cnt"></span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
+      '<div class="bar"><i></i></div>' +
+      '<div class="pkn">トロフィーを 1 つ取るごとに、その名前のスキルを持つヒーロー／エクステンションのアイコンが 1 つ増えます。選んだアイコンは bearko.games 全体（すべてのゲームとチャット）で使われます</div>' +
       '<div class="pkg"></div>' +
-      '<div class="pkf"><div class="cur"></div><button type="button" class="reset">既定の絵に戻す</button><button type="button" class="close">閉じる</button></div>' +
+      '<div class="det"></div>' +
       '</div></div>';
     root.querySelector('.x').addEventListener('click', pickerClose);
-    root.querySelector('.close').addEventListener('click', pickerClose);
     root.querySelector('.pk').addEventListener('click', function (e) { if (e.target === root.querySelector('.pk')) pickerClose(); });
-    root.querySelector('.reset').addEventListener('click', function () { api.setAvatar(null).then(function (r) { if (r.ok) pickerClose(); }); });
-    root.querySelectorAll('.pkt button').forEach(function (b) { b.addEventListener('click', function () { picker.tab = b.getAttribute('data-tab'); pickerRender(); }); });
-    root.querySelector('.pkt input').addEventListener('input', function (e) { picker.q = e.target.value; pickerRender(); });
     document.body.appendChild(picker.host);
     pickerRender();
-    pickerLoad().then(pickerRender);
+    Promise.all([loadDefs(), call('GET', '/api/me/trophies')]).then(function (x) {
+      var r = x[1], owned = {};
+      ((r && r.ok && r.trophies) || []).forEach(function (t) { owned[t.id] = true; });
+      picker.owned = owned;
+      pickerRender();
+    }).catch(function () { picker.owned = {}; pickerRender(); });
   }
 
   var chatApi = {
@@ -1191,7 +1262,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.7.0',
+    version: '1.8.0',
     rta: rtaApi,
 
     /**
@@ -1333,9 +1404,9 @@
         return r;
       });
     },
-    /** アイコンの id → 絵の URL（合わなければ null） */
+    /** アイコンの id → 絵の URL（null や合わない id は既定の MCHウォーリアー。1.8.0） */
     avatarUrl: function (id) { return avatarUrl(id); },
-    /** アイコンを選ぶ窓を開く（1.7.0）。各タイトルのマイページはこれを呼ぶだけでよい */
+    /** アイコン図鑑の窓を開く（1.7.0。1.8.0 で図鑑に）。各タイトルのマイページはこれを呼ぶだけでよい */
     openAvatarPicker: function () { try { openAvatarPicker(); } catch (e) { console.warn('[BearkoGames] avatar picker', e); } },
 
     /**

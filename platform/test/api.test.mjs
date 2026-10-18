@@ -668,3 +668,22 @@ test('横断 RTA：24 時間の期限・やめる・未ログインからログ�
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_cross').get().n, 0);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM rta_cross_segments').get().n, 0);
 });
+
+test('SPEC-006 アイコン図鑑：最初からの 3 体と、持っているトロフィーのアイコンだけ選べる', async () => {
+  const { api } = setup();
+  const b = browser(api);
+  await b.call('POST', '/api/auth/google', { credential: 'ok:sub-av' });
+  const defs = (await b.call('GET', '/api/trophies')).body;
+  assert.equal(defs.avatars.default, 'hero:10001');
+  assert.deepEqual(defs.avatars.starters.map((a) => a.id), ['hero:10001', 'hero:10002', 'hero:10003']);
+  assert.equal(defs.avatars.total, 3 + defs.trophies.length);
+  const sunzi = defs.trophies.find((t) => t.id === 'tactics.ch1');
+  assert.deepEqual([sunzi.avatar, sunzi.avatarName], ['hero:2011', '孫子']);
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:10002' })).status, 200, '最初から');
+  const locked = await b.call('POST', '/api/me/avatar', { id: 'hero:2011' });
+  assert.deepEqual([locked.status, locked.body.error], [403, 'locked'], 'まだトロフィーが無い');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:1001' })).status, 403, '図鑑に無い絵');
+  await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:2011' })).body.user.avatar, 'hero:2011', 'トロフィーで解放');
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: null })).status, 200, '既定の絵に戻す');
+});

@@ -86,6 +86,8 @@ CREATE TABLE likes (msg INTEGER NOT NULL, uid TEXT NOT NULL, at INTEGER NOT NULL
 
 ### 5.3 共通アイコン（D1）
 
+> **2026-10-18 SPEC-006 で変わった**：選べるのは最初からの 3 体（既定は MCHウォーリアー）と、持っているトロフィーのアイコンだけ。選ぶ窓は「アイコン図鑑」になった。
+
 ```sql
 -- migrations/0007_avatar.sql（番号は実際の次番）
 ALTER TABLE users ADD COLUMN avatar TEXT;   -- MCH のヒーロー id（例 "10042"）。無ければ既定の絵
