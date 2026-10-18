@@ -23,6 +23,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; min-height: 100%; }
 body {
   background:
@@ -237,3 +238,19 @@ h1 {
   .got.r-Legendary .frame::after { animation: none; display: none; }
   .bar span, .frame { transition: none; }
 }
+
+/* ───────── ログインの関所（SPEC-008 3.4） ───────── */
+.gate { text-align: center; margin: 22px auto 0; max-width: 460px; padding: 26px 20px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: radial-gradient(120% 120% at 50% 0%, rgba(232, 196, 106, .14), transparent 60%), var(--panel); }
+.gate-k { font-family: var(--latin); letter-spacing: .4em; color: var(--gold); margin: 0; font-weight: 700; }
+.gate-t { font-family: var(--serif); font-weight: 800; font-size: 1.15rem; margin: 8px 0 0; }
+.gate-d { color: var(--muted); font-size: .84rem; line-height: 1.7; margin: 10px 0 0; }
+.gate-d b { color: var(--gold-hi); }
+.gate-btn { margin-top: 16px; border: 0; border-radius: 10px; padding: 11px 20px; font-weight: 700; cursor: pointer;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold)); color: #1d1608; transition: transform .12s var(--ease); }
+.gate-btn:active { transform: scale(.96); }
+
+/* 名鑑の番号（ヒーローだけ） */
+.frame .no { position: absolute; top: 9%; left: 50%; transform: translateX(-50%); font-family: var(--latin); font-weight: 700; font-size: .6rem;
+  letter-spacing: .12em; color: color-mix(in srgb, var(--rc) 75%, #fff); opacity: .85; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.locked .frame .no { color: var(--muted); opacity: .7; }

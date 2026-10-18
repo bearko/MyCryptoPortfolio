@@ -12,6 +12,8 @@
 //   GET    /api/trophies       トロフィーの定義 { games, trophies }
 //   GET    /api/me/trophies    { account: 'login'|'guest'|null, trophies: [{id, at}] }
 //   POST   /api/trophies/unlock { id } 獲得（未ログインなら仮アカウントに貯める）→ { account, unlocked, total }
+//   POST   /api/trophies/welcome   マインの話を聞いた（ポータルから。SPEC-008 4.3）→ { account, unlocked, total }
+//   POST   /api/trophies/visit { game } 来訪のアチーブメント（SDK が最初の操作で 1 回送る。SPEC-008）→ { account, unlocked, total }
 //   GET    /api/rta/regulations  RTA のレギュレーション（6.6）
 //   POST   /api/rta/start      { regulation } → { runId, startedAt, account }
 //   POST   /api/rta/checkpoint { runId, checkpoint, igtMs, idleMs } → { splitMs, finished, timeMs, reference, best, rank }
@@ -41,7 +43,7 @@
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
 import { presenceKey, PRESENCE_COOKIE, COOKIE_TTL_MS as PRESENCE_TTL_MS } from './presence.js';
-import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar, kindOf, rarityOf } from './trophies.js';
+import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar, kindOf, rarityOf, VISIT_TROPHY } from './trophies.js';
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
@@ -253,6 +255,21 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     return !!row;
   }
 
+  // SPEC-008：共通基盤の出来事で渡すアチーブメント（judge）。新しく得たもの（横断を含む）を返す
+  async function grantJudged(userId, judge) {
+    const t = TROPHIES.find((x) => x.judge === judge);
+    if (!t || !(await grant(userId, t.id))) return [];
+    return [t.id, ...(await grantCross(userId))];
+  }
+
+  // 返事に添える：新しく得たもののなかで、そのアカウントの最初のヒーロー（節目）があるか（SPEC-008 4.2 マインの呼びかけ）
+  async function firstHeroIn(userId, unlocked) {
+    const fresh = unlocked.filter((id) => TROPHY_BY_ID[id] && kindOf(TROPHY_BY_ID[id].avatar) === 'hero');
+    if (!fresh.length) return false;
+    const heroes = (await trophyIds(userId)).filter((id) => TROPHY_BY_ID[id] && kindOf(TROPHY_BY_ID[id].avatar) === 'hero');
+    return heroes.length === fresh.length;
+  }
+
   // 横断トロフィーを判定し直し、新しく得たものを記録して返す
   async function grantCross(userId) {
     const out = [];
@@ -344,6 +361,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const out = { account, checkpoint: body.checkpoint, splitMs: j.elapsedMs, finished: j.last, reference: j.reference };
     const cross = await noteCross(run, body.checkpoint, at, j.elapsedMs, j.reference, account);
     if (cross) out.cross = cross;
+    // SPEC-008：RTA を完走した（参考記録は除く）・タイトルをまたぐ RTA を完走した
+    const unlocked = [];
+    if (j.last && !j.reference) unlocked.push(...(await grantJudged(run.user_id, 'rtarun')));
+    if (cross && cross.finished && !cross.reference) unlocked.push(...(await grantJudged(run.user_id, 'crossrta')));
+    if (unlocked.length) out.unlocked = unlocked;
     if (j.last && reg.rank === 'igt') {
       const prev = await db
         .prepare("SELECT igt_ms, time_ms FROM rta_runs WHERE user_id = ?1 AND regulation = ?2 AND status = 'finished' AND reference = 0 AND id <> ?3 ORDER BY igt_ms, time_ms LIMIT 1")
@@ -707,6 +729,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         mergedTrophies = (await trophyIds(user.id)).length - before;
       }
       if (g) cookies.push(cookie(GUEST_COOKIE, '', 0));
+      if (!(await isBanned(user.id))) await grantJudged(user.id, 'login');   // SPEC-008：ログインのアチーブメント
       const old = await login(req);
       if (old) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(old.hash).run();
       cookies.push(cookie(SESSION_COOKIE, await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
@@ -741,7 +764,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         if (!canUseAvatar(id, results.map((r) => r.trophy_id))) return reply(req, 403, { error: 'locked' });
       }
       await db.prepare('UPDATE users SET avatar = ?1 WHERE id = ?2').bind(id, s.userId).run();
-      return reply(req, 200, { user: { id: s.userId, name: s.name ?? null, avatar: id } });
+      const unlocked = id != null && !(await isBanned(s.userId)) ? await grantJudged(s.userId, 'avatar') : [];   // SPEC-008
+      return reply(req, 200, { user: { id: s.userId, name: s.name ?? null, avatar: id }, unlocked });
     }
 
     if (method === 'DELETE' && path === '/api/me') {
@@ -756,7 +780,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         games: GAME_NAMES,
         gameUrls: GAME_URLS,   // SPEC-008 アチーブメントの画面から「このゲームを遊ぶ」
         // kind / rarity は SPEC-008（アチーブメント）。ヒーローかエクステンションか・マイクリのレアリティ
-        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear, avatar, avatarName }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName, kind: kindOf(avatar), rarity: rarityOf(avatar) })),
+        // no は名鑑の番号（ヒーローだけ）、formerAvatars は差し替える前の絵（持っている人はアイコンに使える）
+        trophies: TROPHIES.map(({ id, game, no, name, nameFrom, description, clear, avatar, avatarName, formerAvatars }) => ({ id, game, no: no ?? null, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName, kind: kindOf(avatar), rarity: rarityOf(avatar), formerAvatars: formerAvatars || [] })),
         avatars: { default: DEFAULT_AVATAR, starters: STARTER_AVATARS, total: AVATAR_TOTAL },   // SPEC-006 アイコン図鑑
       });
       res.headers.set('Cache-Control', 'public, max-age=300');
@@ -766,6 +791,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/me/trophies') {
       const s = (await login(req)) || (await guest(req));
       if (!s) return reply(req, 200, { account: null, trophies: [] });
+      // SPEC-008：チャットの発言は部屋（Durable Object）にあり Worker を通らないので、見に来たときに確かめて渡す
+      if (s.sub && chatRoom && !(await trophyIds(s.userId)).includes('cross.chat') && !(await isBanned(s.userId))) {
+        const r = await roomJson(`/mine?uid=${encodeURIComponent(s.userId)}`).catch(() => null);
+        if (r && r.status === 200 && (r.body.msgs || []).length) await grantJudged(s.userId, 'chat');
+      }
       const { results } = await db.prepare('SELECT trophy_id, unlocked_at FROM user_trophies WHERE user_id = ?1 ORDER BY unlocked_at').bind(s.userId).all();
       return reply(req, 200, { account: s.sub ? 'login' : 'guest', trophies: results.map((r) => ({ id: r.trophy_id, at: r.unlocked_at })) });
     }
@@ -778,6 +808,29 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (acc.banned) return reply(req, 403, { error: 'banned' });
       const unlocked = [];
       if (await grant(acc.userId, t.id)) unlocked.push(t.id, ...(await grantCross(acc.userId)));
+      const total = (await trophyIds(acc.userId)).length;
+      return reply(req, 200, { account: acc.kind, unlocked, total, firstHero: await firstHeroIn(acc.userId, unlocked) }, acc.cookies);
+    }
+
+    // SPEC-008 5 章：来訪のアチーブメント。SDK がゲームで最初の操作を受けたときに 1 回送る（開いただけでは送らない）
+    if (method === 'POST' && path === '/api/trophies/visit') {
+      const id = VISIT_TROPHY[body.game];
+      if (!id) return reply(req, 400, { error: 'game' });
+      if (!fromGame(req, body.game)) return reply(req, 403, { error: 'game' });
+      const acc = await accountFor(req);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
+      const unlocked = [];
+      if (await grant(acc.userId, id)) unlocked.push(id, ...(await grantCross(acc.userId)));
+      const total = (await trophyIds(acc.userId)).length;
+      return reply(req, 200, { account: acc.kind, unlocked, total }, acc.cookies);
+    }
+
+    // SPEC-008 4.3：マインの話を最後まで聞いた（ポータルから。未ログインでも仮アカウントに記録する）
+    if (method === 'POST' && path === '/api/trophies/welcome') {
+      if (!fromPortal(req)) return reply(req, 403, { error: 'origin' });
+      const acc = await accountFor(req);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
+      const unlocked = await grantJudged(acc.userId, 'welcome');
       const total = (await trophyIds(acc.userId)).length;
       return reply(req, 200, { account: acc.kind, unlocked, total }, acc.cookies);
     }

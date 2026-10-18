@@ -10,7 +10,7 @@
  *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
  *   BearkoGames.init({ game: 'portal', chat: { layout: 'float' } });        // PC でも右側のドックを使わず 1.x の窓（1.7.0）
  *   BearkoGames.chat.mount(el, { composerAt: 'top' });                 // 自分の場所にタイムラインを描く（1.7.0）
- *   BearkoGames.init({ game: 'tactics', presence: false });           // 同時接続数の「操作あり」を送らない（1.9.0。既定は送る。SPEC-007）
+ *   BearkoGames.init({ game: 'tactics', presence: false });           // 同時接続数の「操作あり」を送らない（1.9.0。既定は送る。SPEC-007）。来訪のアチーブメントも送らない（1.10.0。SPEC-008）
  *   BearkoGames.openAvatarPicker();                                    // アイコン図鑑の窓（1.7.0。1.8.0 でトロフィーで解放する図鑑に）
  *   BearkoGames.getUser();          // { id, name, avatar } か null
  *   await BearkoGames.login();      // { ok, user }
@@ -137,13 +137,30 @@
     wrap.style.top = wrap.style.bottom = '';
     if (state.toastOffset > 0) wrap.style[side] = 'calc(' + Math.round(state.toastOffset) + 'px + env(safe-area-inset-' + side + '))';
   }
+  // 獲得の返事（unlock / visit）→ 通知と onTrophy
+  function announce(r) {
+    if (!r.ok) return r;
+    if (r.account === 'guest') state.guest = state.guest || { id: null };
+    if (r.unlocked && r.unlocked.length) {
+      loadDefs().then(function (defs) {
+        r.unlocked.forEach(function (tid) {
+          showTrophyToast(defs[tid], r.account, r.total);
+          for (var i = 0; i < trophyListeners.length; i++) {
+            try { trophyListeners[i](defs[tid] || { id: tid }, r); } catch (e) { console.warn('[BearkoGames] onTrophy', e); }
+          }
+        });
+      });
+    }
+    return r;
+  }
+
   function showTrophyToast(def, account, total) {
     if (!state.ui || !document.body) return;
     try {
       var wrap = toastRoot().querySelector('.wrap');
       var el = document.createElement('div');
       el.className = 't';
-      var k = document.createElement('div'); k.className = 'k'; k.textContent = 'トロフィー獲得';
+      var k = document.createElement('div'); k.className = 'k'; k.textContent = 'アチーブメント獲得';
       var n = document.createElement('div'); n.className = 'n'; n.textContent = def ? def.name : '';
       el.appendChild(k); el.appendChild(n);
       // SPEC-006：トロフィーごとにアイコンが 1 つ解放される
@@ -155,7 +172,7 @@
       }
       if (account === 'guest') {
         var g = document.createElement('div'); g.className = 'g';
-        var msg = document.createElement('span'); msg.textContent = '未登録のトロフィー ' + total + ' 個';
+        var msg = document.createElement('span'); msg.textContent = '未登録のアチーブメント ' + total + ' 個';
         var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'ログインして登録';
         btn.addEventListener('click', function () { el.remove(); api.login(); });
         g.appendChild(msg); g.appendChild(btn); el.appendChild(g);
@@ -224,7 +241,16 @@
 
   function presenceInput() {
     presence.dirty = true;
-    if (!presence.sentOnce) presenceBeat();
+    if (!presence.sentOnce) { presenceBeat(); visitOnce(); }
+  }
+
+  // SPEC-008：来訪のアチーブメント。ゲームで最初に操作したとき 1 回だけ（開いただけでは送らない）。
+  // 仮アカウントはこのとき作られる（すでに持っていればサーバーが 1 つにまとめる）
+  var visited = false;
+  function visitOnce() {
+    if (visited || !state.game || state.game === 'portal') return;
+    visited = true;
+    call('POST', '/api/trophies/visit', { game: state.game }).then(announce);
   }
 
   function presenceStart() {
@@ -355,6 +381,7 @@
             if ((r.status === 409 || r.status === 404) && rta === run) endRun(); // この計測はもう続けられない
             return r;
           }
+          if (r.unlocked && r.unlocked.length) announce(r);   // SPEC-008：RTA の完走でアチーブメント
           return loadRegs().then(function (all) {
             var reg = all[run.regulation];
             if (r.rejected) {
@@ -1097,9 +1124,21 @@
     if (!av) return [];
     var owned = picker.owned || {};
     var out = (av.starters || []).map(function (a) { return { id: a.id, name: a.name, trophy: null, open: true }; });
+    // SPEC-008：絵を差し替える前のアチーブメントを持っている人は、前の絵も使える
+    var former = {};
     Object.keys(defs).forEach(function (k) {
       var t = defs[k];
-      if (t.avatar) out.push({ id: t.avatar, name: t.avatarName || '', trophy: t, open: !!owned[t.id] });
+      if (owned[t.id]) (t.formerAvatars || []).forEach(function (id) { if (!former[id]) former[id] = t; });
+    });
+    var now = {};
+    Object.keys(defs).forEach(function (k) {
+      var t = defs[k];
+      if (t.avatar) { now[t.avatar] = true; out.push({ id: t.avatar, name: t.avatarName || '', trophy: !owned[t.id] && former[t.avatar] ? former[t.avatar] : t, open: !!owned[t.id] || !!former[t.avatar], viaFormer: !owned[t.id] && !!former[t.avatar] }); }
+    });
+    // 前の絵が、いまはどのアチーブメントの絵でもないもの（雪だるまなど）は「以前の絵」にまとめる（持っている人にだけ出す）
+    Object.keys(former).forEach(function (id) {
+      if (now[id]) return;
+      out.push({ id: id, name: '以前の「' + former[id].name + '」', trophy: former[id], open: true, legacy: true, viaFormer: true });
     });
     return out;
   }
@@ -1117,8 +1156,9 @@
     var cd = document.createElement('div'); cd.className = 'cd';
     if (it.trophy) {
       var g = (state.gameNames || {})[it.trophy.game] || it.trophy.game;
-      cd.appendChild(document.createTextNode((it.open ? '獲得：' : '獲得条件：') + g + ' のトロフィー '));
+      cd.appendChild(document.createTextNode((it.viaFormer ? '以前の絵：' : it.open ? '獲得：' : '獲得条件：') + g + ' のアチーブメント '));
       var b = document.createElement('b'); b.textContent = '「' + it.trophy.name + '」'; cd.appendChild(b);
+      if (it.viaFormer) cd.appendChild(document.createTextNode(' を持っているので使える'));
       if (!it.open && it.trophy.description) cd.appendChild(document.createTextNode(' — ' + it.trophy.description));
     } else cd.textContent = '最初から使える';
     tx.appendChild(nm); tx.appendChild(cd);
@@ -1130,7 +1170,7 @@
       picker.msg = '';
       api.setAvatar(it.id).then(function (r) {
         if (r.ok) { pickerRender(); return; }
-        picker.msg = r.error === 'login' || r.status === 401 ? 'ログインするとアイコンを決められます' : r.error === 'locked' ? 'このアイコンのトロフィーがまだありません' : '変えられませんでした。時間をおいてもう一度';
+        picker.msg = r.error === 'login' || r.status === 401 ? 'ログインするとアイコンを決められます' : r.error === 'locked' ? 'このアイコンのアチーブメントがまだありません' : '変えられませんでした。時間をおいてもう一度';
         pickerSelect(it);
       });
     });
@@ -1144,7 +1184,7 @@
     var items = pickerItems();
     var cur = state.user ? state.user.avatar || DEFAULT_AVATAR : DEFAULT_AVATAR;
     var total = (state.avatars && state.avatars.total) || items.length;
-    var got = items.filter(function (x) { return x.open; }).length;
+    var got = items.filter(function (x) { return x.open && !x.viaFormer; }).length;
     root.querySelector('.cnt').innerHTML = '';
     var cb = document.createElement('b'); cb.textContent = String(got);
     root.querySelector('.cnt').appendChild(cb);
@@ -1154,15 +1194,15 @@
     // まとまり：最初から / タイトルごと（トロフィーの並び）/ 横断
     var groups = [], byKey = {};
     items.forEach(function (it) {
-      var key = it.trophy ? it.trophy.game : '_start';
+      var key = it.legacy ? '_legacy' : it.trophy ? it.trophy.game : '_start';
       if (!byKey[key]) { byKey[key] = { key: key, items: [] }; groups.push(byKey[key]); }
       byKey[key].items.push(it);
     });
     groups.forEach(function (gr) {
       var h = document.createElement('div'); h.className = 'sec';
-      var gname = gr.key === '_start' ? '最初から' : ((state.gameNames || {})[gr.key] || gr.key);
+      var gname = gr.key === '_start' ? '最初から' : gr.key === '_legacy' ? '以前の絵' : ((state.gameNames || {})[gr.key] || gr.key);
       h.textContent = gname;
-      var em = document.createElement('em'); em.textContent = gr.items.filter(function (x) { return x.open; }).length + ' / ' + gr.items.length; h.appendChild(em);
+      var em = document.createElement('em'); em.textContent = gr.items.filter(function (x) { return x.open && !x.viaFormer; }).length + ' / ' + gr.items.filter(function (x) { return !x.legacy; }).length; if (gr.key !== '_legacy') h.appendChild(em);
       var grid = document.createElement('div'); grid.className = 'grid';
       gr.items.forEach(function (it) {
         var b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-id', it.id);
@@ -1198,7 +1238,7 @@
       '<div class="pk"><div class="pkb" role="dialog" aria-label="アイコン図鑑">' +
       '<div class="pkh"><span class="k">アイコン図鑑</span><span class="cnt"></span><button class="x" type="button" aria-label="閉じる">×</button></div>' +
       '<div class="bar"><i></i></div>' +
-      '<div class="pkn">トロフィーを 1 つ取るごとに、その名前のスキルを持つヒーロー／エクステンションのアイコンが 1 つ増えます。選んだアイコンは bearko.games 全体（すべてのゲームとチャット）で使われます</div>' +
+      '<div class="pkn">アチーブメントを 1 つ取るごとに、その名前のスキルを持つヒーロー／エクステンションのアイコンが 1 つ増えます。選んだアイコンは bearko.games 全体（すべてのゲームとチャット）で使われます</div>' +
       '<div class="pkg"></div>' +
       '<div class="det"></div>' +
       '</div></div>';
@@ -1301,7 +1341,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.9.0',
+    version: '1.10.0',
     rta: rtaApi,
 
     /**
@@ -1442,6 +1482,7 @@
     setAvatar: function (id) {
       return call('POST', '/api/me/avatar', { id: id == null ? null : String(id) }).then(function (r) {
         if (r.ok && r.user) { state.user = r.user; emit(); }
+        if (r.ok && r.unlocked && r.unlocked.length) announce(r);   // SPEC-008：アイコンを変えるとアチーブメント
         return r;
       });
     },
@@ -1455,21 +1496,7 @@
      * 新しく得たら通知を出す（init({ ui: false }) なら出さない）。{ ok, account, unlocked, total }
      */
     unlockTrophy: function (id) {
-      return call('POST', '/api/trophies/unlock', { id: id }).then(function (r) {
-        if (!r.ok) return r;
-        if (r.account === 'guest') state.guest = state.guest || { id: null };
-        if (r.unlocked && r.unlocked.length) {
-          loadDefs().then(function (defs) {
-            r.unlocked.forEach(function (tid) {
-              showTrophyToast(defs[tid], r.account, r.total);
-              for (var i = 0; i < trophyListeners.length; i++) {
-                try { trophyListeners[i](defs[tid] || { id: tid }, r); } catch (e) { console.warn('[BearkoGames] onTrophy', e); }
-              }
-            });
-          });
-        }
-        return r;
-      });
+      return call('POST', '/api/trophies/unlock', { id: id }).then(announce);
     },
 
     /** 自分のトロフィー（未ログインなら仮アカウントのもの）。{ ok, account, trophies: [{id, at, name, ...}] } */

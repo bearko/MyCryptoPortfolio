@@ -20,6 +20,7 @@
   }
   function gameName(g) { return g === 'cross' ? 'タイトル横断' : (data.games[g] || g); }
   function shortName(g) { return gameName(g).replace(/^MyCrypto/, ''); }
+  function numLabel(n) { return 'No.' + ('00' + n).slice(-3); }
   function date(ms) { return new Date(ms).toLocaleDateString('ja-JP'); }
   function ofKind(kind) { return data.defs.filter(function (d) { return d.kind === kind; }); }
   function countOwned(list) { return list.filter(function (d) { return data.owned[d.id]; }).length; }
@@ -109,6 +110,7 @@
     var img = el('img');
     img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.src = imgUrl(d.avatar);
     frame.appendChild(img);
+    if (d.no) frame.appendChild(el('span', 'no', numLabel(d.no)));   // 名鑑の番号
     var plaque = el('span', 'plaque');
     plaque.appendChild(el('span', 'rlabel', d.rarity.toUpperCase()));
     plaque.appendChild(el('b', null, got ? d.avatarName : '？？？'));
@@ -141,26 +143,33 @@
     });
   }
 
-  function renderNote() {
-    var n = $('note');
-    var mine = Object.keys(data.owned).length;
-    n.hidden = false;
-    n.textContent = '';
-    if (data.account === 'login') { n.hidden = true; return; }
-    if (!mine) { n.textContent = 'まだアチーブメントはありません。気になるゲームを遊んでみましょう。'; return; }
-    n.appendChild(document.createTextNode('この端末で獲得した ' + mine + ' 個は、まだアカウントに登録されていません。'));
-    var a = el('a', null, 'ログインして登録');
-    a.href = '../me/';
-    n.appendChild(a);
+  // 図鑑は Google ログインが要る（SPEC-008 3.4）。未ログインでも記録は仮アカウントに貯まっている
+  function renderGate() {
+    var locked = data.account !== 'login';
+    $('gate').hidden = !locked;
+    $('tabs').hidden = locked;
+    $('panel').hidden = locked;
+    if (!locked) return false;
+    var n = Object.keys(data.owned).length;
+    var d = $('gate-d');
+    d.textContent = '';
+    if (n) {
+      d.appendChild(document.createTextNode('この端末に、まだ登録していないアチーブメントが '));
+      d.appendChild(el('b', null, n + ' 個'));
+      d.appendChild(document.createTextNode(' あります。ログインすると、まとめてアカウントに登録されます。'));
+    } else {
+      d.textContent = 'ログインしなくてもゲームは最後まで遊べ、アチーブメントもこの端末に記録されます。';
+    }
+    return true;
   }
 
   function render() {
+    if (renderGate()) return;
     var list = ofKind(view.kind);
     renderTabs();
     renderProgress(list);
     renderFilters(list);
     renderShelves(list);
-    renderNote();
   }
 
   // ---------------------------------------------------------------- 詳細
@@ -176,7 +185,7 @@
     var h = el('h2', null, got ? d.avatarName : '？？？'); h.id = 'relic-name';
     body.appendChild(x);
     body.appendChild(big);
-    body.appendChild(el('span', 'ribbon', d.rarity.toUpperCase()));
+    body.appendChild(el('span', 'ribbon', (d.no ? numLabel(d.no) + '　' : '') + d.rarity.toUpperCase()));
     body.appendChild(h);
     body.appendChild(el('p', 'ach', 'アチーブメント「' + d.name + '」'));
     var dl = el('dl');
@@ -192,7 +201,7 @@
       play.href = data.urls[d.game]; play.target = '_blank'; play.rel = 'noopener';
       acts.appendChild(play);
     }
-    if (got && data.account === 'login' && window.BearkoGames) {
+    if (got && window.BearkoGames) {
       var av = el('button', 'btn sub', 'アイコン図鑑');
       av.type = 'button';
       av.addEventListener('click', function () { dlg.close(); window.BearkoGames.openAvatarPicker(); });
@@ -221,10 +230,18 @@
 
   // SDK はチャット・アイコン図鑑のため（読めなくても一覧は出す）。棚が横に広いので、PC でも右のドックではなく 💬 の窓
   var ready = window.BearkoGames ? window.BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { layout: 'float' } }).catch(function () {}) : Promise.resolve();
-  ready.then(load).then(function () {
-    $('loading').hidden = true;
-    render();
-  }).catch(function () {
+  function show() {
+    return load().then(function () {
+      $('loading').hidden = true;
+      render();
+    });
+  }
+  $('gate-login').addEventListener('click', function () {
+    if (!window.BearkoGames) return;
+    window.BearkoGames.login().then(function (r) { if (r && r.ok) show(); });
+  });
+  if (window.BearkoGames) window.BearkoGames.onChange(function () { show(); });
+  ready.then(show).catch(function () {
     $('loading').hidden = true;
     $('error').textContent = 'アチーブメントを読み込めませんでした。時間をおいて開き直してください。';
     $('error').hidden = false;

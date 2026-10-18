@@ -22,8 +22,16 @@
     <p class="lead">ヒーロー名鑑をすべて埋めると、<b>真のゲームクリア</b>。</p>
   </header>
 
+  <!-- SPEC-008 3.4：図鑑は Google ログインが要る（未ログインでも記録は貯まる。ログインでまとめて登録） -->
+  <section class="gate" id="gate" hidden>
+    <p class="gate-k">LOCKED</p>
+    <p class="gate-t">アチーブメントは、ログインすると見られます</p>
+    <p class="gate-d" id="gate-d">ログインしなくてもゲームは最後まで遊べ、アチーブメントもこの端末に記録されます。</p>
+    <button class="gate-btn" id="gate-login" type="button">Google でログイン</button>
+  </section>
+
   <!-- SPEC-008 3.2：ヒーローとエクステンションのタブ。（獲得数 / 総数）を常に見せる -->
-  <div class="tabs" role="tablist" aria-label="アチーブメントの種類">
+  <div class="tabs" id="tabs" role="tablist" aria-label="アチーブメントの種類">
     <button type="button" role="tab" id="tab-hero" aria-controls="panel" data-kind="hero" aria-selected="true">
       <span class="tab-name">ヒーロー名鑑</span><span class="tab-count" id="count-hero">– / –</span>
     </button>
@@ -47,13 +55,12 @@
 
     <nav class="filters" id="filters" aria-label="タイトルでしぼる"></nav>
 
-    <p class="note" id="note" hidden></p>
     <p class="note" id="loading">読み込み中…</p>
     <div id="shelves"></div>
   </section>
 
   <footer class="hall-foot">
-    <p>アチーブメントはゲームの中で獲得できます。ログインしなくても記録され、あとでログインするとアカウントにまとまります（<a href="../me/">マイページ</a>）。</p>
+    <p>アチーブメントはゲームの中で獲得できます。ログインしなくてもこの端末に記録され、ログインするとアカウントにまとまります（<a href="../me/">マイページ</a>）。</p>
     <p>キャラクター画像は My Crypto Heroes（MCH Co., Ltd.）に帰属し、許諾のもとで利用しています。</p>
   </footer>
 </div>
