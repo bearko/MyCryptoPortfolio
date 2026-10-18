@@ -134,7 +134,7 @@
   // IGT で並べるレギュレーション（SPEC-001 6.18）：10 buy year は週（1 年 ＝ 48 週。0 週目から数える）
   function igtText(v, unit) {
     if (v == null) return '—';
-    if (unit === 'weeks') return v + ' 週（' + (Math.floor(v / 48) + 1) + ' 年目）';
+    if (unit === 'weeks') return (Math.floor(v / 48) + 1) + ' 年 ' + (v % 48 + 1) + ' 週目'; // SPEC の表記（391 → 9 年 8 週目）
     if (unit === 'turns') return v + ' ターン';
     return BG.rta.formatTime(v);
   }
