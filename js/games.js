@@ -2,6 +2,7 @@
 //   thumb  … assets/thumbs/<id>.webp（1200×630）
 //   shots  … assets/shots/<id>-1..3.webp（縦 9:16）。1枚目が一番「どんなゲームか」が伝わるもの
 //   icon   … 詳細シートのアイコンに出すドット絵（bearko/mycryptoheroes の画像）
+//   playable … false のとき、一覧でグレーにして「プレイする」を押せなくする（開発中のもの）
 const MCH = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
 
 export const GAMES = [
@@ -56,6 +57,7 @@ export const GAMES = [
     title: 'MyCryptoTCG',
     genre: 'カードゲーム',
     status: '開発中',
+    playable: false,   // 一覧ではグレーにし、詳細の「プレイする」を押せなくする（公開まで）
     url: 'https://tcg.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoTCG',
     accent: '#facc15',
