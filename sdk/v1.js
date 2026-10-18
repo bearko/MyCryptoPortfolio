@@ -115,6 +115,7 @@
       '.s{font-size:12px;color:#c9cde0;margin-top:4px;line-height:1.5}' +
       '.n.time{font-variant-numeric:tabular-nums;font-size:22px}' +
       'a{color:#c4b5fd;font-size:12px;font-weight:700}' +
+      '.t.mine{display:flex;gap:10px;align-items:flex-end;border-color:rgba(244,114,182,.7)}.t.mine img{width:48px;height:64px;image-rendering:pixelated;flex:none}.t.mine>div{flex:1;min-width:0}.t.mine .k{color:#f9a8d4}' +
       '.timer{position:fixed;left:50%;transform:translateX(-50%);z-index:2147483646;pointer-events:none;font-family:"M PLUS 1p",system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:#eef0f6;background:rgba(21,25,38,.82);border:1px solid rgba(167,139,250,.6);border-radius:999px;padding:3px 12px;letter-spacing:.02em}' +
       '.timer.top{top:max(8px,env(safe-area-inset-top))}.timer.bottom{bottom:max(8px,env(safe-area-inset-bottom))}' +
       '.timer b{color:#a78bfa;font-size:11px;margin-right:6px}' +
@@ -149,9 +150,34 @@
             try { trophyListeners[i](defs[tid] || { id: tid }, r); } catch (e) { console.warn('[BearkoGames] onTrophy', e); }
           }
         });
+        if (r.firstHero) setTimeout(showMineCall, 1200);   // SPEC-008 4.2：最初のヒーローでマインが呼ぶ
       });
     }
     return r;
+  }
+
+  // SPEC-008 4.2：最初のヒーローを手に入れたとき、マインが bearko.games へ呼ぶ（押さなければそのまま遊べる）
+  function showMineCall() {
+    if (!state.ui || !document.body) return;
+    try {
+      var wrap = toastRoot().querySelector('.wrap');
+      var el = document.createElement('div');
+      el.className = 't mine';
+      var img = document.createElement('img'); img.alt = ''; img.src = ASSET_BASE + 'Image/Characters/navi_ain_08_sparkle.png';
+      var box = document.createElement('div');
+      var k = document.createElement('div'); k.className = 'k'; k.textContent = 'マイン';
+      var s = document.createElement('div'); s.className = 's'; s.textContent = '情熱的なプレイ、見てたよ！ bearko.games で待ってるね';
+      var row = document.createElement('div'); row.className = 'g';
+      var go = document.createElement('a'); go.href = state.base + '/?mine=1'; go.target = '_blank'; go.rel = 'noopener'; go.textContent = '会いに行く ↗';
+      var x = document.createElement('button'); x.type = 'button'; x.textContent = 'あとで';
+      x.addEventListener('click', function () { el.remove(); });
+      go.addEventListener('click', function () { el.remove(); });
+      row.appendChild(go); row.appendChild(x);
+      box.appendChild(k); box.appendChild(s); box.appendChild(row);
+      el.appendChild(img); el.appendChild(box);
+      wrap.appendChild(el);
+      setTimeout(function () { el.remove(); }, 15000);
+    } catch (e) { console.warn('[BearkoGames] mine', e); }
   }
 
   function showTrophyToast(def, account, total) {

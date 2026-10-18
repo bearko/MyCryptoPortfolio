@@ -104,6 +104,7 @@
     var got = !!data.owned[d.id];
     var b = el('button', 'niche r-' + d.rarity + (got ? ' got' : ' locked'));
     b.type = 'button';
+    b.dataset.id = d.id;
     b.style.setProperty('--i', String(i));
     b.setAttribute('aria-label', (got ? d.avatarName : '未獲得の' + KIND_LABEL[d.kind]) + '（' + d.rarity + '）' + (got ? '「' + d.name + '」獲得済み' : '：' + gameName(d.game) + ' — ' + d.description));
     var frame = el('span', 'frame');
@@ -230,10 +231,22 @@
 
   // SDK はチャット・アイコン図鑑のため（読めなくても一覧は出す）。棚が横に広いので、PC でも右のドックではなく 💬 の窓
   var ready = window.BearkoGames ? window.BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { layout: 'float' } }).catch(function () {}) : Promise.resolve();
+  // マインの案内から来たとき（?hello=<ID>）：呼び戻したヒーローの額縁を光らせる（SPEC-008 4.3）
+  var hello = new URLSearchParams(location.search).get('hello');
+  function greet() {
+    if (!hello || data.account !== 'login') return;
+    var card = document.querySelector('.niche[data-id="' + hello.replace(/[^a-z0-9._]/gi, '') + '"]');
+    if (!card) return;
+    card.classList.add('hello');
+    card.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    hello = null;
+  }
+
   function show() {
     return load().then(function () {
       $('loading').hidden = true;
       render();
+      greet();
     });
   }
   $('gate-login').addEventListener('click', function () {

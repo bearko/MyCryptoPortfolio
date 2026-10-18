@@ -254,3 +254,8 @@ h1 {
 .frame .no { position: absolute; top: 9%; left: 50%; transform: translateX(-50%); font-family: var(--latin); font-weight: 700; font-size: .6rem;
   letter-spacing: .12em; color: color-mix(in srgb, var(--rc) 75%, #fff); opacity: .85; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
 .locked .frame .no { color: var(--muted); opacity: .7; }
+
+/* マインの案内から来たとき、呼び戻したヒーロー（SPEC-008 4.3） */
+.niche.hello .frame { box-shadow: 0 0 0 3px #15120c, 0 0 0 5px var(--gold), 0 0 36px rgba(255, 220, 140, .7); animation: hello 1.6s ease-in-out 3; }
+@keyframes hello { 50% { box-shadow: 0 0 0 3px #15120c, 0 0 0 6px var(--gold-hi), 0 0 56px rgba(255, 230, 160, .95); } }
+@media (prefers-reduced-motion: reduce) { .niche.hello .frame { animation: none; } }
