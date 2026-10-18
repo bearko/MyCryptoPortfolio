@@ -244,11 +244,11 @@ test('API：接続の入口は Origin と Upgrade を見る。本人の情報を
   const alice = await loginAs(b, 'alice-sub', 'alice');
   await b.call('GET', '/api/chat/ws?game=Bad', undefined, { headers: { upgrade: 'websocket' } });
   assert.deepEqual(userFromParam(got.searchParams.get('u')), { uid: alice.id, name: 'alice', avatar: null, game: 'portal', banned: false });
-  // アイコンを決めると、接続のときに部屋へ渡る（SPEC-005 5.3）
-  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'ext:5106' })).status, 200);
-  assert.deepEqual((await b.call('GET', '/api/me')).body.user, { id: alice.id, name: 'alice', avatar: 'ext:5106' });
+  // アイコンを決めると、接続のときに部屋へ渡る（SPEC-005 5.3。選べるのは最初からの 3 体とトロフィーのもの：SPEC-006）
+  assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:10003' })).status, 200);
+  assert.deepEqual((await b.call('GET', '/api/me')).body.user, { id: alice.id, name: 'alice', avatar: 'hero:10003' });
   await b.call('GET', '/api/chat/ws?game=survivor', undefined, { headers: { upgrade: 'websocket' } });
-  assert.equal(userFromParam(got.searchParams.get('u')).avatar, 'ext:5106');
+  assert.equal(userFromParam(got.searchParams.get('u')).avatar, 'hero:10003');
   assert.equal((await b.call('POST', '/api/me/avatar', { id: 'nope' })).status, 400);
   assert.equal((await b.call('POST', '/api/me/avatar', { id: null })).status, 200, 'null で既定の絵に戻す');
   assert.equal((await b.call('GET', '/api/me')).body.user.avatar, null);
@@ -404,4 +404,14 @@ test('API：遡る・いいね順・にぎわい・本人のいいね', async ()
   const st = await b.call('GET', '/api/chat/stats');
   assert.deepEqual(st.body, { games: { survivor: 4 }, total: 4 });
   assert.deepEqual((await browser(api).call('GET', '/api/chat/messages?limit=1')).body.liked, [], '未ログインは空');
+});
+
+test('SPEC-006：どのトロフィーにもアイコンがあり、重ならず、形が正しい', async () => {
+  const { TROPHIES, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } = await import('../trophies.js');
+  const ids = [...STARTER_AVATARS.map((a) => a.id), ...TROPHIES.map((t) => t.avatar)];
+  for (const t of TROPHIES) assert.ok(/^(hero|ext):\d{1,6}$/.test(t.avatar) && t.avatarName, t.id);
+  assert.equal(new Set(ids).size, ids.length, 'アイコンが重ならない');
+  assert.equal(AVATAR_TOTAL, ids.length);
+  assert.ok(canUseAvatar(null, []) && canUseAvatar('hero:10003', []));
+  assert.ok(!canUseAvatar('hero:5017', []) && canUseAvatar('hero:5017', ['cross.allclear']));
 });

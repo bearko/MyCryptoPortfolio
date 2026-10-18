@@ -6,7 +6,8 @@
 //   POST   /api/auth/google    { credential } Google でログイン → { user, created, merged }
 //   POST   /api/auth/logout    この端末のログインを終える
 //   POST   /api/me/name        { name } 表示名を変える
-//   POST   /api/me/avatar      { id } アイコンを変える（"hero:1001" / "ext:5106" / null。SPEC-005 5.3。全ゲーム共通）
+//   POST   /api/me/avatar      { id } アイコンを変える（"hero:1001" / "ext:5106" / null。SPEC-005 5.3。全ゲーム共通）。
+//                               使えるのは最初からの 3 体と、持っているトロフィーのアイコンだけ（SPEC-006。ほかは 403 locked）
 //   DELETE /api/me             退会（アカウントと記録をすべて消す）
 //   GET    /api/trophies       トロフィーの定義 { games, trophies }
 //   GET    /api/me/trophies    { account: 'login'|'guest'|null, trophies: [{id, at}] }
@@ -37,7 +38,7 @@
 //   bg_session … ログイン（180 日）  bg_guest … 仮アカウント（最後に使ってから 90 日）
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
-import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor } from './trophies.js';
+import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } from './trophies.js';
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
@@ -673,6 +674,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (body.id != null && typeof body.id !== 'string') return reply(req, 400, { error: 'avatar' });
       const id = body.id == null ? null : cleanAvatar(body.id);
       if (body.id != null && !id) return reply(req, 400, { error: 'avatar' });
+      // SPEC-006：最初からの 3 体と、持っているトロフィーのアイコンだけ
+      if (id != null) {
+        const { results } = await db.prepare('SELECT trophy_id FROM user_trophies WHERE user_id = ?1').bind(s.userId).all();
+        if (!canUseAvatar(id, results.map((r) => r.trophy_id))) return reply(req, 403, { error: 'locked' });
+      }
       await db.prepare('UPDATE users SET avatar = ?1 WHERE id = ?2').bind(id, s.userId).run();
       return reply(req, 200, { user: { id: s.userId, name: s.name ?? null, avatar: id } });
     }
@@ -687,7 +693,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (method === 'GET' && path === '/api/trophies') {
       const res = reply(req, 200, {
         games: GAME_NAMES,
-        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear })),
+        trophies: TROPHIES.map(({ id, game, name, nameFrom, description, clear, avatar, avatarName }) => ({ id, game, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName })),
+        avatars: { default: DEFAULT_AVATAR, starters: STARTER_AVATARS, total: AVATAR_TOTAL },   // SPEC-006 アイコン図鑑
       });
       res.headers.set('Cache-Control', 'public, max-age=300');
       return res;

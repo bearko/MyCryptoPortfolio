@@ -87,7 +87,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 1. 何もしなくても、`init()` のあとに出る：**PC（1100px 以上）は右側のドック**（常に見えている。▸ で畳める）、**狭い画面（639px 以下）は右下の 💬 → 下から出るシート**、その間は 💬 → 窓。読むだけなら未ログインでも。話すにはログインして名前を決める。1 件は YouTube のコメント風（アイコン・名前・タイトルの札・時刻・本文・♡ いいね・返信・編集・消す）。並びは新しい順／いいね順
 2. 置き場所を変える：`init({ chat: { position: 'top-right', offset: { x: 16, y: 56 } } })`（💬 と窓。ドックは右側に固定）。ドックを使わない：`{ layout: 'float' }`。ドックの境目を変える：`{ dockMin: 1280 }`
 3. 遊びの最中は隠す：画面を切り替える関数から `BearkoGames.chat.setVisible(false)` / `setVisible(true)` を呼ぶ（Survivor なら `startBattle` / `returnToTitle`）。ドックも一緒に隠れる
-3a. アイコン：マイページや設定に「アイコンを変える」のボタンを置き、`BearkoGames.openAvatarPicker()` を呼ぶだけ（窓に「bearko.games 全体のアイコンが変わります」と出る）。`getUser().avatar` と `avatarUrl(id)` で絵も出せる
+3a. アイコン：マイページや設定に「アイコンを変える」のボタンを置き、`BearkoGames.openAvatarPicker()` を呼ぶだけ（窓は「アイコン図鑑」。最初からの 3 体と、トロフィーで解放したものから選ぶ。SPEC-006）。`getUser().avatar` と `avatarUrl(id)` で絵も出せる（未設定は MCHウォーリアー）。**トロフィーを足すときは `platform/trophies.js` に `avatar` も書く**
 3b. 書いているあいだだけ時間を止める（Factory）：`chat.onCompose((on) => on ? pauseTime() : resumeTime())`。`chat.layout()` が `'dock'` のときはこれ、`'sheet'` / `'float'` のときは `onToggle` で開いているあいだ止める
 4. 出さない：`init({ chat: false })`。💬 を出さずにゲームのボタンから開く（10 buy year! の横のボタン）：`init({ chat: { button: false } })` のうえで `chat.open()`（SDK 1.6.1）。窓まで自前にする：`{ ui: false }` のうえで `chat.connect()` / `chat.send(text)` / `chat.onMessage(fn)` / `chat.getMessages()`
 4a. 窓を開いているあいだ時間を止める（Factory）：`chat.onToggle((open) => open ? pauseTime() : resumeTime())`（SDK 1.6.1。解除する関数を返す）
