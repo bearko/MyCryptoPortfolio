@@ -3,7 +3,7 @@
 //   game：タイトル ID（GAME_HOSTS のキー）か 'cross'（横断。共通基盤が判定する）
 //   clear：ゲームクリアのトロフィー（横断トロフィー「全制覇」の判定に使う）
 //   avatar / avatarName：獲得すると使えるアイコン（SPEC-006。名前の由来になったスキルを持つヒーロー／エクステンション。
-//     雪だるまは図鑑に出ない Rep 版しかスキルを持たないので ext:11126）。トロフィーを足すときは必ず付ける（テストが見る）
+//     雪だるまは図鑑に出ない Rep 版しかスキルを持たない。Rep F（11126）は白黒の絵なので、色のある Rep E の ext:12126）。トロフィーを足すときは必ず付ける（テストが見る）
 
 // タイトル内のトロフィーは、そのゲームのサブドメインからしか受け付けない
 export const GAME_HOSTS = {
@@ -36,7 +36,7 @@ export const TROPHIES = [
   { id: 'tactics.ch2', game: 'tactics', name: '二天一流', nameFrom: '宮本武蔵のパッシブスキル', avatar: 'hero:5032', avatarName: '宮本武蔵', description: '第 2 章のボスを倒す' },
   { id: 'tactics.clear', game: 'tactics', name: '天下布武', nameFrom: '織田信長のパッシブスキル', avatar: 'hero:5001', avatarName: '織田信長', description: '全 5 章をクリアする', clear: true },
 
-  { id: 'survivor.stage1', game: 'survivor', name: 'スノーフォール', nameFrom: 'エクステンション「雪だるま」のスキル', avatar: 'ext:11126', avatarName: '雪だるま', description: '最初のステージをクリアする（ボス撃破か 5 分耐久）' },
+  { id: 'survivor.stage1', game: 'survivor', name: 'スノーフォール', nameFrom: 'エクステンション「雪だるま」のスキル', avatar: 'ext:12126', avatarName: '雪だるま', description: '最初のステージをクリアする（ボス撃破か 5 分耐久）' },
   { id: 'survivor.clear', game: 'survivor', name: '幻の生存者', nameFrom: 'アナスタシアのパッシブスキル', avatar: 'hero:2016', avatarName: 'アナスタシア', description: '全 3 ステージをクリアする', clear: true },
 
   { id: 'fortress.level01', game: 'fortress', name: '天地開闢の守護', nameFrom: 'エクステンション「アメノミナカヌシ」のスキル', avatar: 'ext:5147', avatarName: 'アメノミナカヌシ', description: 'レベル 01 をクリアする' },
