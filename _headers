@@ -1,0 +1,24 @@
+# 静的ファイルの応答ヘッダー（Workers の静的配信が読む。/api/* は Worker が返すので対象外）
+# 管理・マイページ（退会・名前）・ログインはほかのサイトの iframe に入れさせない（クリックジャッキング対策）。
+# ログインは iframe ではなくポップアップかページの移動で開く（SDK の login）ので、これで壊れない
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+/admin
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+/admin/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+/me
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+/me/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+/login
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+/login/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
