@@ -101,6 +101,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
 - これまでの 0001〜0006 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
+- `0008_achievements.sql`（SPEC-008。行を足すだけ）は 2026-10-18 に作者の確認のうえ同じ方法で適用した（足した行 17：来訪 13・`deckbattle.firstwin` 2・`cross.visit2` 2。`ON CONFLICT DO NOTHING` なので流し直しても増えない）
 - 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
 
 ### 4.1 管理画面（bearko.games/admin/）

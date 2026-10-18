@@ -20,7 +20,7 @@
 
 ## 公開の順番（段階 2）
 
-1. このリポジトリをマージし、D1 に `migrations/0008_achievements.sql` を流す（`wrangler d1 migrations apply bearko-platform --remote`）
+1. D1 に `migrations/0008_achievements.sql` を流す — **2026-10-18 に適用済み**（17 行。INTEGRATION.md 4 章）。続けてこのリポジトリをマージする
 2. 公開されたら、ゲーム側の PR（段階 3）をマージしてよい。それまでゲームが新しい ID を送っても、共通基盤がはじくだけで遊びには影響しない
 
 ## 2. 順番の理由
