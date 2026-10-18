@@ -20,6 +20,37 @@
   ul.segs li .ok { color: var(--accent); font-weight: 900; }
   ul.segs li .t { font-variant-numeric: tabular-nums; font-weight: 700; }
   ul.segs li a { font-size: .8rem; }
+
+  /* レギュレーションの切り替え：いまのレギュレーションを 1 つのボタンで出し、押すと選ぶ画面を開く */
+  .picker { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; width: 100%; margin: 8px 0; padding: 10px 14px; text-align: left; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+  .picker:hover { border-color: rgba(167, 139, 250, .55); }
+  .picker small { grid-column: 1; color: var(--muted); font-size: .75rem; }
+  .picker b { grid-column: 1; font-size: 1rem; line-height: 1.4; }
+  .picker .chev { grid-column: 2; grid-row: 1 / span 2; color: var(--accent); font-size: .8rem; font-weight: 700; white-space: nowrap; }
+
+  /* 高さは固定（検索で件数が変わっても、画面が上下に跳ねないように）。中身の一覧だけがスクロールする */
+  dialog.regs { width: min(560px, calc(100vw - 16px)); height: min(720px, calc(100dvh - 32px)); max-height: none; padding: 0; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  dialog.regs[open] { display: flex; flex-direction: column; }
+  dialog.regs::backdrop { background: rgba(5, 6, 10, .7); }
+  .regs .top, .regs .search, .regs .tabs, .regs .count { flex: none; }
+  .regs .top { display: flex; align-items: center; gap: 8px; padding: 14px 16px 0; }
+  .regs .top h2 { flex: 1; margin: 0; font-size: 1rem; }
+  .regs .close { background: none; border: 0; color: var(--muted); font-size: 1.4rem; line-height: 1; padding: 4px 8px; cursor: pointer; }
+  .regs .search { display: block; margin: 10px 16px 0; width: calc(100% - 32px); }
+  .regs .tabs { flex-wrap: nowrap; overflow-x: auto; padding: 0 16px 4px; margin: 10px 0 0; scrollbar-width: thin; }
+  .regs .tabs button { flex: none; white-space: nowrap; }
+  .regs .count { margin: 4px 16px 0; font-size: .75rem; }
+  .regs .body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; }
+  .regs h3.game { margin: 14px 0 6px; }
+  ul.reglist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  ul.reglist button { display: grid; gap: 2px; width: 100%; text-align: left; padding: 8px 12px; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; }
+  ul.reglist button:hover { border-color: rgba(167, 139, 250, .55); }
+  ul.reglist button[aria-current="true"] { border-color: var(--accent); }
+  ul.reglist button[aria-current="true"] b::after { content: "　表示中"; color: var(--accent); font-size: .75rem; }
+  ul.reglist small { color: var(--muted); font-size: .75rem; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -27,7 +58,11 @@
   <a href="../" class="muted">← ゲーム一覧</a>
   <h1>RTA ランキング</h1>
 
-  <nav class="tabs" id="tabs" aria-label="レギュレーション"></nav>
+  <button type="button" class="picker" id="picker" aria-haspopup="dialog" aria-controls="regDialog" hidden>
+    <small id="pickGame"></small>
+    <b id="pickName"></b>
+    <span class="chev">切り替え ▾</span>
+  </button>
   <p class="note" id="rule"></p>
   <p class="note" id="mine" hidden></p>
   <section class="cross" id="cross" hidden>
@@ -58,6 +93,17 @@
   <p class="error" id="error" hidden></p>
 </main>
 
+<dialog class="regs" id="regDialog" aria-labelledby="regTitle">
+  <div class="top">
+    <h2 id="regTitle">レギュレーションを選ぶ</h2>
+    <button type="button" class="close" id="regClose" aria-label="閉じる">×</button>
+  </div>
+  <input type="search" class="search" id="regSearch" placeholder="名前・ルールで探す（例：v1.3）" aria-label="レギュレーションを探す" autocomplete="off">
+  <nav class="tabs" id="regTabs" aria-label="絞り込み"></nav>
+  <p class="muted count" id="regCount"></p>
+  <div class="body" id="regBody"></div>
+</dialog>
+
 <script src="../sdk/v1.js"></script>
 <script>
 (function () {
@@ -75,6 +121,8 @@
   };
   var regs = [];
   var current = null; // いま表示しているレギュレーション
+  var gameNames = {}; // タイトル ID → 名前（/api/rta/regulations の games）
+  var filter = { tab: 'all', q: '' }; // 選ぶ画面の絞り込み（タブ・検索語）
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -146,7 +194,9 @@
     if (!reg) return;
     current = reg.id;
     showCross(reg);
-    Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', b.dataset.id === reg.id ? 'true' : 'false'); });
+    $('picker').hidden = false;
+    $('pickGame').textContent = gameLabel(reg.game);
+    $('pickName').textContent = reg.name;
     $('rule').textContent = reg.rule;
     $('play').hidden = !HOSTS[reg.game];
     if (HOSTS[reg.game]) $('play').href = HOSTS[reg.game];
@@ -175,20 +225,102 @@
     });
   }
 
-  BG.init({ game: 'portal', apiBase: location.origin }).then(function () { return BG.rta.getRegulations(); }).then(function (r) {
+  // ---------------------------------------------------------------- レギュレーションを選ぶ画面
+  // タブは「すべて」「タイトル横断」と作品ごと。検索語は名前・ルール・タイトル名に当て、空白で区切ると全部を含むものだけ
+  function gameLabel(game) {
+    if (game === 'cross') return 'タイトル横断';
+    return (gameNames[game] || game).replace(/^MyCrypto/, '');
+  }
+  var norm = function (t) { return String(t || '').normalize('NFKC').toLowerCase(); };
+
+  function tabsOf() {
+    var games = [];
+    regs.forEach(function (r) { if (r.game !== 'cross' && games.indexOf(r.game) < 0) games.push(r.game); });
+    var out = [{ id: 'all', label: 'すべて' }];
+    if (regs.some(function (r) { return r.game === 'cross'; })) out.push({ id: 'cross', label: 'タイトル横断' });
+    return out.concat(games.map(function (g) { return { id: g, label: gameLabel(g) }; }));
+  }
+
+  function matches(reg) {
+    if (filter.tab !== 'all' && reg.game !== filter.tab) return false;
+    var hay = norm([reg.name, reg.rule, gameLabel(reg.game), gameNames[reg.game], reg.id].join(' '));
+    return norm(filter.q).split(/\s+/).filter(Boolean).every(function (w) { return hay.indexOf(w) >= 0; });
+  }
+
+  function renderPicker() {
+    var tabs = $('regTabs');
+    tabs.textContent = '';
+    tabsOf().forEach(function (t) {
+      var n = regs.filter(function (r) { return t.id === 'all' || r.game === t.id; }).length;
+      var b = el('button', '', t.label + ' ' + n);
+      b.type = 'button';
+      b.setAttribute('aria-current', String(filter.tab === t.id));
+      b.addEventListener('click', function () { filter.tab = t.id; renderPicker(); });
+      tabs.appendChild(b);
+    });
+    var list = regs.filter(matches);
+    $('regCount').textContent = list.length + ' 件';
+    var body = $('regBody');
+    body.textContent = '';
+    if (!list.length) { body.appendChild(el('p', 'muted', '見つかりません。ことばを変えるか、タブを「すべて」にしてください。')); return; }
+    // 「すべて」と検索のときは作品ごとに見出しを付ける（作品のタブでは要らない）
+    var groups = [];
+    list.forEach(function (r) {
+      var g = groups.filter(function (x) { return x.game === r.game; })[0];
+      if (!g) groups.push(g = { game: r.game, regs: [] });
+      g.regs.push(r);
+    });
+    groups.sort(function (a, b) { return (a.game === 'cross' ? 0 : 1) - (b.game === 'cross' ? 0 : 1); });
+    groups.forEach(function (g) {
+      if (filter.tab === 'all') body.appendChild(el('h3', 'game', gameLabel(g.game)));
+      var ul = el('ul', 'reglist');
+      g.regs.forEach(function (reg) {
+        var b = el('button');
+        b.type = 'button';
+        b.setAttribute('aria-current', String(reg.id === current));
+        b.appendChild(el('b', '', reg.name));
+        if (reg.rule) b.appendChild(el('small', '', reg.rule));
+        b.addEventListener('click', function () {
+          $('regDialog').close();
+          history.replaceState(null, '', '?regulation=' + encodeURIComponent(reg.id));
+          show(reg.id);
+        });
+        var li = el('li');
+        li.appendChild(b);
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    });
+  }
+
+  function openPicker() {
+    // 前に選んだタブと検索語のまま開き、いま見ているレギュレーションまで送る
+    renderPicker();
+    var d = $('regDialog');
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    var on = d.querySelector('ul.reglist button[aria-current="true"]');
+    if (on) on.scrollIntoView({ block: 'center' });
+  }
+
+  $('picker').addEventListener('click', openPicker);
+  $('regClose').addEventListener('click', function () { $('regDialog').close(); });
+  // 外側（背景）を押したら閉じる
+  $('regDialog').addEventListener('click', function (e) { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  $('regSearch').addEventListener('input', function (e) {
+    if (!filter.q && e.target.value) filter.tab = 'all'; // 探し始めたら全部から。そのあとタブで絞ってもよい
+    filter.q = e.target.value;
+    renderPicker();
+  });
+
+  var namesLoaded = fetch('/api/rta/regulations', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { gameNames = j.games || {}; })
+    .catch(function () {});
+
+  BG.init({ game: 'portal', apiBase: location.origin }).then(function () { return Promise.all([BG.rta.getRegulations(), namesLoaded]); }).then(function (x) {
+    var r = x[0];
     regs = r.regulations || [];
     if (!regs.length) { $('loading').hidden = true; return fail('レギュレーションを読み込めませんでした。'); }
-    regs.forEach(function (reg) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.id = reg.id;
-      b.textContent = reg.name;
-      b.addEventListener('click', function () {
-        history.replaceState(null, '', '?regulation=' + encodeURIComponent(reg.id));
-        show(reg.id);
-      });
-      $('tabs').appendChild(b);
-    });
     show(new URLSearchParams(location.search).get('regulation'));
   });
 })();
