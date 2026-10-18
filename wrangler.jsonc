@@ -12,11 +12,17 @@
     // Workshop と同じ OAuth クライアント（公開してよい値。SPEC-001 4.3）
     "GOOGLE_CLIENT_ID": "757389530825-7kee3d573nk0b03iv9mc0qeq8952kf5n.apps.googleusercontent.com",
     // 古い Cookie（Domain=.bearko.games の bg_session / bg_guest）を消すためだけに残す。新しい Cookie は __Host-（bearko.games だけ）
-    "COOKIE_DOMAIN": ".bearko.games"
+    "COOKIE_DOMAIN": ".bearko.games",
+    // ポチゲーポータルへの同時接続数の送り先と、このゲーム集の札（公開してよい値。SPEC-007）。
+    // API キーはシークレット POCHI_API_KEY（ダッシュボードで登録。ここには書かない）
+    "POCHI_ENDPOINT": "https://games-alchemist.com/api/portal/online-count/",
+    "POCHI_GAME_KEY": "mycryptgames"
   },
   // 仮アカウントを作る回数の上限：IP ごとに 1 分 10 件（D1 の無料枠を使い切られないように）
   "ratelimits": [
-    { "name": "GUEST_LIMIT", "namespace_id": "1201", "simple": { "limit": 10, "period": 60 } }
+    { "name": "GUEST_LIMIT", "namespace_id": "1201", "simple": { "limit": 10, "period": 60 } },
+    // 同時接続数の「操作あり」：IP ごとに 1 分 30 回（偽の人数で水増しされないように。SPEC-007 2.3）
+    { "name": "PRESENCE_LIMIT", "namespace_id": "1202", "simple": { "limit": 30, "period": 60 } }
   ],
   "d1_databases": [
     {
@@ -28,11 +34,19 @@
   ],
   // 全体チャットの部屋（SPEC-004）。SQLite つきの Durable Object（無料プランで使える種類）
   "durable_objects": {
-    "bindings": [{ "name": "CHAT", "class_name": "ChatRoom" }]
+    "bindings": [
+      { "name": "CHAT", "class_name": "ChatRoom" },
+      // 同時接続数を数える部屋（SPEC-007）
+      { "name": "PRESENCE", "class_name": "Presence" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRoom"] }],
-  // 毎日 4:00（日本時間）に期限切れのセッションと古い仮アカウントを消す
-  "triggers": { "crons": ["0 19 * * *"] },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ChatRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["Presence"] }
+  ],
+  // 5 分ごと：同時接続数をポチゲーポータルへ送る（SPEC-007）。
+  // 毎日 4:00（日本時間 = UTC 19:00）の回だけ、期限切れのセッションと古い仮アカウントも消す（定期実行は無料プランでアカウント全体 5 つまでなので 1 つにまとめる）
+  "triggers": { "crons": ["*/5 * * * *"] },
   // 本番以外のブランチ（プレビュー）のビルドで `wrangler preview` を使うために必要。
   // 空なので、プレビューには本番の D1・変数・シークレットはつながらない（本番のデータに書き込まない）
   "previews": {}

@@ -10,6 +10,7 @@
  *   BearkoGames.init({ game: 'survivor', chat: { position: 'top-right' } }); // 💬 の置き場所。chat: false で出さない
  *   BearkoGames.init({ game: 'portal', chat: { layout: 'float' } });        // PC でも右側のドックを使わず 1.x の窓（1.7.0）
  *   BearkoGames.chat.mount(el, { composerAt: 'top' });                 // 自分の場所にタイムラインを描く（1.7.0）
+ *   BearkoGames.init({ game: 'tactics', presence: false });           // 同時接続数の「操作あり」を送らない（1.9.0。既定は送る。SPEC-007）
  *   BearkoGames.openAvatarPicker();                                    // アイコン図鑑の窓（1.7.0。1.8.0 でトロフィーで解放する図鑑に）
  *   BearkoGames.getUser();          // { id, name, avatar } か null
  *   await BearkoGames.login();      // { ok, user }
@@ -196,6 +197,44 @@
       rta.lastSent = t;
       call('POST', '/api/rta/ping', { runId: rta.runId, idleMs: rta.maxIdle });
     }
+  }
+
+  // ---------------------------------------------------------------- 同時接続数（SPEC-007。1.9.0）
+  // 操作があったページだけ、最初の操作ですぐ 1 回、そのあとは 3 分ごとに「操作あり」を送る。
+  // 番号はページを開くたびの使い捨て（メモリだけ）。重ならない番号はサーバーの Cookie が持つ。仮アカウントは作らない
+  var PRESENCE_EVERY = 3 * 60e3;
+  var presence = { on: false, dirty: false, sentOnce: false, timer: null, page: null };
+
+  function presencePage() {
+    var b = new Uint8Array(16), s = '';
+    try { crypto.getRandomValues(b); } catch (e) { for (var i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256); }
+    for (var j = 0; j < b.length; j++) s += String.fromCharCode(b[j]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function presenceBeat() {
+    presence.dirty = false;
+    presence.sentOnce = true;
+    try {
+      // Content-Type を付けない（単純なリクエストにして、事前の確認（OPTIONS）を送らない）。返事は見ない
+      fetch(state.base + '/api/presence', { method: 'POST', credentials: 'include', keepalive: true, body: JSON.stringify({ game: state.game, page: presence.page }) })
+        .catch(function () { /* 数えられないだけ */ });
+    } catch (e) { /* 数えられないだけ */ }
+  }
+
+  function presenceInput() {
+    presence.dirty = true;
+    if (!presence.sentOnce) presenceBeat();
+  }
+
+  function presenceStart() {
+    if (presence.on) return;
+    presence.on = true;
+    presence.page = presencePage();
+    INPUT_EVENTS.forEach(function (ev) { window.addEventListener(ev, presenceInput, { capture: true, passive: true }); });
+    presence.timer = setInterval(function () {
+      if (presence.dirty && document.visibilityState !== 'hidden') presenceBeat();
+    }, PRESENCE_EVERY);
   }
 
   function showTimer() {
@@ -1262,7 +1301,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.8.0',
+    version: '1.9.0',
     rta: rtaApi,
 
     /**
@@ -1301,7 +1340,7 @@
     /** 全体チャット（SPEC-004・SPEC-005。1.7.0）：open / close / collapse / setVisible / setPosition / layout / setSort / setFilter / loadMore / mount / send / reply / like / edit / remove / onMessage / onToggle / onCompose / stats */
     chat: chatApi,
 
-    /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset?, chat?: false | { position, offset, ui } }。ログイン状態を読みに行く */
+    /** 最初に 1 回。{ game, version, apiBase?, toast?, toastOffset?, chat?: false | { position, offset, ui }, presence?: false }。ログイン状態を読みに行く */
     init: function (opts) {
       opts = opts || {};
       state.game = opts.game || null;
@@ -1309,6 +1348,8 @@
       if (opts.ui === false) state.ui = false;
       if (opts.toast) api.setToastPosition({ position: opts.toast, offset: opts.toastOffset });
       if (opts.apiBase) state.base = String(opts.apiBase).replace(/\/+$/, '');
+      // 同時接続数（SPEC-007）：操作のあったページから「操作あり」を送る。presence: false で送らない
+      if (opts.presence !== false) { try { presenceStart(); } catch (e) { console.warn('[BearkoGames] presence', e); } }
       // 全体チャット（1.6.0 / 1.7.0）：既定は PC で右側のドック・狭い画面で 💬 → シート。chat: false で何も出さない。
       // { layout: 'float' } で 1.x の窓、{ ui: false } で自前の窓（connect / send / onMessage）、{ button: false } で 💬 を出さない
       if (opts.chat === false) chat.enabled = false;

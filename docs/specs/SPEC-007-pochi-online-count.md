@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 状態 | **Draft（0.1、2026-10-18）** |
+| 状態 | **Accepted（1.0、2026-10-18）**。作者の依頼（運営の指示）どおりに作った。送り始めるのは作者が `POCHI_API_KEY` を登録してから |
 | 作成 | 2026-10-18 |
 | 親 | [SPEC-001](SPEC-001-bearko-games-platform.md) 4.7（Cookie）・11 章（データ量と費用） |
 | 置き場所 | 数える部屋 `platform/presence.js`（Durable Object「Presence」）、API `platform/api.js`、定期実行 `platform/worker.js`、SDK `sdk/v1.js`（1.9.0） |
@@ -99,3 +99,4 @@ bearko.games を「ポチゲーポータル」（合同会社あるけみすと�
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-10-18 | 0.1 | 下書き（運営の指示と、送り方・数え方・費用） |
+| 2026-10-18 | 1.0 | 作った（`platform/presence.js`・`POST /api/presence`・5 分ごとの定期実行・SDK 1.9.0）。テスト `platform/test/presence.test.mjs` |
