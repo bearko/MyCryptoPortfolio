@@ -68,6 +68,8 @@
 | Workshop | **完了（v1.0.0、2026-10-17）**。親 Issue MyCryptoWorkshop#4。LICENSE は MIT（MCH の素材とドット絵は対象外）・古いデプロイ設定（vercel.json・GitHub Pages）を消して CI に・トロフィーと RTA を v1.0 に含める、は作者の決定。日本語のシステムフォントは基準の例外として残した（漢字の字形） | #5〜#11、MyCryptoPortfolio#17 |
 | Education | **完了（v1.0.0、2026-10-17）**。クレオパトラに勝つとクリア（#1）。総合スコアは v2（クリア 5,000 ＋ 知識カード・マス・英雄・称号の加点。このリポジトリの #18）。RTA は区切りだけ決め、計測の入口は v1.0 のあと | MyCryptoEducation #4〜#7（`docs/game-clear.md`・`docs/release-v1.md`） |
 | Factory | **完了（v1.0.0、2026-10-17）**。期限 8 年・期限内の工房 Lv.5 でクリア・節目は各年の終わりと Lv.2〜4・期限切れはゲームオーバーにしない・月ごとの自動セーブ（#94）。総合スコアは期限で止めて `factory.v1` のまま。RTA を v1.0 に含める（`factory-lv5`。最短時間は理屈の下限で暫定）・LICENSE は MIT（MCH の素材と `Audio/` は対象外）は作者の決定 | mycryptofactory #97〜#108（SPEC-001〜008）、MyCryptoPortfolio#21 |
+| Factory 仕上げ | **v1.1.0（2026-10-18）**。オークション（SPEC-018）・旧ランキングは見るだけ（SPEC-019）・時間が止まる不具合の修正。Rare の出品ルールはいまのまま、は作者の決定 | mycryptofactory #129〜#134 |
+| 10 buy year | **完了（v1.0.0、2026-10-18）**。MCH 運営への確認は済み・週替わりランキングを Cloudflare D1 に移して Vercel の設定を消す・総合スコアの係数（#7 / #8 / #10）と RTA（#11）は自動プレイで決める、は作者の決定。総合スコア v2（SPEC-002 3.8）と RTA `10buy-stage5`（SPEC-001 6.18。ステージ 5 に着いた週で並べる）。継承スキル 2 つが強すぎる件はゲーム側の #19 | 10buy-year #17〜#20、MyCryptoPortfolio #66〜#68 |
 | Fortress | 未着手 | — |
 
 ## 5. 改定履歴
@@ -81,3 +83,4 @@
 | 2026-10-17 | Workshop を v1.0.0 に（ドキュメントの数字・デプロイ設定と CI・LICENSE・UI の土台・トロフィー 4 つと RTA・版）。次は Education |
 | 2026-10-17 | Education を v1.0.0 に（ゲームクリアの判定・総合スコア v2・RTA の区切り・manifest・アイコン・OGP・Esc で閉じる・版）。残りは Factory（別セッション）と Fortress |
 | 2026-10-17 | Factory を v1.0.0 に（ドキュメント・LICENSE・期限 8 年とクリア・セーブ・RTA・UI の土台・設定・演出・はじめての案内・版）。残りは Fortress |
+| 2026-10-18 | Factory を v1.1.0 に（オークション・旧ランキングは見るだけ）。10 buy year を v1.0.0 に（D1 のランキング・Vercel の設定を消す・総合スコア v2・週で競う RTA・版）。CSS の仕上げはあとで。残りは Fortress と TCG |
