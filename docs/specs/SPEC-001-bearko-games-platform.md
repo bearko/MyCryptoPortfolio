@@ -123,6 +123,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 - Cookie は `__Host-bg_session` / `__Host-bg_guest`。**Domain を付けない**ので bearko.games にだけ送られ、ゲームのサブドメイン（外部のホスティングを含む）には送られない。ゲームから API への `fetch(credentials: 'include')` と WebSocket は same-site なので、今までどおり付く
 - 以前の `bg_session` / `bg_guest`（`Domain=.bearko.games`）は、次に API を呼んだときにサーバーが `__Host-` へ移し、古いほうを消す（ログインし直しは要らない）
 - 受け付ける Origin は `https://bearko.games`・`https://www.bearko.games` と `GAME_HOSTS` のタイトルだけ（`*.bearko.games` の正規表現にしない。使っていないサブドメインが乗っ取られても API を呼べない）。タイトルを足すときは `GAME_HOSTS` に足す
+- 同時接続数を数えるための `__Host-bg_presence`（30 分で消える使い捨ての番号。アカウントとは結びつけない。[SPEC-007](SPEC-007-pochi-online-count.md) 2.3）
 - 仮アカウントを作る回数は IP ごとに 1 分 10 件まで（Workers の Rate Limiting binding `GUEST_LIMIT`）。超えると 429 `rate`
 - 静的ページ：`/admin`・`/me`・`/login` はほかのサイトの iframe に入れさせない（`_headers` の `frame-ancestors 'none'`）
 
@@ -539,6 +540,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
   - 仮アカウント：最後に使ってから 90 日で消す
   - 期限切れのセッション：毎日消す
 - 静的ファイル（ゲーム本体・SDK・ポータル）の配信は、どのプランでも無料・無制限
+- ポチゲーポータルへの同時接続数（[SPEC-007](SPEC-007-pochi-online-count.md)）：遊ばれている 1 時間あたり、Worker と Durable Object の呼び出しが 20 回ずつ増える（D1 の書き込みは増えない）
 - 見積もりは前提しだいで変わる。Cloudflare のダッシュボードで実際の量を見て、上限の 7 割を超えたら見直す
 
 ## 12. 進め方
@@ -584,3 +586,4 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 | 2026-10-17 | 1.8 | 6.16：Survivor v1.2 のレギュレーション 2 つ（`survivor-normal-v3`・`survivor-absolute-2x-v3`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v3` |
 | 2026-10-18 | 2.0 | 4.7：Cookie を `__Host-`（サブドメインへ送らない）に・Origin を決まった一覧に・仮アカウントの回数の上限・管理などの画面を iframe に入れさせない（セキュリティの見直し） |
 | 2026-10-17 | 1.9 | 6.17：Survivor v1.3 のレギュレーション 2 つ（`survivor-normal-v4`・`survivor-absolute-2x-v4`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v4` |
+| 2026-10-18 | 2.1 | 4.7・11 章：同時接続数の Cookie `__Host-bg_presence` と呼び出しの増え方（SPEC-007） |
