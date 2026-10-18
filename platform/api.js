@@ -43,7 +43,7 @@
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
 import { presenceKey, PRESENCE_COOKIE, COOKIE_TTL_MS as PRESENCE_TTL_MS } from './presence.js';
-import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar, kindOf, rarityOf, VISIT_TROPHY } from './trophies.js';
+import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar, kindOf, rarityOf, chapterOf, VISIT_TROPHY } from './trophies.js';
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
@@ -780,8 +780,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         games: GAME_NAMES,
         gameUrls: GAME_URLS,   // SPEC-008 アチーブメントの画面から「このゲームを遊ぶ」
         // kind / rarity は SPEC-008（アチーブメント）。ヒーローかエクステンションか・マイクリのレアリティ
-        // no は名鑑の番号（ヒーローだけ）、formerAvatars は差し替える前の絵（持っている人はアイコンに使える）
-        trophies: TROPHIES.map(({ id, game, no, name, nameFrom, description, clear, avatar, avatarName, formerAvatars }) => ({ id, game, no: no ?? null, name, nameFrom: nameFrom ?? null, description, clear: !!clear, avatar, avatarName, kind: kindOf(avatar), rarity: rarityOf(avatar), formerAvatars: formerAvatars || [] })),
+        // no は名鑑の番号（ヒーローだけ）、formerAvatars は差し替える前の絵（持っている人はアイコンに使える）、chapter は名鑑の章、trueClear はその章の最後の 1 枚
+        trophies: TROPHIES.map((t) => ({ id: t.id, game: t.game, no: t.no ?? null, name: t.name, nameFrom: t.nameFrom ?? null, description: t.description, clear: !!t.clear, avatar: t.avatar, avatarName: t.avatarName, kind: kindOf(t.avatar), rarity: rarityOf(t.avatar), formerAvatars: t.formerAvatars || [], chapter: kindOf(t.avatar) === 'hero' ? chapterOf(t) : null, trueClear: !!t.trueClear })),
         avatars: { default: DEFAULT_AVATAR, starters: STARTER_AVATARS, total: AVATAR_TOTAL },   // SPEC-006 アイコン図鑑
       });
       res.headers.set('Cache-Control', 'public, max-age=300');

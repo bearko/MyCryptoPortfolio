@@ -115,6 +115,7 @@
       '.s{font-size:12px;color:#c9cde0;margin-top:4px;line-height:1.5}' +
       '.n.time{font-variant-numeric:tabular-nums;font-size:22px}' +
       'a{color:#c4b5fd;font-size:12px;font-weight:700}' +
+      '.t.gold{border-color:#e8c46a;box-shadow:0 0 32px rgba(232,196,106,.45)}.t.gold .k{color:#ffc94d}' +
       '.t.mine{display:flex;gap:10px;align-items:flex-end;border-color:rgba(244,114,182,.7)}.t.mine img{width:48px;height:64px;image-rendering:pixelated;flex:none}.t.mine>div{flex:1;min-width:0}.t.mine .k{color:#f9a8d4}' +
       '.timer{position:fixed;left:50%;transform:translateX(-50%);z-index:2147483646;pointer-events:none;font-family:"M PLUS 1p",system-ui,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:#eef0f6;background:rgba(21,25,38,.82);border:1px solid rgba(167,139,250,.6);border-radius:999px;padding:3px 12px;letter-spacing:.02em}' +
       '.timer.top{top:max(8px,env(safe-area-inset-top))}.timer.bottom{bottom:max(8px,env(safe-area-inset-bottom))}' +
@@ -186,7 +187,7 @@
       var wrap = toastRoot().querySelector('.wrap');
       var el = document.createElement('div');
       el.className = 't';
-      var k = document.createElement('div'); k.className = 'k'; k.textContent = 'アチーブメント獲得';
+      var k = document.createElement('div'); k.className = 'k'; k.textContent = def && def.trueClear ? '真のゲームクリア！ ヒーロー名鑑 完成' : 'アチーブメント獲得';   // SPEC-008 6.1
       var n = document.createElement('div'); n.className = 'n'; n.textContent = def ? def.name : '';
       el.appendChild(k); el.appendChild(n);
       // SPEC-006：トロフィーごとにアイコンが 1 つ解放される
@@ -203,8 +204,14 @@
         btn.addEventListener('click', function () { el.remove(); api.login(); });
         g.appendChild(msg); g.appendChild(btn); el.appendChild(g);
       }
+      if (def && def.trueClear) {
+        el.classList.add('gold');
+        var see = document.createElement('div'); see.className = 'g';
+        var go = document.createElement('a'); go.href = state.base + '/achievements/'; go.target = '_blank'; go.rel = 'noopener'; go.textContent = '名鑑を見る ↗';
+        see.appendChild(go); el.appendChild(see);
+      }
       wrap.appendChild(el);
-      setTimeout(function () { el.remove(); }, account === 'guest' ? 8000 : 4500);
+      setTimeout(function () { el.remove(); }, def && def.trueClear ? 15000 : account === 'guest' ? 8000 : 4500);
     } catch (e) { console.warn('[BearkoGames] toast', e); }
   }
 

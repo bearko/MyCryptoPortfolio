@@ -850,3 +850,23 @@ test('アチーブメント（SPEC-008）：移行で、来訪と移したエク
   assert.deepEqual(rows('u2'), ['factory.lv2@300', 'factory.visit@300']);
   for (const id of ['deckbattle.visit', 'deckbattle.firstwin', 'cross.visit2', 'factory.visit']) assert.ok(TROPHIES.some((t) => t.id === id), id);
 });
+
+test('アチーブメント（SPEC-008 5.2）：名鑑の章。枚数はその章だけを数え、第 2 章が増えても第 1 章の真のクリアは消えない', async () => {
+  // 第 2 章を 2 枚足した仮の定義
+  const ch2 = [
+    { id: 'newgame.first', game: 'newgame', no: 101, chapter: 2, avatar: 'hero:2002', clear: true, description: '' },
+    { id: 'cross.ch2book', game: 'cross', no: 102, chapter: 2, avatar: 'hero:5019', book: 1, trueClear: true, description: '' },
+  ];
+  const list = [...TROPHIES, ...ch2];
+  const ch1 = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero' && t.id !== 'cross.book99').map((t) => t.id);
+  const exts = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext').map((t) => t.id);
+  const got = crossTrophiesFor([...ch1, ...exts], list);
+  assert.ok(got.includes('cross.book99'), '第 1 章の 99 枚で第 1 章の最後の 1 枚（第 2 章は数えない）');
+  assert.ok(!got.includes('cross.ch2book'), '第 2 章はまだ');
+  assert.deepEqual(crossTrophiesFor([...ch1, ...exts, 'cross.book99', 'newgame.first'], list).filter((id) => id.startsWith('cross.ch2')), ['cross.ch2book']);
+  assert.equal(TROPHIES.find((t) => t.id === 'cross.book99').trueClear, true);
+  const res = await browser(setup().api).call('GET', '/api/trophies');
+  const b99 = res.body.trophies.find((t) => t.id === 'cross.book99');
+  assert.deepEqual([b99.chapter, b99.trueClear], [1, true]);
+  assert.equal(res.body.trophies.find((t) => t.id === 'tactics.visit').chapter, null, 'エクステンションに章は無い');
+});
