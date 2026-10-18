@@ -2,7 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SCORERS } from '../scoring/index.js';
-import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v2.js';
+import { MAIN_NODES, SPECIAL_NODES } from '../scoring/deckbattle.v3.js';
+import * as deckbattleV2 from '../scoring/deckbattle.v2.js';
+import * as deckbattleV3 from '../scoring/deckbattle.v3.js';
 
 const s = (game, m) => SCORERS[game].score(m)?.score ?? null;
 // Fortress のふつうのクリア（v3、自動プレイの実測）：体力 54% が残る・スロットを埋める・早呼びなし
@@ -14,7 +16,7 @@ test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリ
     ['tactics', { chaptersCleared: 1, cleared: false }, { chaptersCleared: 5, cleared: true, finalScore: 20000 }],
     ['survivor', { stagesCleared: 1, cleared: false }, { stagesCleared: 3, cleared: true, reportScore: 150000, regulationMul: 1 }],
     ['fortress', { levels: { L1: FORTRESS_TYPICAL } }, { levels: Object.fromEntries(FORTRESS_LEVELS.map((id) => [id, FORTRESS_TYPICAL])) }],
-    ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: 312, avgBattleSec: 10 }])) }],
+    ['deckbattle', { nodesCleared: ['kindai-jp'] }, { nodesCleared: MAIN_NODES, nodes: Object.fromEntries(MAIN_NODES.map((id) => [id, { power: deckbattleV3.NORMAL_POWER[id], avgBattleSec: 10 }])) }],
     ['education', { cards: 47, cells: 12, heroes: 1, titles: 1, cleared: false }, { cards: 469, cells: 40, heroes: 6, titles: 4, cleared: true }],
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
     ['10buy', { years: 10, netWorth: -100000, difficulty: 'normal' }, { years: 10, netWorth: 5e7, difficulty: 'normal' }],
@@ -46,12 +48,49 @@ test('節目の点は決まった点', () => {
 });
 
 test('DeckBattle v2：戦力 × 0.6 ＋ 1,900 ÷ 平均秒（ボットの実測。v1 の生の成績もそのまま計算し直せる）', () => {
-  const d = (nodes) => s('deckbattle', { nodesCleared: Object.keys(nodes), nodes });
+  const d = (nodes) => deckbattleV2.score({ nodesCleared: Object.keys(nodes), nodes })?.score ?? null;
   assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), Math.round(1000 + 178 * 0.6 + 1900 / 11.5), '最初のノード（実測の中央）');
   assert.ok(d({ 'kindai-jp': { power: 200, avgBattleSec: 11.5 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '強いほど高い');
   assert.ok(d({ 'kindai-jp': { power: 178, avgBattleSec: 8 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '速いほど高い');
   assert.equal(d({ 'ex-corsica': { power: 205, avgBattleSec: 8 } }), Math.round(5000 / 3 + 205 * 0.6 + 1900 / 8), '特別ステージ');
   assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 0.5 } }), null, '1 秒より短い平均はありえない');
+});
+
+test('DeckBattle v3：190 × 戦力 ÷ そのノードのふつうの戦力 ＋ 1,900 ÷ 平均秒（#8）', () => {
+  const d = (nodes) => s('deckbattle', { nodesCleared: Object.keys(nodes), nodes });
+  const { NORMAL_POWER } = deckbattleV3;
+  assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), Math.round(1000 + (190 * 178) / 180 + 1900 / 11.5), '最初のノード（実測の平均）＝ 1,353');
+  assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), 1353);
+  // ふつうの戦力なら、どのノードでも戦力の部分は 190（先のノードほど大きくなる、がなくなる）
+  for (const id of ['kindai-jp', 'kindai-eu', 'hazama', 'ex-maou']) {
+    assert.equal(deckbattleV3.nodePerformance(id, { power: NORMAL_POWER[id], avgBattleSec: 1900 / 190 }), 380, id);
+  }
+  assert.ok(d({ 'kindai-jp': { power: 200, avgBattleSec: 11.5 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '強いほど高い');
+  assert.ok(d({ 'kindai-jp': { power: 178, avgBattleSec: 8 } }) > d({ 'kindai-jp': { power: 178, avgBattleSec: 11.5 } }), '速いほど高い');
+  // ふつうのクリア（どのノードもふつうの戦力・平均 10 秒）≒ 10,000、1.2 倍強ければ上がる
+  const all = (k, sec) => d(Object.fromEntries(MAIN_NODES.map((id) => [id, { power: NORMAL_POWER[id] * k, avgBattleSec: sec }])));
+  assert.equal(all(1, 10), 9940);
+  assert.equal(all(1.2, 10), 10434);
+  assert.equal(d({ 'ex-corsica': { power: 205, avgBattleSec: 10 } }), Math.round(5000 / 3 + 190 + 190), '特別ステージ');
+  assert.equal(d({ 'kindai-jp': { power: 178, avgBattleSec: 0.5 } }), null, '1 秒より短い平均はありえない');
+  assert.equal(d({ 'kindai-jp': { power: -1, avgBattleSec: 10 } }), null, '負の戦力はありえない');
+});
+
+test('DeckBattle v3：ノードごとの戦力の上限を越えたら、そのノードの成績の点だけ入れない（#11）', () => {
+  const { MAX_POWER } = deckbattleV3;
+  assert.equal(MAX_POWER['kindai-jp'], 739);
+  assert.equal(MAX_POWER['kindai-eu'], 1232);
+  assert.equal(MAX_POWER.hazama, 1232);
+  assert.deepEqual([MAX_POWER['ex-corsica'], MAX_POWER['ex-abyss'], MAX_POWER['ex-maou']], [774, 774, 810]);
+  for (const id of [...MAIN_NODES, ...SPECIAL_NODES]) assert.ok(MAX_POWER[id] >= 3 * deckbattleV3.NORMAL_POWER[id], `${id} の上限はふつうの戦力の 3 倍以上（正しい記録を落とさない）`);
+  const r = (nodes, cleared = Object.keys(nodes)) => SCORERS.deckbattle.score({ nodesCleared: cleared, nodes });
+  // 本番の生の成績（2026-10-18。魔石を ÷ 100 していなかったころの値）は節目の点だけ
+  assert.deepEqual(r({ 'kindai-jp': { power: 785, avgBattleSec: 11.6 } }), { score: 1000, milestone: 1000, performance: 0 });
+  assert.equal(r({ 'kindai-jp': { power: 739, avgBattleSec: 10 } }).performance, Math.round((190 * 739) / 180 + 190), '上限ちょうどは受け付ける');
+  // ほかのノードの成績は残る
+  const two = r({ 'kindai-jp': { power: 1e9, avgBattleSec: 10 }, 'kindai-eu': { power: 255, avgBattleSec: 10 } });
+  assert.equal(two.performance, 380);
+  assert.equal(two.milestone, Math.round(1000 + 4000 / 12));
 });
 
 test('Education：クリアは 5,000、称号・英雄・マス・カードは加点（v2）', () => {
