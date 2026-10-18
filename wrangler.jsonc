@@ -11,8 +11,13 @@
   "vars": {
     // Workshop と同じ OAuth クライアント（公開してよい値。SPEC-001 4.3）
     "GOOGLE_CLIENT_ID": "757389530825-7kee3d573nk0b03iv9mc0qeq8952kf5n.apps.googleusercontent.com",
+    // 古い Cookie（Domain=.bearko.games の bg_session / bg_guest）を消すためだけに残す。新しい Cookie は __Host-（bearko.games だけ）
     "COOKIE_DOMAIN": ".bearko.games"
   },
+  // 仮アカウントを作る回数の上限：IP ごとに 1 分 10 件（D1 の無料枠を使い切られないように）
+  "ratelimits": [
+    { "name": "GUEST_LIMIT", "namespace_id": "1201", "simple": { "limit": 10, "period": 60 } }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

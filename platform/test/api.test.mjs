@@ -65,7 +65,7 @@ test('サブドメインからの呼び出しに CORS を返し、Cookie は bea
   const res = await b.call('POST', '/api/guest', {});
   assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
   assert.equal(res.headers.get('access-control-allow-credentials'), 'true');
-  assert.match(res.cookies[0], /^bg_guest=[0-9a-f]{64}; Domain=\.bearko\.games; Path=\/; Max-Age=7776000; HttpOnly; Secure; SameSite=Lax$/);
+  assert.match(res.cookies[0], /^__Host-bg_guest=[0-9a-f]{64}; Path=\/; Max-Age=7776000; HttpOnly; Secure; SameSite=Lax$/, 'Domain を付けない（サブドメインへ送らない）');
   const other = await b.call('GET', '/api/me', undefined, { origin: 'https://evil.example' });
   assert.equal(other.headers.get('access-control-allow-origin'), null, '許可していない Origin には CORS を返さない');
 });
@@ -97,7 +97,7 @@ test('Google でログイン：初回は作る・2 回目は同じアカウン�
   assert.equal(first.status, 200);
   assert.equal(first.body.created, true);
   assert.equal(first.body.merged, true);
-  assert.ok(b.jar.bg_session && !b.jar.bg_guest, 'ログイン Cookie が付き、仮アカウントの Cookie は消える');
+  assert.ok(b.jar['__Host-bg_session'] && !b.jar['__Host-bg_guest'], 'ログイン Cookie が付き、仮アカウントの Cookie は消える');
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users').get().n, 1, '仮アカウントは消える');
   assert.deepEqual((await b.call('GET', '/api/me')).body, { user: { id: first.body.user.id, name: null, avatar: null }, guest: null });
 
@@ -178,7 +178,7 @@ test('トロフィー：未ログインなら仮アカウントに貯まり、�
   const first = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
   assert.equal(first.status, 200);
   assert.deepEqual(first.body, { account: 'guest', unlocked: ['tactics.ch1'], total: 1 });
-  assert.ok(b.jar.bg_guest, '仮アカウントがこのとき作られる');
+  assert.ok(b.jar['__Host-bg_guest'], '仮アカウントがこのとき作られる');
   const again = await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
   assert.deepEqual(again.body.unlocked, [], '同じトロフィーは 1 つ');
   await b.call('POST', '/api/trophies/unlock', { id: 'tactics.clear' });
@@ -686,4 +686,32 @@ test('SPEC-006 アイコン図鑑：最初からの 3 体と、持っている�
   await b.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' });
   assert.equal((await b.call('POST', '/api/me/avatar', { id: 'hero:2011' })).body.user.avatar, 'hero:2011', 'トロフィーで解放');
   assert.equal((await b.call('POST', '/api/me/avatar', { id: null })).status, 200, '既定の絵に戻す');
+});
+
+test('セキュリティ：古い Domain つきの Cookie は __Host- へ移して消す。知らないサブドメインは受けない。仮アカウントは回数に上限', async () => {
+  const db = d1();
+  let allow = true;
+  const api = createApi({ db, now: () => Date.parse('2026-10-18T00:00:00Z'), verifyGoogle: fakeVerify, clientId: 'cid', cookieDomain: '.bearko.games', guestLimit: async () => allow });
+  const b = browser(api);
+  await b.call('POST', '/api/guest', {});
+  const token = b.jar['__Host-bg_guest'];
+  // 古い名前で持っている人（Domain=.bearko.games のころの Cookie）
+  delete b.jar['__Host-bg_guest'];
+  b.jar.bg_guest = token;
+  const me = await b.call('GET', '/api/me');
+  assert.ok(me.body.guest, '古い Cookie でも読める');
+  assert.ok(me.cookies.some((c) => c.startsWith(`__Host-bg_guest=${token};`) && !/Domain=/.test(c)), '__Host- へ移す');
+  assert.ok(me.cookies.some((c) => /^bg_guest=; Domain=\.bearko\.games; Path=\/; Max-Age=0/.test(c)), '古いほうは Domain つきで消す');
+  assert.ok(b.jar['__Host-bg_guest'] && !b.jar.bg_guest);
+  // Origin は決まった一覧だけ
+  const evil = await b.call('POST', '/api/guest', {}, { origin: 'https://old-unused.bearko.games' });
+  assert.equal(evil.status, 403, '使っていないサブドメインからは書けない');
+  assert.equal(evil.headers.get('access-control-allow-origin'), null);
+  assert.equal((await b.call('GET', '/api/me', undefined, { origin: 'https://survivor.bearko.games' })).headers.get('access-control-allow-origin'), 'https://survivor.bearko.games');
+  // 仮アカウントの作りすぎ
+  allow = false;
+  const c = browser(api);
+  assert.deepEqual([(await c.call('POST', '/api/guest', {})).status], [429]);
+  assert.equal((await c.call('POST', '/api/trophies/unlock', { id: 'tactics.ch1' }, { origin: 'https://tactics.bearko.games' })).status, 429);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM users').get().n, 1, '作られていない');
 });

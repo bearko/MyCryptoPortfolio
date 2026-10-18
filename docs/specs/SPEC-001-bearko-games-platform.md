@@ -57,7 +57,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 
 1. ゲームで「ランキングに登録」「トロフィー獲得」などの場面になったら、SDK が `https://bearko.games/login` をポップアップで開く（ポップアップが使えない環境では、そのページへ移動して戻ってくる）
 2. `/login` で Google Identity Services のボタンを出し、受け取った ID トークンをサーバーで検証する
-3. サーバーはセッションを作り、Cookie `bg_session` を発行する
+3. サーバーはセッションを作り、Cookie `__Host-bg_session` を発行する（4.7）
    - `Domain=.bearko.games; Path=/; HttpOnly; Secure; SameSite=Lax`
    - これで、どのサブドメインのゲームからでも同じログイン状態になる（サブドメイン同士は「同じサイト」なので Lax でも送られる）
 4. ポップアップは `postMessage` でゲームにログイン完了を知らせて閉じる
@@ -85,7 +85,7 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 
 ### 4.6 仮アカウント（未ログイン中の記録）
 
-- 未ログインの人が初めてトロフィーを獲得する・RTA を始める・スコアを送るときに、サーバーが **仮アカウント** を作り、Cookie `bg_guest`（`Domain=.bearko.games; HttpOnly; Secure; SameSite=Lax`、有効 90 日）を発行する。ページを開いただけでは作らない（データを増やさないため）
+- 未ログインの人が初めてトロフィーを獲得する・RTA を始める・スコアを送るときに、サーバーが **仮アカウント** を作り、Cookie `__Host-bg_guest`（`HttpOnly; Secure; SameSite=Lax`、bearko.games だけに付く。有効 90 日。4.7）を発行する。ページを開いただけでは作らない（データを増やさないため）
 - 仮アカウントは 1 つの端末に 1 つ。ログインも仮アカウントもまだないあいだは、SDK が書き込みを 1 つ送って返事（Cookie）を待ってから残りを送る（同時に送ると、サーバーが送った数だけ仮アカウントを作ってしまうため）
 - 仮アカウントの記録は、**サーバーの時刻で記録する**。クリアタイムも、ログイン後と同じ方法で測るので、あとからまとめて登録しても公式記録として扱える
 - ログインすると、その端末の仮アカウントの記録を本アカウントに **まとめて移す**（同じトロフィーは 1 つにまとめ、スコアは自己ベストを残す）
@@ -116,6 +116,15 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 - ゲーム側のコードは Cookie や localStorage に触らない（ログイン状態は SDK と bearko.games が持つ）。Tactics の憲章とも矛盾しない
 
 ## 6. RTA モード
+
+
+### 4.7 Cookie と Origin（2026-10-18 のセキュリティ見直し）
+
+- Cookie は `__Host-bg_session` / `__Host-bg_guest`。**Domain を付けない**ので bearko.games にだけ送られ、ゲームのサブドメイン（外部のホスティングを含む）には送られない。ゲームから API への `fetch(credentials: 'include')` と WebSocket は same-site なので、今までどおり付く
+- 以前の `bg_session` / `bg_guest`（`Domain=.bearko.games`）は、次に API を呼んだときにサーバーが `__Host-` へ移し、古いほうを消す（ログインし直しは要らない）
+- 受け付ける Origin は `https://bearko.games`・`https://www.bearko.games` と `GAME_HOSTS` のタイトルだけ（`*.bearko.games` の正規表現にしない。使っていないサブドメインが乗っ取られても API を呼べない）。タイトルを足すときは `GAME_HOSTS` に足す
+- 仮アカウントを作る回数は IP ごとに 1 分 10 件まで（Workers の Rate Limiting binding `GUEST_LIMIT`）。超えると 429 `rate`
+- 静的ページ：`/admin`・`/me`・`/login` はほかのサイトの iframe に入れさせない（`_headers` の `frame-ancestors 'none'`）
 
 ### 6.1 区切り（チェックポイント）
 
@@ -573,4 +582,5 @@ bearko.games 配下のゲームを「ひとつのシリーズ」として遊べ�
 | 2026-10-17 | 1.8 | 5 章：SDK 1.6.0 の `chat`（全体チャット。SPEC-004） |
 | 2026-10-17 | 1.7 | 5 章：SDK 1.5.0 の `setToastPosition`（通知を上にも出せる。Survivor の結果画面のボタンが隠れるため）。6.15：Survivor 懐中時計ありのレギュレーション 2 つ。6.14 の Survivor の区間に `survivor-normal-v2` |
 | 2026-10-17 | 1.8 | 6.16：Survivor v1.2 のレギュレーション 2 つ（`survivor-normal-v3`・`survivor-absolute-2x-v3`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v3` |
+| 2026-10-18 | 2.0 | 4.7：Cookie を `__Host-`（サブドメインへ送らない）に・Origin を決まった一覧に・仮アカウントの回数の上限・管理などの画面を iframe に入れさせない（セキュリティの見直し） |
 | 2026-10-17 | 1.9 | 6.17：Survivor v1.3 のレギュレーション 2 つ（`survivor-normal-v4`・`survivor-absolute-2x-v4`。最短時間は 6.15 と同じ）。6.14 の Survivor の区間に `survivor-normal-v4` |

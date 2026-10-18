@@ -34,8 +34,9 @@
 //   DELETE /api/chat/messages/<id> 自分の発言を消す（管理者はだれのでも）
 //
 // 締め出したアカウント（表 bans。SPEC-003 5 章）は、ランキングから隠し、成績・トロフィー・RTA を 403 で受け付けない。
-// Cookie（どちらも Domain=.bearko.games・HttpOnly・Secure・SameSite=Lax）：
-//   bg_session … ログイン（180 日）  bg_guest … 仮アカウント（最後に使ってから 90 日）
+// Cookie（どちらも bearko.games だけに付く __Host- つき・HttpOnly・Secure・SameSite=Lax。SPEC-001 4.7）：
+//   __Host-bg_session … ログイン（180 日）  __Host-bg_guest … 仮アカウント（最後に使ってから 90 日）
+//   古い Domain=.bearko.games の bg_session / bg_guest は読んで、__Host- へ移してから消す（ゲームのサブドメインへ送らない）
 // DB には Cookie の値を置かず、SHA-256 のハッシュだけを持つ。
 
 import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, crossTrophiesFor, DEFAULT_AVATAR, STARTER_AVATARS, AVATAR_TOTAL, canUseAvatar } from './trophies.js';
@@ -56,7 +57,18 @@ const METRICS_MAX = 4096; // 成績の JSON の大きさの上限（バイト）
 const SCORE_GAMES = Object.keys(SCORERS).map((g) => `'${g}'`).join(', '); // SQL に埋める（定数だけ）
 const RTA_STALE = 2 * DAY; // これより前に始めて終わっていない計測は掃除で消す
 
-const ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*bearko\.games$/;
+// 受け付ける Origin は、ポータルと GAME_HOSTS のタイトルだけ（正規表現の *.bearko.games にしない。
+// 使っていないサブドメインが乗っ取られても、そこから Cookie つきで API を呼べないように）
+export const PORTAL_ORIGINS = ['https://bearko.games', 'https://www.bearko.games'];
+export const API_ORIGINS = new Set([...PORTAL_ORIGINS, ...Object.values(GAME_HOSTS).map((h) => `https://${h}`)]);
+// Cookie の名前（新 → 古）。__Host- は Domain を持てないので、bearko.games だけに付く
+export const SESSION_COOKIE = '__Host-bg_session';
+export const GUEST_COOKIE = '__Host-bg_guest';
+const LEGACY_COOKIE = { [SESSION_COOKIE]: 'bg_session', [GUEST_COOKIE]: 'bg_guest' };
+const IGT_MAX = { ms: 1e10, turns: 1e6 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
+
+/** 回数の上限を超えたとき（呼ぶ側の fetch が 429 にする） */
+class RateLimited extends Error {}
 const NOT_BANNED = (col) => `${col} NOT IN (SELECT user_id FROM bans)`; // ランキングの集計から締め出しを外す
 
 export function cleanName(raw) {
@@ -89,13 +101,13 @@ function parseCookies(header) {
   return out;
 }
 
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, log }) {
-  const allowed = (origin) => !!origin && (ORIGIN_RE.test(origin) || extraOrigins.includes(origin));
+// cookieDomain：古い Cookie（Domain=.bearko.games）を消すときだけ使う。guestLimit(req)：仮アカウントを作ってよいか（回数の上限）
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, log }) {
+  const allowed = (origin) => !!origin && (API_ORIGINS.has(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
     [
       `${name}=${value}`,
-      cookieDomain ? `Domain=${cookieDomain}` : null,
       'Path=/',
       `Max-Age=${Math.max(0, Math.floor(maxAgeMs / 1000))}`,
       'HttpOnly',
@@ -119,7 +131,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
 
   // Cookie から有効なセッションを引く。使われたら期限を延ばす（書き込みは 1 日に 1 回まで）
   async function sessionOf(req, name, kind, ttl) {
-    const token = parseCookies(req.headers.get('cookie'))[name];
+    const jar = parseCookies(req.headers.get('cookie'));
+    const token = jar[name] || jar[LEGACY_COOKIE[name]];
     if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
     const hash = await sha256(token);
     const row = await db
@@ -191,10 +204,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (chatRoom) await chatRoom.purge(userId).catch(() => {});
   }
 
-  async function createGuest() {
+  async function createGuest(req) {
+    if (guestLimit && !(await guestLimit(req))) throw new RateLimited();
     const id = randomToken().slice(0, 32);
     await db.prepare('INSERT INTO users (id, google_sub, name, created_at, last_seen) VALUES (?1, NULL, NULL, ?2, ?2)').bind(id, now()).run();
-    return { id, cookie: cookie('bg_guest', await newSession(id, 'guest', GUEST_TTL), GUEST_TTL) };
+    return { id, cookie: cookie(GUEST_COOKIE, await newSession(id, 'guest', GUEST_TTL), GUEST_TTL) };
   }
 
   const isBanned = async (userId) => !!(await db.prepare('SELECT 1 AS b FROM bans WHERE user_id = ?1').bind(userId).first());
@@ -220,7 +234,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (s) return (await isBanned(s.userId)) ? { banned: true } : { userId: s.userId, kind: 'login', cookies: [] };
     const g = await guest(req);
     if (g) return (await isBanned(g.userId)) ? { banned: true } : { userId: g.userId, kind: 'guest', cookies: [] };
-    const created = await createGuest();
+    const created = await createGuest(req);
     return { userId: created.id, kind: 'guest', cookies: [created.cookie] };
   }
 
@@ -284,7 +298,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const at = now();
     const j = judgeCheckpoint(reg, run, body.checkpoint, at, Number(body.idleMs));
     if (j.error) return reply(req, 409, { error: j.error });
-    const igt = Number.isFinite(Number(body.igtMs)) && body.igtMs !== null ? Math.max(0, Math.round(Number(body.igtMs))) : null;
+    const igt = Number.isFinite(Number(body.igtMs)) && body.igtMs !== null ? Math.min(IGT_MAX[reg.igt || 'ms'] ?? IGT_MAX.ms, Math.max(0, Math.round(Number(body.igtMs)))) : null;
 
     if (j.rejected) {
       await db.prepare("UPDATE rta_runs SET status = 'rejected', finished_at = ?2 WHERE id = ?1").bind(run.id, at).run();
@@ -436,9 +450,14 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         .bind(acc.userId, body.game)
         .first();
       if (base) {
-        metrics = sc.combine([JSON.parse(base.metrics), metrics]);
-        json = JSON.stringify(metrics);
-        r = sc.score(metrics);
+        let prevMetrics = null;
+        try { prevMetrics = JSON.parse(base.metrics); } catch { prevMetrics = null; }
+        if (prevMetrics) {
+          metrics = sc.combine([prevMetrics, metrics]);
+          json = JSON.stringify(metrics);
+          r = sc.score(metrics);
+          if (!r || json.length > METRICS_MAX) return reply(req, 400, { error: 'metrics' });
+        }
       }
     }
     const gameVersion = typeof body.version === 'string' ? body.version.slice(0, 32) : null;
@@ -539,10 +558,10 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     ]);
   }
 
-  const login = (req) => sessionOf(req, 'bg_session', 'login', LOGIN_TTL);
-  const guest = (req) => sessionOf(req, 'bg_guest', 'guest', GUEST_TTL);
+  const login = (req) => sessionOf(req, SESSION_COOKIE, 'login', LOGIN_TTL);
+  const guest = (req) => sessionOf(req, GUEST_COOKIE, 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null, avatar: s.avatar ?? null });
-  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: ['https://bearko.games', ...extraOrigins], chat: chatRoom, ...(log ? { log } : {}) });
+  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: [...PORTAL_ORIGINS, ...extraOrigins], chat: chatRoom, ...(log ? { log } : {}) });
 
   async function handle(req) {
     const url = new URL(req.url);
@@ -617,7 +636,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (await login(req)) return reply(req, 409, { error: 'logged_in' });
       const g = await guest(req);
       if (g) return reply(req, 200, { guest: { id: g.userId } });
-      const created = await createGuest();
+      const created = await createGuest(req);
       return reply(req, 200, { guest: { id: created.id } }, [created.cookie]);
     }
 
@@ -645,17 +664,17 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         await grantCross(user.id);
         mergedTrophies = (await trophyIds(user.id)).length - before;
       }
-      if (g) cookies.push(cookie('bg_guest', '', 0));
+      if (g) cookies.push(cookie(GUEST_COOKIE, '', 0));
       const old = await login(req);
       if (old) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(old.hash).run();
-      cookies.push(cookie('bg_session', await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
+      cookies.push(cookie(SESSION_COOKIE, await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
       return reply(req, 200, { user: { id: user.id, name: user.name ?? null, avatar: user.avatar ?? null }, created, merged: !!g, mergedTrophies }, cookies);
     }
 
     if (method === 'POST' && path === '/api/auth/logout') {
       const s = await login(req);
       if (s) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(s.hash).run();
-      return reply(req, 200, { ok: true }, [cookie('bg_session', '', 0)]);
+      return reply(req, 200, { ok: true }, [cookie(SESSION_COOKIE, '', 0)]);
     }
 
     if (method === 'POST' && path === '/api/me/name') {
@@ -687,7 +706,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const s = await login(req);
       if (!s) return reply(req, 401, { error: 'login' });
       await deleteUser(s.userId);
-      return reply(req, 200, { ok: true }, [cookie('bg_session', '', 0)]);
+      return reply(req, 200, { ok: true }, [cookie(SESSION_COOKIE, '', 0)]);
     }
 
     if (method === 'GET' && path === '/api/trophies') {
@@ -965,11 +984,28 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     return { guests: results.length, recomputed };
   }
 
+  // 古い Cookie（Domain=.bearko.games の bg_session / bg_guest）を __Host- へ移し、古いほうを消す。
+  // その応答がもう同じ Cookie を書いている（ログイン・ログアウト）なら、移さずに古いほうを消すだけ
+  function migrateCookies(req, res) {
+    if (res.status === 101 || res.webSocket) return res;   // チャットの接続（ヘッダーを書き換えられない）
+    const jar = parseCookies(req.headers.get('cookie'));
+    if (!jar.bg_session && !jar.bg_guest) return res;
+    const set = res.headers.getSetCookie ? res.headers.getSetCookie() : [];
+    for (const [now_, old] of Object.entries(LEGACY_COOKIE)) {
+      if (!jar[old]) continue;
+      const writes = set.some((c) => c.startsWith(`${now_}=`));
+      if (!jar[now_] && !writes && /^[0-9a-f]{64}$/.test(jar[old])) res.headers.append('Set-Cookie', cookie(now_, jar[old], now_ === SESSION_COOKIE ? LOGIN_TTL : GUEST_TTL));
+      res.headers.append('Set-Cookie', [`${old}=`, cookieDomain ? `Domain=${cookieDomain}` : null, 'Path=/', 'Max-Age=0', 'HttpOnly', 'Secure', 'SameSite=Lax'].filter(Boolean).join('; '));
+    }
+    return res;
+  }
+
   return {
     async fetch(req) {
       try {
-        return await handle(req);
+        return migrateCookies(req, await handle(req));
       } catch (e) {
+        if (e instanceof RateLimited) return reply(req, 429, { error: 'rate' });
         console.error(e);
         return reply(req, 500, { error: 'server' });
       }
