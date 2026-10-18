@@ -26,7 +26,7 @@ export const GAMES = [
     no: 2,
     title: 'MyCryptoFactory',
     genre: '経営シミュレーション',
-    status: 'β版',
+    status: '公開中',
     url: 'https://factory.bearko.games/',
     repo: 'https://github.com/bearko/mycryptofactory',
     accent: '#fbbf24',
