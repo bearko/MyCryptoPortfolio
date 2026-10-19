@@ -3,6 +3,8 @@
 //   shots  … assets/shots/<id>-1..3.webp（縦 9:16）。1枚目が一番「どんなゲームか」が伝わるもの
 //   icon   … 詳細シートのアイコンに出すドット絵（bearko/mycryptoheroes の画像）
 //   playable … false のとき、一覧でグレーにして「プレイする」を押せなくする（開発中のもの）
+//   play     … どう遊ぶか（操作）を一言で。一覧のカードに出す
+//   moods    … 「気分で選ぶ」の絞り込み（MOODS の id）
 const MCH = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
 
 export const GAMES = [
@@ -11,6 +13,8 @@ export const GAMES = [
     no: 1,
     title: 'MyCryptoTactics',
     genre: 'デッキ構築型ローグライク',
+    play: 'ターン制。カードを選んで戦う',
+    moods: ['think'],
     status: '公開中',
     url: 'https://tactics.bearko.games/',
     repo: 'https://github.com/bearko/mycryptotactics',
@@ -26,6 +30,8 @@ export const GAMES = [
     no: 2,
     title: 'MyCryptoFactory',
     genre: '経営シミュレーション',
+    play: '時間が流れる経営。作る・売る・投資する',
+    moods: ['think', 'idle'],
     status: '公開中',
     url: 'https://factory.bearko.games/',
     repo: 'https://github.com/bearko/mycryptofactory',
@@ -41,6 +47,8 @@ export const GAMES = [
     no: 3,
     title: 'MyCryptoSurvivor',
     genre: 'サバイバルアクション',
+    play: '動かすだけ。攻撃は自動',
+    moods: ['quick', 'action'],
     status: '公開中',
     url: 'https://survivor.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoSurvivor',
@@ -56,6 +64,8 @@ export const GAMES = [
     no: 4,
     title: 'MyCryptoTCG',
     genre: 'カードゲーム',
+    play: 'ターン制のカードバトル',
+    moods: ['think'],
     status: '開発中',
     playable: false,   // 一覧ではグレーにし、詳細の「プレイする」を押せなくする（公開まで）
     url: 'https://tcg.bearko.games/',
@@ -72,6 +82,8 @@ export const GAMES = [
     no: 5,
     title: 'MyCryptoEducation',
     genre: '教育クイズ',
+    play: 'クイズに答えて、敵を倒す',
+    moods: ['quick', 'learn'],
     status: '公開中',
     url: 'https://education.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoEducation',
@@ -87,6 +99,8 @@ export const GAMES = [
     no: 6,
     title: 'MyCryptoWorkshop',
     genre: '経営シミュ × インクリメンタル',
+    play: 'タップで作って、並べて売る',
+    moods: ['quick', 'idle'],
     status: '公開中',
     url: 'https://workshop.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoWorkshop',
@@ -102,6 +116,8 @@ export const GAMES = [
     no: 7,
     title: 'MyCryptoFortress',
     genre: 'タワーディフェンス × インクリメンタル',
+    play: 'ヒーローを置いて、見守る',
+    moods: ['quick', 'action'],
     status: '公開中',
     url: 'https://fortress.bearko.games/',
     repo: 'https://github.com/bearko/mycryptofortress',
@@ -117,6 +133,8 @@ export const GAMES = [
     no: 8,
     title: '10 buy year！',
     genre: '育成シミュ × インクリメンタル',
+    play: '週ごとに、やることを 1 つ選ぶ',
+    moods: ['think', 'idle'],
     status: '公開中',
     url: 'https://10-buy-year.bearko.games/',
     repo: 'https://github.com/bearko/10buy-year',
@@ -132,6 +150,8 @@ export const GAMES = [
     no: 9,
     title: 'MyCryptoDeckBattle',
     genre: 'デッキ構築型RPG',
+    play: '買って並べると、自動で戦う',
+    moods: ['think'],
     status: '公開中',
     url: 'https://deckbattle.bearko.games/',
     repo: 'https://github.com/bearko/mycryptodeckbattle',
@@ -161,3 +181,20 @@ export const ASSETS = {
   shots: 0,
   playLabel: 'GitHub で見る',
 };
+
+// 「気分で選ぶ」の絞り込み。遊び方で分ける（ジャンル名を知らなくても選べるように）
+export const MOODS = [
+  { id: 'quick', label: 'サクッと遊ぶ' },
+  { id: 'action', label: 'アクション' },
+  { id: 'think', label: 'じっくり考える' },
+  { id: 'idle', label: '経営・放置' },
+  { id: 'learn', label: '学べる' },
+];
+
+// はじめての人へのおすすめ（トップのカルーセル）。短い時間で「最初の手ごたえ」が来るものを選ぶ。
+// マインの案内（js/guide.js の PICKS・SPEC-008 4.1）と同じ 3 本・同じ言い方にそろえる
+export const FEATURED = [
+  { id: 'survivor', hook: '最初のステージは 5 分。逃げて、倒して、強くなる' },
+  { id: 'workshop', hook: '1 日は 1〜3 分。作って並べて、売れたら勝ち' },
+  { id: 'fortress', hook: 'ヒーローを並べて、押し寄せる敵から守り抜く' },
+];
