@@ -24,6 +24,25 @@ const avatarSrc = (a) => {
   return MCH + (kind === 'hero' ? 'Image/Heroes/' : 'Image/Extensions/') + id + '.png';
 };
 
+// ───────── ポータルの計測（SPEC-009） ─────────
+// 日ごとの回数だけを数える（だれかを見分ける値は送らない）。key を渡すと、このタブで 1 回だけ
+const sent = new Set();
+function stat(e, g = '', s = '', key = null) {
+  if (key) { if (sent.has(key)) return; sent.add(key); }
+  try {
+    const data = JSON.stringify({ e, g, s });
+    // ページを離れる直前（「遊ぶ」）でも届くように sendBeacon。使えなければ keepalive の fetch
+    if (!(navigator.sendBeacon && navigator.sendBeacon('/api/portal/event', new Blob([data], { type: 'text/plain' })))) {
+      fetch('/api/portal/event', { method: 'POST', body: data, keepalive: true }).catch(() => {});
+    }
+  } catch (err) { /* 数えられないだけ */ }
+}
+// トップを見た：タブごとに 1 回。「つづきから」が出た人は return
+function statView(back) {
+  try { if (sessionStorage.getItem('bg.view')) return; sessionStorage.setItem('bg.view', '1'); } catch (err) { /* 毎回数えるだけ */ }
+  stat('view', '', back ? 'return' : 'new');
+}
+
 // ───────── 一覧 ─────────
 // カードには「どう遊ぶか」を一言で出す。マウスを乗せる（スマホは画面の真ん中に来る）と、
 // スクリーンショットが順に流れて、中身がひと目で分かる（デモの代わり）
@@ -48,7 +67,7 @@ grid.innerHTML = ALL.map((g, i) => `
 
 grid.addEventListener('click', (e) => {
   const card = e.target.closest('.card');
-  if (card) open(card.dataset.id);
+  if (card) open(card.dataset.id, { source: 'card' });
 });
 
 // スクリーンショットを順に流す（はじめて見るときに画像を読む）
@@ -63,6 +82,7 @@ function peek(card, on) {
     box.style.setProperty('--n', g.shots);
   }
   card.classList.toggle('peeking', on);
+  if (on) setTimeout(() => { if (card.classList.contains('peeking')) stat('peek', card.dataset.id, '', `peek:${card.dataset.id}`); }, 800);
 }
 if (!reduced) {
   if (matchMedia('(hover: hover)').matches) {
@@ -85,6 +105,7 @@ moods.addEventListener('click', (e) => {
   const b = e.target.closest('.mood');
   if (!b) return;
   const id = b.dataset.mood;
+  stat('mood', '', id);
   moods.querySelectorAll('.mood').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   grid.querySelectorAll('.card').forEach((c) => {
     const g = ALL.find((x) => x.id === c.dataset.id);
@@ -128,13 +149,16 @@ function featGo(i, smooth = true) {
 }
 track.addEventListener('scroll', () => {
   const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  const was = featAt;
   featAt = Math.min(feats.length - 1, Math.max(0, i));
+  // 手で切り替えたときだけ数える（自動で送ったぶんは数えない）
+  if (hold && featAt !== was) stat('feat', feats[featAt].id, '', `feat:${feats[featAt].id}`);
   dots.querySelectorAll('.dot').forEach((d, k) => d.setAttribute('aria-current', String(k === featAt)));
   slides().forEach((s, k) => s.classList.toggle('on', k === featAt));
 }, { passive: true });
 slides()[0]?.classList.add('on');
 dots.addEventListener('click', (e) => { const d = e.target.closest('.dot'); if (d) featGo(Number(d.dataset.to)); });
-track.addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) open(b.dataset.open); });
+track.addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) open(b.dataset.open, { source: 'feat' }); });
 
 let hold = false; // 触っている・フォーカスがある間は送らない
 const feat = $('feat');
@@ -176,6 +200,7 @@ Promise.all([
     .filter((x) => x.last > 0 && ICON[x.gid])
     .sort((a, b) => b.last - a.last)
     .slice(0, 3);
+  statView(recent.length > 0);
   if (!recent.length) return;
   $('cont-list').innerHTML = recent.map(({ gid, list }) => {
     const g = ICON[gid];
@@ -184,7 +209,7 @@ Promise.all([
     const next = goals.find((t) => !owned.has(t.id));
     const src = next && avatarSrc(next.avatar);
     return `
-      <a class="cont-card" href="${g.url}" target="_blank" rel="noopener" style="--c:${g.accent}">
+      <a class="cont-card" href="${g.url}" target="_blank" rel="noopener" style="--c:${g.accent}" data-id="${g.id}">
         <img class="cont-icon" src="${g.icon}" alt="">
         <span class="cont-tx">
           <b>${esc(short(g.title))}</b>
@@ -196,7 +221,7 @@ Promise.all([
       </a>`;
   }).join('');
   $('cont').hidden = false;
-}).catch(() => { /* つづきから・ごほうびが出ないだけ */ });
+}).catch(() => { statView(false); /* つづきから・ごほうびが出ないだけ */ });
 
 // ───────── 背景をゆっくり流れるヒーロー ─────────
 // ゲームのアイコンに使っているヒーローを数体、薄く下から上へ流す（飾り）
@@ -260,9 +285,10 @@ function render(g) {
   body.scrollTop = 0;
 }
 
-function open(id, { push = true } = {}) {
+function open(id, { push = true, source = null } = {}) {
   const g = ALL.find((x) => x.id === id);
   if (!g) return;
+  if (source) stat('open', g.id, source);
   current = g;
   render(g);
   if (!sheet.open) sheet.showModal();
@@ -304,7 +330,20 @@ document.addEventListener('keydown', (e) => {
 // #tactics のようなリンクで直接その作品を開ける
 const fromHash = () => {
   const id = location.hash.slice(1);
-  if (id) open(id, { push: false }); else close();
+  if (id) open(id, { push: false, source: 'link' }); else close();
 };
 window.addEventListener('hashchange', fromHash);
 fromHash();
+
+// 「遊ぶ」を押した（SPEC-009）。おすすめ・詳細・つづきから・マインの案内（js/guide.js は変えずに、ここで拾う）
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a');
+  if (!a) return;
+  if (a.matches('.slide .btn.play')) return stat('play', a.closest('.slide').dataset.id, 'feat');
+  if (a.matches('.cont-card')) return stat('play', a.dataset.id, 'cont');
+  if (a.matches('#sheet .btn.play') && current) return stat('play', current.id, 'sheet');
+  if (a.matches('#mine a.mine-pick')) {
+    const g = GAMES.find((x) => a.href.startsWith(x.url));
+    if (g) stat('play', g.id, 'guide');
+  }
+}, true);

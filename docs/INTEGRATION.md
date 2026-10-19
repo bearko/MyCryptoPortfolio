@@ -2,7 +2,7 @@
 
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
-- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）、[SPEC-003](specs/SPEC-003-admin.md)（管理画面・締め出し）
+- 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）、[SPEC-003](specs/SPEC-003-admin.md)（管理画面・締め出し）、[SPEC-009](specs/SPEC-009-portal-stats.md)（ポータルの計測）
 - 最終更新：2026-10-17
 
 ## 1. いまの状態
@@ -29,6 +29,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | `platform/worker.js` | Worker の入口。`/api/*` は API、それ以外はポータルの静的ファイル。毎日の掃除（cron） |
 | `platform/api.js` | API 全部（ログイン・仮アカウント・トロフィー・RTA・総合スコア）。上のコメントに一覧 |
 | `platform/admin.js` | 管理画面の API（`/api/admin/*`。SPEC-003）。締め出しの効き目は `api.js` の側 |
+| `platform/portal-stats.js` | ポータルの計測（SPEC-009）。トップで起きたことを日ごとの回数で数える。管理画面の「ポータル」タブで見る |
 | `platform/trophies.js` | トロフィーの定義と、タイトル ID → サブドメイン（`GAME_HOSTS`） |
 | `platform/rta.js` | RTA のレギュレーションと区切り・最短時間 |
 | `platform/scoring/<タイトル>.v1.js` | 総合スコアの計算式（1 タイトル 1 ファイル）。一覧は `scoring/index.js` |
@@ -100,7 +101,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
-- これまでの 0001〜0006 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
+- これまでの 0001〜0009 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
 - `0008_achievements.sql`（SPEC-008。行を足すだけ）は 2026-10-18 に作者の確認のうえ同じ方法で適用した（足した行 17：来訪 13・`deckbattle.firstwin` 2・`cross.visit2` 2。`ON CONFLICT DO NOTHING` なので流し直しても増えない）
 - 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
 

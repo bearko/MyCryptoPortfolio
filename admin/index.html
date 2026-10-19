@@ -58,6 +58,7 @@
       <button type="button" data-tab="rta">RTA の記録</button>
       <button type="button" data-tab="players">プレイヤー</button>
       <button type="button" data-tab="chat">チャット</button>
+      <button type="button" data-tab="portal">ポータル</button>
     </nav>
 
     <section data-pane="scores" hidden>
@@ -97,6 +98,31 @@
       <p class="note">直近 200 件（<span id="chat-total">0</span> 件が残っています）。締め出すと、その人の発言はすべて消え、接続も切れます。</p>
       <ul class="list" id="chat-list"></ul>
       <p class="muted" id="chat-empty" hidden>発言はありません。</p>
+    </section>
+
+    <!-- SPEC-009：ポータルの計測。トップで起きたことの、日ごとの回数（だれかを見分ける値は持たない） -->
+    <section data-pane="portal" hidden>
+      <div class="controls">
+        <select id="pdays" aria-label="期間">
+          <option value="7">直近 7 日</option><option value="14" selected>直近 14 日</option><option value="30">直近 30 日</option><option value="90">直近 90 日</option>
+        </select>
+      </div>
+      <h2>日ごと</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>日付</th><th>トップを見た</th><th>はじめて／戻り</th><th>詳細</th><th>遊ぶ</th><th>遊ぶ ÷ 見た</th></tr></thead>
+          <tbody id="portal-days"></tbody>
+        </table>
+      </div>
+      <h2>作品ごと（期間の合計）</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>作品</th><th>おすすめで見た</th><th>スクショ</th><th>詳細</th><th>遊ぶ</th><th>おすすめ／詳細／つづき／案内</th></tr></thead>
+          <tbody id="portal-games"></tbody>
+        </table>
+      </div>
+      <p class="note" id="portal-moods"></p>
+      <p class="note">「トップを見た」はタブごとに 1 回。「スクショ」は 0.8 秒以上流れたもの。「おすすめで見た」は手で切り替えたものだけ（自動で送ったぶんは数えない）。押したあと本当に起動したかは、各ゲームの起動のトロフィーで見る。</p>
     </section>
   </section>
 
@@ -323,8 +349,51 @@
     });
   }
 
+  // ---------------------------------------------------------------- ポータルの計測（SPEC-009）
+  var PORTAL_NAMES = { tactics: 'Tactics', factory: 'Factory', survivor: 'Survivor', tcg: 'TCG', education: 'Education', workshop: 'Workshop',
+    fortress: 'Fortress', tenbuy: '10 buy year', deckbattle: 'DeckBattle', heroes: 'mycryptoheroes' };
+  var MOOD_NAMES = { '': 'すべて', quick: 'サクッと遊ぶ', action: 'アクション', think: 'じっくり考える', idle: '経営・放置', learn: '学べる' };
+  function renderPortal() {
+    api('GET', '/api/admin/portal?days=' + $('pdays').value).then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      var byDay = {}, byGame = {}, moods = {};
+      r.rows.forEach(function (x) {
+        var d = byDay[x.day] || (byDay[x.day] = { view: 0, vnew: 0, vret: 0, open: 0, play: 0 });
+        if (x.event === 'view') { d.view += x.n; if (x.source === 'return') d.vret += x.n; else d.vnew += x.n; }
+        if (x.event === 'open') d.open += x.n;
+        if (x.event === 'play') d.play += x.n;
+        if (x.event === 'mood') moods[x.source] = (moods[x.source] || 0) + x.n;
+        if (x.game) {
+          var g = byGame[x.game] || (byGame[x.game] = { feat: 0, peek: 0, open: 0, play: 0, src: { feat: 0, sheet: 0, cont: 0, guide: 0 } });
+          if (x.event === 'feat' || x.event === 'peek' || x.event === 'open') g[x.event] += x.n;
+          if (x.event === 'play') { g.play += x.n; g.src[x.source] = (g.src[x.source] || 0) + x.n; }
+        }
+      });
+      var tb = $('portal-days');
+      tb.textContent = '';
+      var days = Object.keys(byDay).sort().reverse();
+      days.forEach(function (k) {
+        var d = byDay[k];
+        var tr = el('tr');
+        [k, nf(d.view), nf(d.vnew) + '／' + nf(d.vret), nf(d.open), nf(d.play), d.view ? Math.round((d.play / d.view) * 100) + '%' : '—'].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        tb.appendChild(tr);
+      });
+      if (!days.length) { var empty = el('tr'); var td = el('td', null, 'まだ記録がありません。'); td.colSpan = 6; empty.appendChild(td); tb.appendChild(empty); }
+      var tg = $('portal-games');
+      tg.textContent = '';
+      Object.keys(byGame).sort(function (a, b) { return byGame[b].play - byGame[a].play; }).forEach(function (k) {
+        var g = byGame[k];
+        var tr = el('tr');
+        [PORTAL_NAMES[k] || k, nf(g.feat), nf(g.peek), nf(g.open), nf(g.play), [g.src.feat, g.src.sheet, g.src.cont, g.src.guide].map(nf).join('／')].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        tg.appendChild(tr);
+      });
+      var mk = Object.keys(moods);
+      $('portal-moods').textContent = mk.length ? '遊び方で絞る：' + mk.sort(function (a, b) { return moods[b] - moods[a]; }).map(function (m) { return (MOOD_NAMES[m] || m) + ' ' + nf(moods[m]); }).join('、') : '';
+    });
+  }
+
   // ---------------------------------------------------------------- 画面の切り替え
-  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat };
+  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat, portal: renderPortal };
   function show(tab) {
     current = renderers[tab] ? tab : 'scores';
     Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', String(b.dataset.tab === current)); });
@@ -350,6 +419,7 @@
   Array.prototype.forEach.call($('tabs').children, function (b) { b.addEventListener('click', function () { show(b.dataset.tab); }); });
   $('reg').addEventListener('change', renderRuns);
   $('order').addEventListener('change', renderRuns);
+  $('pdays').addEventListener('change', renderPortal);
   $('search').addEventListener('submit', function (e) { e.preventDefault(); renderUsers(); });
   $('login').addEventListener('click', function () {
     fail('');
