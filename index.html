@@ -20,6 +20,8 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- 背景をゆっくり流れるヒーロー（飾り。動きを減らす設定では止める） -->
+<div class="drift" id="drift" aria-hidden="true"></div>
 <div class="app">
   <header class="top">
     <div class="brand">
@@ -47,7 +49,31 @@
     <span class="ticker__win"><span class="ticker__track" id="ticker-track"></span></span>
   </a>
 
-  <main class="grid" id="grid" aria-label="ゲーム一覧"></main>
+  <main class="home" id="home">
+    <!-- 戻ってきた人：最近遊んだゲームと、次の節目（そこで戻ってくるヒーロー）。トロフィーが 1 つもなければ出さない -->
+    <section class="cont" id="cont" hidden aria-labelledby="cont-title">
+      <h2 class="sec-title" id="cont-title">つづきから</h2>
+      <div class="cont-list" id="cont-list"></div>
+    </section>
+
+    <!-- はじめての人へのおすすめ 3 本。短い時間で最初の手ごたえが来るもの（js/games.js の FEATURED） -->
+    <section class="feat" id="feat" aria-roledescription="カルーセル" aria-labelledby="feat-title">
+      <div class="sec-head">
+        <h2 class="sec-title" id="feat-title">はじめての人に</h2>
+        <p class="sec-sub">すぐに最初の手ごたえが来る 3 本</p>
+      </div>
+      <div class="feat-track" id="feat-track"></div>
+      <div class="feat-dots" id="feat-dots" role="group" aria-label="おすすめを切り替える"></div>
+    </section>
+
+    <section class="all" aria-labelledby="all-title">
+      <div class="sec-head">
+        <h2 class="sec-title" id="all-title">すべてのゲーム</h2>
+        <div class="moods" id="moods" role="group" aria-label="遊び方で絞る"></div>
+      </div>
+      <div class="grid" id="grid" aria-label="ゲーム一覧"></div>
+    </section>
+  </main>
 
   <footer class="foot">
     キャラクター画像・BGM/SE は My Crypto Heroes（MCH Co., Ltd.）に帰属し、許諾のもとで利用しています。各作品は非公式のファン制作です。
