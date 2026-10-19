@@ -32,7 +32,7 @@
 | 017 | `factory.rank5` | Rare | 斎藤一 | 無敵の剣 | ヒーローをランク 5 まで育てる |
 | 018 | `factory.masterpiece` | Rare | モネ | 睡蓮 | 品評会で傑作（45 点以上）を出す |
 | 019 | `factory.clear` | Epic | トーマス・エジソン | エジソン・エフェクト | 期限（8 年）内に工房 Lv.5 になる |
-| 020 | `factory.legendary` | Epic | ニコラ・テスラ | テスラコイル | Legendary のエクステンションをクラフトする（打ち直しで Legendary にしたものも含む） |
+| 020 | `factory.legendary` | Epic | フランシス・ドレーク | 女王直属海賊 | Legendary のエクステンションをクラフトする（打ち直しで Legendary にしたものも含む） |
 | 021 | `factory.clear3y` | Epic | カエサル | 来た、見た、勝った | 3 年（144 週）以内に工房 Lv.5 になる |
 | 022 | `factory.y50` | Legendary | 武則天 | 聖神皇帝 | 工房を 50 年続ける |
 
@@ -41,15 +41,15 @@
 | No. | ID | レアリティ | 絵 | 名前 | 条件 |
 |---|---|---|---|---|---|
 | 023 | `survivor.stage1` | Common | シートン | 狼王ロボ | 最初のステージをクリアする（ボス撃破か 5 分耐久） |
-| 024 | `survivor.awaken` | Uncommon | ジェロニモ | 荒野の復讐者 | スキルツリーの「サバイバーの覚醒」を解放する |
+| 024 | `survivor.awaken` | Uncommon | 霧隠才蔵 | 忍術・毒霧 | スキルツリーの「サバイバーの覚醒」を解放する |
 | 025 | `survivor.stage2` | Uncommon | アナスタシア | 幻の生存者 | ステージ 2 をクリアする |
-| 026 | `survivor.tree5` | Uncommon | カフカ | 変身 | スキルツリーの節を 5 つ取る |
+| 026 | `survivor.tree5` | Uncommon | ジャックザリッパー | ランゲルライン | スキルツリーの節を 5 つ取る |
 | 027 | `survivor.stage3` | Rare | ワイアット・アープ | 不屈のガンマン | ステージ 3 にたどり着く |
 | 028 | `survivor.fao` | Rare | ギルガメッシュ | フンババとの戦い | 覚醒魔王ファオを倒す |
 | 029 | `survivor.capstone` | Rare | 太公望 | 六韜 | スキルツリーの奥義をひとつ解放する |
-| 030 | `survivor.clear` | Epic | ラスプーチン | ロシアの怪僧 | 全 3 ステージをクリアする |
+| 030 | `survivor.clear` | Epic | ニコラ・テスラ | テスラコイル | 全 3 ステージをクリアする |
 | 031 | `survivor.allboss` | Epic | 呂布 | 人中に呂布あり | 3 体のボスをすべて倒して全ステージをクリアする |
-| 032 | `survivor.rta` | Epic | ビリー・ザ・キッド | ワンホールショット | RTA で全ステージを完走する |
+| 032 | `survivor.rta` | Epic | ラスプーチン | ロシアの怪僧 | RTA で全ステージを完走する |
 | 033 | `survivor.absolute` | Legendary | チンギス・ハン | 蒼狼 | ABSOLUTE の 4 軸すべて ×2.0 以上で全ステージをクリアする |
 
 ### MyCryptoEducation
@@ -81,7 +81,7 @@
 | 051 | `workshop.legendary` | Rare | ルーベンス | 黄金の工房 | 「MCH製法」を習得して Legendary をクラフトできるようにする |
 | 052 | `workshop.clear` | Epic | ゴッホ | ひまわり | 黄金のエクステンションを作る |
 | 053 | `workshop.relocate` | Epic | マルコ・ポーロ | 東方見聞録 | ランド移転して 2 周目を始める |
-| 054 | `workshop.loop3` | Epic | フランシス・ドレーク | 女王直属海賊 | 3 周目を始める |
+| 054 | `workshop.loop3` | Epic | キュリー夫人 | プチ・キュリー | 3 周目を始める |
 | 055 | `workshop.versepass` | Legendary | レオナルド・ダ・ビンチ | モナリザ | 「MCH Verse Pass」を習得する |
 
 ### MyCryptoFortress
