@@ -89,7 +89,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .bar i { display: block; height: 100%; border-radius: inherit; background: var(--c); }
 .cont-next { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px;
   background: radial-gradient(circle, color-mix(in srgb, var(--c) 35%, transparent), transparent 70%); animation: glow 2.2s ease-in-out infinite; }
-.cont-next img { width: 36px; height: 36px; image-rendering: pixelated; filter: brightness(.25) drop-shadow(0 0 0 var(--c)); }   /* まだ戻っていない仲間は影で見せる */
+.cont-next img { width: 36px; height: 36px; image-rendering: pixelated; filter: brightness(0) drop-shadow(0 0 1.5px var(--c)) drop-shadow(0 0 1.5px var(--c)); }   /* まだ戻っていない仲間は影（輪郭だけ光る）で見せる */
 .cont-go { flex: none; font-size: 12px; font-weight: 900; color: var(--c); }
 @keyframes glow { 50% { transform: scale(1.08); } }
 
@@ -112,7 +112,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .slide-hook { margin: 2px 0 0; font-size: 14px; line-height: 1.6; font-weight: 700; }
 .slide-reward { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: #e9e3ff; }
 .slide-reward[hidden] { display: none; }
-.slide-reward img { width: 32px; height: 32px; image-rendering: pixelated; flex: none; filter: brightness(.25); }   /* まだ仲間になっていない：影 */
+.slide-reward img { width: 36px; height: 36px; image-rendering: pixelated; flex: none; filter: brightness(0) drop-shadow(0 0 1.5px #fde68a) drop-shadow(0 0 1.5px #fde68a); }   /* まだ仲間になっていない：影（輪郭だけ光る） */
 .slide-reward b { color: #fde68a; }
 .slide-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .slide-acts .btn { height: 42px; }
@@ -131,8 +131,10 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   transform: rotate(3deg); }
 .phone img, .peek img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; opacity: 0;
   animation: flip calc(var(--n, 3) * 2.2s) infinite; animation-delay: calc(var(--k) * 2.2s); }
-.phone img:first-child { opacity: 1; }
-@keyframes flip { 0% { opacity: 0; transform: scale(1.04); } 4%, 30% { opacity: 1; transform: none; } 36%, 100% { opacity: 0; } }
+/* 1 枚目は下に置きっぱなしにして、その上で順に重ねる（切り替わりの瞬間に黒く抜けないように） */
+.phone img.base, .peek img.base { animation: none; opacity: 1; transform: none; }
+.peek img.base { transform: translateX(-50%); }
+@keyframes flip { 0% { opacity: 0; transform: scale(1.04); } 5%, 33% { opacity: 1; transform: none; } 38%, 100% { opacity: 0; } }
 
 .feat-dots { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
 .dot { width: 28px; height: 6px; padding: 0; border: 0; border-radius: 99px; background: var(--panel-2); cursor: pointer; }
@@ -178,7 +180,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .peek-bg { position: absolute; inset: -10px; background: center / cover no-repeat; filter: blur(10px) brightness(.4); }
 .peek img { left: 50%; width: auto; height: 100%; aspect-ratio: 9 / 16; transform: translateX(-50%); border-inline: 2px solid rgba(255, 255, 255, .12);
   animation-name: flip-c; }
-@keyframes flip-c { 0% { opacity: 0; } 4%, 30% { opacity: 1; } 36%, 100% { opacity: 0; } }
+@keyframes flip-c { 0% { opacity: 0; } 5%, 33% { opacity: 1; } 38%, 100% { opacity: 0; } }
 .card.peeking .peek { opacity: 1; }
 .card .meta { display: flex; align-items: center; gap: 6px; padding: 7px 8px 2px; }
 .card .no { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;

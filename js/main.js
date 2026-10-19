@@ -58,7 +58,7 @@ function peek(card, on) {
   if (on && !box.childElementCount) {
     const g = ALL.find((x) => x.id === card.dataset.id);
     // 背景はサムネイルをぼかしたもの。url() は CSS の変数に入れず、要素の style に直接書く（変数に入れると css/ からの相対パスになる）
-    box.innerHTML = `<i class="peek-bg" style="background-image:url(${thumb(g)})"></i>` +
+    box.innerHTML = `<i class="peek-bg" style="background-image:url(${thumb(g)})"></i><img class="base" src="${shot(g, 1)}" alt="" decoding="async">` +
       Array.from({ length: g.shots }, (_, i) => `<img src="${shot(g, i + 1)}" alt="" decoding="async" style="--k:${i}">`).join('');
     box.style.setProperty('--n', g.shots);
   }
@@ -113,6 +113,7 @@ track.innerHTML = feats.map(({ g, hook }, i) => `
       </div>
     </div>
     <div class="phone" aria-hidden="true" style="--n:${g.shots}">
+      <img class="base" src="${shot(g, 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async">
       ${Array.from({ length: g.shots }, (_, k) => `<img src="${shot(g, k + 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async" style="--k:${k}">`).join('')}
     </div>
   </article>`).join('');
