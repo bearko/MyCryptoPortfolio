@@ -37,6 +37,10 @@ function apiFor(env) {
       presenceLimit: env.PRESENCE_LIMIT
         ? async (req) => (await env.PRESENCE_LIMIT.limit({ key: req.headers.get('cf-connecting-ip') || 'unknown' })).success
         : null,
+      // ポータルの計測（SPEC-009）。IP ごとの回数の上限（1 分 60 回）。IP は判定に使うだけで残さない
+      portalLimit: env.PORTAL_LIMIT
+        ? async (req) => (await env.PORTAL_LIMIT.limit({ key: req.headers.get('cf-connecting-ip') || 'unknown' })).success
+        : null,
     });
   }
   return api;

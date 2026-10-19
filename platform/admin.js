@@ -11,6 +11,7 @@
 //   POST /api/admin/unban           { userId } 解除する
 //   GET  /api/admin/chat            全体チャットの直近 200 件（SPEC-004）
 //   POST /api/admin/chat/delete     { id } 発言を消す
+//   GET  /api/admin/portal?days=14  ポータルの計測（SPEC-009）。日ごと・できごとごとの回数
 //
 // 締め出しの効き目（ランキングから隠す・記録を受け付けない）は api.js の側にある。
 
@@ -188,6 +189,14 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
     if (method === 'GET' && path === '/api/admin/rta') return rta(req, url);
     if (method === 'GET' && path === '/api/admin/users') return users(req, url);
     if (method === 'GET' && path === '/api/admin/bans') return bans(req);
+
+    // ポータルの計測（SPEC-009）。行をそのまま返し、まとめ方は画面で決める（1 日 100 行もない）
+    if (method === 'GET' && path === '/api/admin/portal') {
+      const days = Math.min(400, Math.max(1, Math.floor(Number(url.searchParams.get('days')) || 14)));
+      const since = new Date(now() + 9 * 3600e3 - (days - 1) * 86400e3).toISOString().slice(0, 10);
+      const { results } = await db.prepare('SELECT day, event, game, source, n FROM portal_counts WHERE day >= ?1 ORDER BY day DESC').bind(since).all();
+      return reply(req, 200, { days, since, rows: results });
+    }
 
     // 全体チャット（SPEC-004 7 章）：直近の発言と、発言ごとの削除。締め出しは下の /api/admin/ban が部屋にも伝える
     if (method === 'GET' && path === '/api/admin/chat') {

@@ -19,6 +19,7 @@
 //   POST   /api/rta/checkpoint { runId, checkpoint, igtMs, idleMs } → { splitMs, finished, timeMs, reference, best, rank }
 //   POST   /api/rta/ping       { runId, idleMs } 「操作あり」
 //   POST   /api/presence       { game, page } 同時接続数の「操作あり」（SPEC-007）→ 204
+//   POST   /api/portal/event   { e, g, s } ポータルの計測（SPEC-009。日ごとの回数だけ）→ 204
 //   POST   /api/rta/abort      { runId } 中断
 //   GET    /api/rta/ranking?regulation=  ランキング（ログインした人の、参考記録でない自己ベスト。横断 RTA も）
 //   POST   /api/rta/cross/start { regulation } 横断 RTA の挑戦を始める（ポータルから。6.14）→ { attempt }
@@ -47,6 +48,7 @@ import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophie
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
+import { portalEvent, jstDay, PORTAL_KEEP_DAYS } from './portal-stats.js';
 import { cleanGame, cleanAvatar } from './chat.js';
 
 export const LOGIN_TTL = 180 * 86400e3;
@@ -106,7 +108,7 @@ function parseCookies(header) {
 }
 
 // cookieDomain：古い Cookie（Domain=.bearko.games）を消すときだけ使う。guestLimit(req)：仮アカウントを作ってよいか（回数の上限）
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, presence = null, presenceLimit = null, log }) {
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, presence = null, presenceLimit = null, portalLimit = null, log }) {
   const allowed = (origin) => !!origin && (API_ORIGINS.has(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
@@ -648,6 +650,20 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       return reply(req, 204, null, [cookie(PRESENCE_COOKIE, k, PRESENCE_TTL_MS)]);
     }
 
+    // ---- ポータルの計測（SPEC-009）。トップからだけ受け、日ごとの回数を 1 足すだけ。だれかを見分ける値は持たない
+    if (method === 'POST' && path === '/api/portal/event') {
+      const origin = req.headers.get('origin');
+      if (!PORTAL_ORIGINS.includes(origin) && !extraOrigins.includes(origin)) return reply(req, 403, { error: 'origin' });
+      const ev = portalEvent(body);
+      if (!ev) return reply(req, 400, { error: 'event' });
+      if (portalLimit && !(await portalLimit(req))) return reply(req, 429, { error: 'rate' });
+      await db
+        .prepare('INSERT INTO portal_counts (day, event, game, source, n) VALUES (?1, ?2, ?3, ?4, 1) ON CONFLICT (day, event, game, source) DO UPDATE SET n = n + 1')
+        .bind(jstDay(now()), ev.event, ev.game, ev.source)
+        .run();
+      return reply(req, 204);
+    }
+
     // ---- 全体チャット（SPEC-004）。本人の確認はここで済ませ、部屋には { uid, name, game, banned } を渡す
     if (path === '/api/chat/ws' || path === '/api/chat/messages' || path === '/api/chat/stats' || path === '/api/me/chat' || path.startsWith('/api/chat/messages/')) {
       if (!chatRoom) return reply(req, 503, { error: 'chat' });
@@ -1094,6 +1110,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       db.prepare(`DELETE FROM rta_cross_segments WHERE cross_id IN (${staleCross})`).bind(now() - RTA_STALE),
       db.prepare(`DELETE FROM rta_cross WHERE id IN (${staleCross})`).bind(now() - RTA_STALE),
     ]);
+    // ポータルの計測（SPEC-009）：400 日より古い日の行
+    await db.prepare('DELETE FROM portal_counts WHERE day < ?1').bind(jstDay(now() - PORTAL_KEEP_DAYS * DAY)).run();
     // 自己ベストのもとになっていない、90 日より古い生の成績
     await db.prepare('DELETE FROM plays WHERE created_at < ?1 AND id NOT IN (SELECT play_id FROM title_scores)').bind(now() - PLAY_TTL).run();
     const recomputed = await recompute();
