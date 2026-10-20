@@ -35,6 +35,7 @@ css/style.css
 js/games.js         作品の台帳
 js/main.js          一覧と詳細シートの描画
 achievements/       アチーブメント（ヒーロー名鑑・エクステンション。SPEC-008。js/achievements.js・css/achievements.css）
+js/bgm.js           トップの BGM（MCH の craft.mp3。最初の操作で鳴らし始め、♪ で止める）
 js/guide.js         マインの案内（初めて来たとき・ヒーローを呼び戻して戻ってきたとき。SPEC-008 4 章。見た目は css/mine.css）
 assets/thumbs/      サムネイル 1200×630（WebP）
 assets/shots/       スクリーンショット 540×960（9:16・WebP）
