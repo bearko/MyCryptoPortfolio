@@ -349,3 +349,16 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .lightbox[hidden] { display: none; }
 .lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; }
 
+
+/* ───────── BGM（js/bgm.js） ───────── */
+.bgm { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 16px; line-height: 1; cursor: pointer; flex: none; }
+.bgm:hover { border-color: var(--accent); }
+.bgm.off { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+
+/* ───────── PC：右側のチャットのドック（SDK。幅 320px）のぶん、一覧を左に詰める（SPEC-005 5.5） ───────── */
+body.chat-docked { padding-right: 320px; }
+@media (max-width: 400px) { .bgm { width: 30px; height: 30px; font-size: 14px; } }
+@media (max-width: 380px) {   /* ♪ を足したぶん、もう一段詰める */
+  .top-links { gap: 4px; }
+  .me-link { padding: 4px 7px; font-size: .74rem; }
+}
