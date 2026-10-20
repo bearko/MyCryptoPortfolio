@@ -45,6 +45,10 @@ button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-
 .hall {
   max-width: 980px;
   margin: 0 auto;
+  /* 解放の光（.niche.unsealing::before は額縁の 240%）が画面の外へはみ出すと、スマホのブラウザがページ全体を縮めて右に余白ができる。
+     横にはみ出したぶんは切る（clip はスクロールの箱を作らない。古いブラウザは hidden） */
+  overflow-x: hidden;
+  overflow-x: clip;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
