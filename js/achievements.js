@@ -8,6 +8,9 @@
   var data = { defs: [], owned: {}, games: {}, urls: {}, account: null };
   var view = { kind: 'hero', game: '', chapter: 1 };
   var fresh = {};   // 前に開いたときから増えたもの（額縁へ飾る演出。SPEC-008 6 章）
+  var sealed = {};  // 解放の演出を待っているヒーロー（6.4）。演出までは影絵のまま
+  var helloId = new URLSearchParams(location.search).get('hello');
+  var preview = false;   // マインの案内から未ログインで来た：この端末の分を先に見せる（3.4）
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -32,6 +35,9 @@
   // その章の真のゲームクリア（最後の 1 枚）。一度得たら、章が増えても記録として残る（SPEC-008 2.4・5.2）
   function trueClearOf(chapter) { return data.defs.filter(function (d) { return d.trueClear && (d.chapter || 1) === chapter; })[0]; }
   function countOwned(list) { return list.filter(function (d) { return data.owned[d.id]; }).length; }
+  function defOf(id) { return data.defs.filter(function (d) { return d.id === id; })[0]; }
+  function ownsHero() { return Object.keys(data.owned).some(function (id) { var d = defOf(id); return d && d.kind === 'hero'; }); }
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------------------------------------------------------------- 読み込み
   function load() {
@@ -122,7 +128,9 @@
 
   function niche(d, i) {
     var got = !!data.owned[d.id];
-    var b = el('button', 'niche r-' + d.rarity + (got ? ' got' : ' locked') + (fresh[d.id] ? ' placed' : ''));
+    var seal = got && sealed[d.id];
+    // ヒーローは解放の演出（6.4）で見せるので、上から収まる動き（6.2）はエクステンションだけ
+    var b = el('button', 'niche r-' + d.rarity + (got ? ' got' : ' locked') + (seal ? ' sealed' : '') + (fresh[d.id] && d.kind !== 'hero' ? ' placed' : ''));
     b.type = 'button';
     b.dataset.id = d.id;
     b.style.setProperty('--i', String(i));
@@ -134,7 +142,7 @@
     if (d.no) frame.appendChild(el('span', 'no', numLabel(d.no)));   // 名鑑の番号
     var plaque = el('span', 'plaque');
     plaque.appendChild(el('span', 'rlabel', d.rarity.toUpperCase()));
-    plaque.appendChild(el('b', null, got ? d.avatarName : '？？？'));
+    plaque.appendChild(el('b', null, got && !seal ? d.avatarName : '？？？'));
     plaque.appendChild(el('small', null, shortName(d.game)));
     if (fresh[d.id]) frame.appendChild(el('span', 'new', 'NEW'));
     b.appendChild(frame);
@@ -167,7 +175,8 @@
 
   // 図鑑は Google ログインが要る（SPEC-008 3.4）。未ログインでも記録は仮アカウントに貯まっている
   function renderGate() {
-    var locked = data.account !== 'login';
+    var locked = data.account !== 'login' && !preview;
+    $('preview').hidden = !preview;
     $('gate').hidden = !locked;
     $('tabs').hidden = locked;
     $('panel').hidden = locked;
@@ -196,17 +205,35 @@
   }
 
   // ---------------------------------------------------------------- 前に開いたときから増えたもの（SPEC-008 6.2）
-  // この端末で最後に見た獲得の一覧を、アカウントごとに localStorage に置く。初めて開いたときは何も「新しい」にしない
-  function seenKey() { var u = window.BearkoGames && window.BearkoGames.getUser(); return u ? 'bg.ach.seen.' + u.id : null; }
+  // この端末で最後に見た獲得の一覧を、アカウントごとに localStorage に置く（未ログインの先見せは bg.ach.seen.guest）。
+  // 初めて開いたときは、持っているヒーローを解放の演出で見せる（6.4）。エクステンションは「新しい」にしない
+  var GUEST_SEEN = 'bg.ach.seen.guest';
+  function seenKey() {
+    if (data.account !== 'login') return GUEST_SEEN;
+    var u = window.BearkoGames && window.BearkoGames.getUser();
+    return u ? 'bg.ach.seen.' + u.id : null;
+  }
+  function readSeen(key) {
+    try { var v = JSON.parse(localStorage.getItem(key) || 'null'); return Array.isArray(v) ? v : null; } catch (e) { return null; }
+  }
   var notedKey = null;   // 1 回の表示で 1 度だけ比べる（ログインの確認で描き直しても、増えた印を消さない）
+  var firstOpen = false;
   function noteFresh() {
     var key = seenKey();
     if (!key || key === notedKey) return;
     notedKey = key;
     fresh = {};
-    var ids = Object.keys(data.owned), seen = null;
-    try { seen = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { seen = null; }
-    if (Array.isArray(seen)) ids.forEach(function (id) { if (seen.indexOf(id) < 0) fresh[id] = true; });
+    sealed = {};
+    var ids = Object.keys(data.owned);
+    // ログインして初めて開いたときは、未ログインの先見せで見た分を「前に見た」にする（同じ演出を 2 度見せない）
+    var seen = readSeen(key) || (key !== GUEST_SEEN ? readSeen(GUEST_SEEN) : null);
+    firstOpen = !seen;
+    ids.forEach(function (id) {
+      var d = defOf(id);
+      if (!d || (seen ? seen.indexOf(id) >= 0 : d.kind !== 'hero')) return;
+      fresh[id] = true;
+      if (d.kind === 'hero') sealed[id] = true;
+    });
     try { localStorage.setItem(key, JSON.stringify(ids)); } catch (e) { /* 次も同じものが「新しい」に出るだけ */ }
   }
   function renderNews() {
@@ -217,7 +244,7 @@
       if (d) { if (d.kind === 'hero') h++; else x++; }
     });
     n.hidden = !(h || x);
-    n.textContent = '前に見たときから、' + [h ? 'ヒーロー ' + h + ' 人' : '', x ? 'エクステンション ' + x + ' 個' : ''].filter(Boolean).join('・') + ' が飾られました';
+    n.textContent = (firstOpen ? '' : '前に見たときから、') + [h ? 'ヒーロー ' + h + ' 人' : '', x ? 'エクステンション ' + x + ' 個' : ''].filter(Boolean).join('・') + ' が飾られました';
   }
 
   // ---------------------------------------------------------------- 詳細
@@ -278,24 +305,167 @@
 
   // SDK はチャット・アイコン図鑑のため（読めなくても一覧は出す）。棚が横に広いので、PC でも右のドックではなく 💬 の窓
   var ready = window.BearkoGames ? window.BearkoGames.init({ game: 'portal', apiBase: location.origin, chat: { layout: 'float' } }).catch(function () {}) : Promise.resolve();
-  // マインの案内から来たとき（?hello=<ID>）：呼び戻したヒーローの額縁を光らせる（SPEC-008 4.3）
-  var hello = new URLSearchParams(location.search).get('hello');
+  // マインの案内から来たとき（?hello=<ID>）：解放の演出がなければ、呼び戻したヒーローの額縁を光らせる（SPEC-008 4.3）
+  var hello = helloId;
   function greet() {
-    if (!hello || data.account !== 'login') return;
+    if (!hello || $('panel').hidden) return;
     var card = document.querySelector('.niche[data-id="' + hello.replace(/[^a-z0-9._]/gi, '') + '"]');
     if (!card) return;
     card.classList.add('hello');
-    card.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    card.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
     hello = null;
   }
 
+  // ---------------------------------------------------------------- 解放の演出（SPEC-008 6.4）
+  // 増えたヒーローの額縁まで 1 人ずつ送り、影絵から姿が戻る。押しているあいだは 3 倍速、スキップで残りをまとめて出す
+  var rate = 1, skipped = false;
+  // 解放の動き（unseal-*）だけ。Legendary の光（無限にくり返す）には触らない
+  function unsealAnims() {
+    var list = [];
+    document.querySelectorAll('#shelves .niche.unsealing').forEach(function (b) {
+      (b.getAnimations ? b.getAnimations({ subtree: true }) : []).forEach(function (a) { if (/^unseal/.test(a.animationName || '')) list.push(a); });
+    });
+    return list;
+  }
+  function setRate(r) {
+    rate = r;
+    unsealAnims().forEach(function (a) { a.playbackRate = r; });
+  }
+  // dur ミリ秒（rate 倍で進む）かけて step(0→1) を呼ぶ。スキップしたらすぐ終わる
+  function tween(dur, step) {
+    return new Promise(function (res) {
+      var p = 0, last = performance.now();
+      function f(now) {
+        p += (now - last) * rate / dur;
+        last = now;
+        if (skipped || p >= 1) { step(1); res(); return; }
+        step(p);
+        requestAnimationFrame(f);
+      }
+      requestAnimationFrame(f);
+    });
+  }
+  function wait(ms) { return tween(ms, function () {}); }
+  function glideTo(b) {
+    var r = b.getBoundingClientRect();
+    var max = document.documentElement.scrollHeight - innerHeight;
+    var from = scrollY, to = Math.max(0, Math.min(max, scrollY + r.top + r.height / 2 - innerHeight / 2)), dist = to - from;
+    if (Math.abs(dist) < 4) return Promise.resolve();
+    return tween(Math.min(900, 280 + Math.abs(dist) * 0.5), function (p) { window.scrollTo(0, from + dist * (1 - Math.pow(1 - p, 3))); });
+  }
+  function nicheOf(id) { return document.querySelector('#shelves .niche[data-id="' + id + '"]'); }
+  function unseal(b, d, animate) {
+    delete sealed[d.id];
+    b.classList.remove('sealed');
+    b.querySelector('.plaque b').textContent = d.avatarName;
+    if (!animate) return;
+    b.classList.add('unsealing');
+    setRate(rate);
+  }
+  function caption(d) {
+    var cap = $('reveal-cap');
+    cap.textContent = '';
+    cap.appendChild(el('b', null, '「' + d.avatarName + '」が戻ってきた！'));
+    cap.appendChild(el('small', null, gameName(d.game) + ' — 「' + d.name + '」'));
+    cap.classList.remove('on');
+    void cap.offsetWidth;   // 同じ文の出し直しでも動かす
+    cap.classList.add('on');
+  }
+  var revealing = false;
+  // 見せた人数を返す
+  function reveal() {
+    var ids = view.kind === 'hero' ? Array.prototype.map.call(document.querySelectorAll('#shelves .niche.sealed'), function (b) { return b.dataset.id; }) : [];
+    if (!ids.length || reduced) {
+      ids.forEach(function (id) { var b = nicheOf(id); if (b) unseal(b, defOf(id), false); });
+      sealed = {};
+      return Promise.resolve(ids.length);
+    }
+    revealing = true;
+    skipped = false;
+    setRate(1);
+    $('veil').hidden = false;
+    var chain = wait(450).then(function () {
+      // 棚が下から順に現れる動き（rise）は、下のほうほど遅れて始まる。送った先がまだ空にならないように、先に済ませる
+      document.querySelectorAll('#shelves .niche').forEach(function (b) {
+        (b.getAnimations ? b.getAnimations() : []).forEach(function (a) { if (a.animationName === 'rise') a.finish(); });
+      });
+    });
+    ids.forEach(function (id) {
+      chain = chain.then(function () {
+        var b = nicheOf(id), d = defOf(id);
+        if (skipped || !b || !d || !sealed[id]) return;
+        return glideTo(b).then(function () { return wait(220); }).then(function () {
+          b = nicheOf(id) || b;   // 途中で描き直されていたら、新しいほう
+          unseal(b, d, true);
+          caption(d);
+          return wait(1500);
+        });
+      });
+    });
+    return chain.then(function () {
+      // スキップしたら、残りはまとめて姿を戻す（動きなし）
+      Object.keys(sealed).forEach(function (id) { var b = nicheOf(id); if (b) unseal(b, defOf(id), false); });
+      sealed = {};
+      if (skipped) unsealAnims().forEach(function (a) { a.finish(); });
+      $('veil').hidden = true;
+      $('reveal-cap').classList.remove('on');
+      revealing = false;
+      setRate(1);
+      return ids.length;
+    });
+  }
+  (function () {
+    var veil = $('veil'), timer = null;
+    function release() { clearTimeout(timer); timer = null; if (rate !== 1) setRate(1); }
+    veil.addEventListener('pointerdown', function (e) {
+      if (e.target.closest('.reveal-skip')) return;
+      clearTimeout(timer);
+      timer = setTimeout(function () { setRate(3); }, 180);   // 長押し（触れただけでは速めない）
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) { veil.addEventListener(t, release); });
+    veil.addEventListener('contextmenu', function (e) { e.preventDefault(); });   // スマホの長押しメニューを出さない
+    $('reveal-skip').addEventListener('click', function () { skipped = true; });
+    document.addEventListener('keydown', function (e) {
+      if (!revealing) return;
+      if (e.key === 'Escape') skipped = true;
+      if (e.key === ' ' && !e.repeat) { e.preventDefault(); setRate(3); }
+    });
+    document.addEventListener('keyup', function (e) { if (revealing && e.key === ' ') setRate(1); });
+  })();
+
+  // ---------------------------------------------------------------- 4.3 マインの話（解放の演出のあと。まだ聞いていなければ）
+  function toast(text) {
+    var t = $('toast');
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(function () { t.hidden = true; }, 5000);
+  }
+  function mineStory() {
+    if (!window.BgMine || !window.BgMine.pending() || !ownsHero() || $('panel').hidden) return Promise.resolve();
+    var gift = defOf('cross.welcome');
+    return window.BgMine.story().then(function (heard) {
+      if (!heard) return;
+      return load().then(function () {
+        renderTabs();
+        if (gift && data.owned[gift.id]) toast('お礼のエクステンション「' + gift.avatarName + '」が、エクステンションの棚に飾られました');
+      });
+    });
+  }
+
+  var busy = false;   // 演出・案内の最中に描き直したときは、続きは走っているほうに任せる
   function show() {
     return load().then(function () {
       $('loading').hidden = true;
-      if (data.account === 'login') noteFresh();
+      preview = data.account !== 'login' && !!helloId && ownsHero();
+      if (data.account === 'login' || preview) noteFresh();
       render();
-      greet();
-      celebrate();
+      if (busy) return;
+      busy = true;
+      return reveal()
+        .then(function (n) { if (!n) greet(); return mineStory(); })
+        .then(celebrate)
+        .then(function () { busy = false; }, function () { busy = false; });
     });
   }
   // ---------------------------------------------------------------- 真のゲームクリアの演出（SPEC-008 6.1）。章ごとに 1 回（この端末）
@@ -432,10 +602,12 @@
   $('share').addEventListener('click', function (e) { if (e.target === e.currentTarget) e.currentTarget.close(); });
   $('share-btn').addEventListener('click', openShare);
 
-  $('gate-login').addEventListener('click', function () {
+  function login() {
     if (!window.BearkoGames) return;
     window.BearkoGames.login().then(function (r) { if (r && r.ok) show(); });
-  });
+  }
+  $('gate-login').addEventListener('click', login);
+  $('preview-login').addEventListener('click', login);
   if (window.BearkoGames) window.BearkoGames.onChange(function () { show(); });
   ready.then(show).catch(function () {
     $('loading').hidden = true;

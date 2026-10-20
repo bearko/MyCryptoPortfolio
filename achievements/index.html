@@ -18,6 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@500;700;900&family=Shippori+Mincho+B1:wght@700;800&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/mine.css">
 <link rel="stylesheet" href="../css/achievements.css">
 </head>
 <body>
@@ -49,6 +50,12 @@
   </div>
 
   <section class="panel" id="panel" role="tabpanel" aria-labelledby="tab-hero">
+    <!-- SPEC-008 3.4：マインの案内から未ログインで来たときだけ、この端末の分を先に見せる -->
+    <div class="preview" id="preview" hidden>
+      <p>この名鑑は、まだこの端末だけのものです。ログインするとアカウントに保存されます。</p>
+      <button class="gate-btn" id="preview-login" type="button">Google でログイン</button>
+    </div>
+
     <div class="complete" id="complete" hidden>
       <p class="complete-k">COMPLETE</p>
       <p class="complete-n" id="complete-n">ヒーロー名鑑 完成 — 真のゲームクリア</p>
@@ -93,8 +100,22 @@
 </dialog>
 
 <p class="error" id="error" hidden></p>
+<p class="toast" id="toast" role="status" hidden></p>
+
+<!-- SPEC-008 6.4：解放の演出。押しているあいだは早送り、スキップもできる -->
+<div class="reveal-veil" id="veil" hidden>
+  <div class="reveal-cap" id="reveal-cap" aria-live="polite"></div>
+  <div class="reveal-ctl">
+    <span class="reveal-hint">長押しで早送り</span>
+    <button class="reveal-skip" id="reveal-skip" type="button">スキップ ▶▶</button>
+  </div>
+</div>
+
+<!-- SPEC-008 4.3：マインの案内（解放の演出のあと） -->
+<dialog class="mine" id="mine" aria-label="マインの案内"></dialog>
 
 <script src="../sdk/v1.js"></script>
+<script src="../js/guide.js"></script>
 <script src="../js/achievements.js"></script>
 </body>
 </html>

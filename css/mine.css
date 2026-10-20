@@ -1,0 +1,47 @@
+/* マインの案内（SPEC-008 4 章）。ポータルとアチーブメントの画面で使う（色は各ページの --panel・--panel-2・--line・--text・--muted） */
+.mine {
+  width: min(92vw, 460px); padding: 18px 16px 16px; border: 1px solid rgba(244, 114, 182, .55); border-radius: 18px;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(244, 114, 182, .16), transparent 60%), var(--panel); color: var(--text);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .65);
+}
+.mine[open] { animation: mine-in .28s cubic-bezier(.2, .8, .2, 1); }
+@keyframes mine-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+.mine::backdrop { background: rgba(4, 4, 10, .7); backdrop-filter: blur(3px); }
+.mine-in { display: flex; gap: 12px; align-items: flex-end; }
+.mine-fig { width: 96px; height: 128px; image-rendering: pixelated; flex: none; }
+.mine-talk { flex: 1; min-width: 0; position: relative; background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 18px; }
+.mine-talk::before { content: ""; position: absolute; left: -7px; bottom: 18px; width: 12px; height: 12px; background: var(--panel-2);
+  border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.mine-who { margin: 0 0 4px; font-size: 11px; font-weight: 700; color: #f9a8d4; letter-spacing: .06em; }
+.mine-line { margin: 0; font-size: 14px; line-height: 1.7; }
+.mine-line + .mine-line { margin-top: 6px; }
+.mine-picks { display: grid; gap: 8px; margin-top: 12px; }
+.mine-pick { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; text-decoration: none;
+  background: var(--panel-2); border: 1px solid var(--line); transition: border-color .15s, transform .15s; }
+.mine-pick:hover { border-color: #f9a8d4; }
+.mine-pick:active { transform: scale(.98); }
+.mine-pick img { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
+.mine-pick-tx { display: grid; flex: 1; min-width: 0; }
+.mine-pick-tx b { font-size: 15px; }
+.mine-pick-tx small { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+.mine-pick-go { flex: none; font-size: 12px; font-weight: 700; color: #f9a8d4; }
+.mine-hero { display: flex; justify-content: center; margin-top: 12px; }
+.mine-card { margin: 0; padding: 12px 18px 10px; border-radius: 48% 48% 12px 12px / 30% 30% 12px 12px; text-align: center;
+  border: 2px solid #e8c46a; background: radial-gradient(70% 60% at 50% 35%, rgba(232, 196, 106, .3), transparent 70%), #15131c;
+  box-shadow: 0 0 28px rgba(232, 196, 106, .35); animation: mine-glow 2.4s ease-in-out infinite; }
+.mine-card.ext { border-radius: 14px; border-color: #c77dff; box-shadow: 0 0 28px rgba(199, 125, 255, .35); }
+.mine-card img { width: 128px; height: 128px; image-rendering: pixelated; display: block; }
+.mine-card figcaption { font-weight: 900; font-size: 14px; margin-top: 4px; }
+@keyframes mine-glow { 50% { box-shadow: 0 0 40px rgba(232, 196, 106, .55); } }
+.mine-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.mine-btn { display: inline-block; border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 700; font-size: 14px; cursor: pointer; text-decoration: none;
+  background: #f9a8d4; color: #2a0f1d; touch-action: manipulation; transition: transform .12s; }
+.mine-btn.sub { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+.mine-btn:active { transform: scale(.96); }
+@media (max-height: 640px) {
+  .mine-fig { width: 72px; height: 96px; }   /* 背の低い画面（例外的に 0.75 倍。ドットは少し崩れるが、ボタンを画面に収める） */
+  .mine-card img { width: 96px; height: 96px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mine[open], .mine-card { animation: none; }
+}
