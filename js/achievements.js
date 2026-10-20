@@ -361,6 +361,12 @@
     if (!animate) return;
     b.classList.add('unsealing');
     setRate(rate);
+    // 光が消えたら外す（残すと、見えない光の箱が画面の外まで場所を取る）
+    b.addEventListener('animationend', function done(e) {
+      if (e.animationName !== 'unseal-rays') return;
+      b.removeEventListener('animationend', done);
+      b.classList.remove('unsealing');
+    });
   }
   function caption(d) {
     var cap = $('reveal-cap');
