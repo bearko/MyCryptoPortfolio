@@ -210,7 +210,7 @@ Promise.all([
     const src = next && avatarSrc(next.avatar);
     return `
       <a class="cont-card" href="${g.url}" target="_blank" rel="noopener" style="--c:${g.accent}" data-id="${g.id}">
-        <img class="cont-icon" src="${g.icon}" alt="">
+        <img class="cont-icon${g.iconBust ? ' bust' : ''}" src="${g.icon}" alt="">
         <span class="cont-tx">
           <b>${esc(short(g.title))}</b>
           <span class="bar" role="img" aria-label="トロフィー ${got} / ${goals.length}"><i style="width:${Math.round((got / Math.max(1, goals.length)) * 100)}%"></i></span>
@@ -250,7 +250,7 @@ function render(g) {
     </div>
 
     <div class="app-row">
-      <div class="app-icon"><img src="${g.icon}" alt=""></div>
+      <div class="app-icon"><img${g.iconBust ? ' class="bust"' : ''} src="${g.icon}" alt=""></div>
       <div>
         <h2 class="app-title" id="sheet-title">${circled(g.no)} ${esc(g.title)}</h2>
         <p class="app-genre">${esc(g.genre)}</p>

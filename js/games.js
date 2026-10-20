@@ -140,6 +140,7 @@ export const GAMES = [
     repo: 'https://github.com/bearko/10buy-year',
     accent: '#facc15',
     icon: MCH + 'Image/Characters/chris_04_guts_pose.png',
+    iconBust: true,   // 全身の立ち絵（72×140）。四角いアイコンでは上半身だけを切り出す（潰さない）
     lead: '借金150万円。押し入れの1冊から始める10年の転売キャリア。',
     body: '仮想通貨で溶かして借金を背負ったクリスが、週ごとに行動を選び、経験点で能力と転売屋スキルツリーを伸ばす育成シミュ。副業から専業・法人・事業家へとステージが上がるほど、見るべき経営指標も変わっていきます。',
     tags: ['育成シミュ', '転売', '経営指標', 'デイリーチャレンジ'],
