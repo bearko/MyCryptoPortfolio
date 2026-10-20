@@ -1,6 +1,7 @@
 // マインの案内（SPEC-008 4 章）。説明は段階に分け、遊ぶ前には「何を遊ぶか」だけを言う。
-//   4.1 初めて来たとき：すぐ遊べる 3 本を紹介
-//   4.3 ヒーローを 1 人でも呼び戻して戻ってきたとき：ヒーローの話 → 記念のエクステンション → アチーブメントの画面へ
+//   4.1 初めて来たとき：すぐ遊べる 3 本を紹介（ポータル）
+//   4.3 ヒーローを 1 人でも呼び戻して戻ってきたとき：ポータルで「おかえり」→ アチーブメントの画面へ。
+//       ヒーローの話は、名鑑が見えてから（解放の演出 6.4 のあと）。js/achievements.js が BgMine.story() を呼ぶ
 // どこまで聞いたかはこの端末の localStorage（bg.guide）。ログインしなくても最後まで聞ける
 (function () {
   'use strict';
@@ -70,61 +71,47 @@
     ]);
   }
 
-  // ---------------------------------------------------------------- 4.3 戻ってきたとき
-  function story(hero, gift) {
-    var beats = [
-      { pose: '08_sparkle', lines: ['あっ、おかえり！ 君のプレイ、見てたよ！ とっても情熱的だった！'] },
-      { pose: '09_cry', lines: ['ここにいるのは、MyCryptoHeroes で活躍していたヒーローたち。', '2026 年 9 月のサービス終了で、みんな散り散りになっちゃったの……'] },
-      { pose: '00_pointer_up', lines: ['でも研究して分かったの。ヒーローは「ゲームを遊ぶ情熱」に引き寄せられるって！', 'だから呼び戻すために、マイクリのゲームをたくさん作ったわ。'] },
-      { pose: '05_wink', lines: ['……ヒーローが多すぎて、1 本じゃ収まらなかったけど。'] },
-    ];
-    var i = 0;
-    function next() {
-      if (i < beats.length) {
-        var b = beats[i++];
-        scene(b.pose, b.lines, null, [{ label: '次へ', on: next }]);
-        return;
-      }
-      finale(hero, gift);
-    }
-    next();
-  }
-
-  function finale(hero, gift) {
-    var show = el('div', 'mine-hero');
-    var h = el('figure', 'mine-card');
-    var hi = el('img'); hi.alt = ''; hi.src = ASSET + 'Image/Heroes/' + hero.avatar.split(':')[1] + '.png';
-    h.appendChild(hi);
-    h.appendChild(el('figcaption', null, hero.avatarName));
-    show.appendChild(h);
-    scene('02_both_arms_up', ['ほら、君の情熱で「' + hero.avatarName + '」が戻ってきてる！', '一緒にヒーロー名鑑を 100 人ぶん埋めて、みんなを呼び戻して！ お願い！'], show, [
-      { label: '任せて！', on: function () { thanks(hero, gift); } },
-    ]);
-  }
-
-  function thanks(hero, gift) {
-    write('story');
-    // 聞いてくれた記念のエクステンション（cross.welcome）。未ログインなら仮アカウントに貯まる
-    fetch('/api/trophies/welcome', { method: 'POST', credentials: 'same-origin' }).catch(function () {});
-    var show = el('div', 'mine-hero');
-    if (gift) {
-      var g = el('figure', 'mine-card ext');
-      var gi = el('img'); gi.alt = ''; gi.src = ASSET + 'Image/Extensions/' + gift.avatar.split(':')[1] + '.png';
-      g.appendChild(gi);
-      g.appendChild(el('figcaption', null, gift.avatarName));
-      show.appendChild(g);
-    }
-    scene('06_smile', ['ありがとう！ これは聞いてくれたお礼よ。', '集めたヒーローとエクステンションは「アチーブメント」で見られるわ。'], show, [
+  // ---------------------------------------------------------------- 4.3 戻ってきたとき（ポータル）：アチーブメントの画面へ誘う
+  function welcomeBack(hero) {
+    scene('08_sparkle', ['あっ、おかえり！ 君のプレイ、見てたよ！ とっても情熱的だった！', '「アチーブメント」を開いてみて。見せたいものがあるの！'], null, [
       { label: 'アチーブメントを見る', href: 'achievements/?hello=' + encodeURIComponent(hero.id) },
       { label: 'あとで', sub: true, on: function () { dlg.close(); } },
     ]);
   }
 
+  // ---------------------------------------------------------------- 4.3 アチーブメントの画面：名鑑が見えてから 2 回だけ話す
+  // 聞き終えたら true（記念のエクステンションを渡した）。途中で閉じたら false（次に開いたとき、もう一度話す）
+  function story() {
+    return new Promise(function (done) {
+      var heard = false;
+      dlg.addEventListener('close', function () { done(heard); }, { once: true });
+      scene('09_cry', ['ここにいるのは、MyCryptoHeroes で活躍していたヒーローたち。', '2026 年 9 月のサービス終了で、みんな散り散りになっちゃったの……'], null, [
+        { label: '次へ', on: function () {
+          scene('02_both_arms_up', ['でもヒーローは、ゲームを遊ぶ情熱に引き寄せられて戻ってくるの。', '一緒にヒーロー名鑑を 100 人ぶん埋めて、みんなを呼び戻して！ お願い！'], null, [
+            { label: '任せて！', on: function (e) {
+              if (e.currentTarget.disabled) return;
+              e.currentTarget.disabled = true;   // 2 度押しても 1 回だけ送る
+              write('story');
+              // 聞いてくれた記念のエクステンション（cross.welcome）。未ログインなら仮アカウントに貯まる
+              fetch('/api/trophies/welcome', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { heard = true; dlg.close(); });
+            } },
+          ]);
+        } },
+      ]);
+    });
+  }
+
+  var asked = new URLSearchParams(location.search).get('mine') === '1';
+  // アチーブメントの画面から使う（js/achievements.js）
+  window.BgMine = {
+    pending: function () { return read() !== 'story' || asked; },
+    story: story,
+  };
   dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+  if (document.getElementById('shelves')) return;   // アチーブメントの画面では、ここから先（ポータルの案内）は出さない
 
   // ---------------------------------------------------------------- どれを出すか
   var stage = read();
-  var asked = new URLSearchParams(location.search).get('mine') === '1';
   if (stage === 'story' && !asked) return;
   Promise.all([
     fetch('/api/trophies').then(function (r) { return r.json(); }),
@@ -134,7 +121,7 @@
     (x[0].trophies || []).forEach(function (t) { defs[t.id] = t; });
     var mineList = (x[1].trophies || []).slice().sort(function (a, b) { return a.at - b.at; });
     var hero = mineList.map(function (t) { return defs[t.id]; }).filter(function (d) { return d && d.kind === 'hero'; })[0];
-    if (hero && (stage !== 'story' || asked)) return story(hero, defs['cross.welcome']);
+    if (hero && (stage !== 'story' || asked)) return welcomeBack(hero);
     if (!hero && (stage === '' || asked)) intro();
   }).catch(function () { /* 案内が出ないだけ */ });
 })();
