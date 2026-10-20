@@ -362,3 +362,6 @@ body.chat-docked { padding-right: 320px; }
   .top-links { gap: 4px; }
   .me-link { padding: 4px 7px; font-size: .74rem; }
 }
+
+/* 全身の立ち絵（10 buy year! のクリス）を四角いアイコンに入れるときは、上半身だけ（縦に潰さない。games.js の iconBust） */
+.cont-icon.bust, .app-icon img.bust { object-fit: cover; object-position: 50% 18%; }
