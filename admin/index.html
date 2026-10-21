@@ -29,6 +29,9 @@
   .acts button { font-size: .8rem; padding: 4px 10px; }
   .badge.guest { border: 1px solid var(--muted); color: var(--muted); }
   .badge.ban { border: 1px solid var(--danger); color: var(--danger); }
+  .badge.tester { border: 1px solid var(--accent); color: var(--accent); }
+  .device { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 14px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: .85rem; }
+  .device b { font-weight: 700; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   select { font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
   code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
@@ -53,6 +56,12 @@
   </section>
 
   <section id="panel" hidden>
+    <!-- SPEC-009 3.2：この端末で遊んだ分を、分析（新しく来た人・ポータルの計測・プレイログ）から除く -->
+    <div class="device">
+      <span>この端末：<b id="device-state">—</b></span>
+      <button type="button" class="secondary" id="device-toggle">切り替える</button>
+      <small class="muted">テスターの端末で使ったアカウントには印が付き、ポータルの回数にも数えません。ランキング・記録は変わりません。</small>
+    </div>
     <nav class="tabs" id="tabs" aria-label="管理の種類">
       <button type="button" data-tab="scores">総合スコア</button>
       <button type="button" data-tab="rta">RTA の記録</button>
@@ -173,12 +182,26 @@
     b.addEventListener('click', onClick);
     return b;
   }
-  function who(name, account, banned) {
+  function who(name, account, banned, tester) {
     var f = document.createDocumentFragment();
     f.appendChild(el('b', null, name || (account === 'guest' ? '（仮アカウント）' : '名無し')));
     if (account === 'guest') f.appendChild(badge('guest', '仮'));
     if (banned) f.appendChild(badge('ban', '締め出し中'));
+    if (tester) f.appendChild(badge('tester', 'テスター'));
     return f;
+  }
+  // テスター（SPEC-009 3.2）
+  function paintDevice(on) {
+    $('device-state').textContent = on ? 'テスター（分析に数えない）' : 'ふつう（分析に数える）';
+    $('device-toggle').textContent = on ? 'ふつうに戻す' : 'テスターにする';
+    $('device-toggle').dataset.on = on ? '1' : '';
+  }
+  $('device-toggle').addEventListener('click', function () {
+    var on = !$('device-toggle').dataset.on;
+    api('POST', '/api/admin/tester-device', { on: on }).then(function (r) { if (r.status === 200) paintDevice(r.testerDevice); else fail('切り替えられませんでした（' + (r.error || r.status) + '）。'); });
+  });
+  function setTester(userId, on) {
+    api('POST', '/api/admin/tester', { userId: userId, on: on }).then(function (r) { done(r, renderUsers); });
   }
 
   // ---------------------------------------------------------------- 操作
@@ -298,10 +321,11 @@
       r.users.forEach(function (u) {
         var li = el('li', 'item');
         var head = el('div', 'head');
-        head.appendChild(who(u.name, u.account, u.banned));
+        head.appendChild(who(u.name, u.account, u.banned, u.tester));
         li.appendChild(head);
         li.appendChild(el('small', null, '総合 ' + nf(u.total) + ' 点 ・ RTA ' + u.runs + ' 件 ・ 最終利用 ' + day(u.lastSeen) + ' ・ ID ' + u.id));
         var acts = el('div', 'acts');
+        acts.appendChild(button('secondary', u.tester ? 'テスターを外す' : 'テスターにする', function () { setTester(u.id, !u.tester); }));
         if (u.banned) acts.appendChild(button('secondary', '締め出しを解除', function () { unban(u.id); }));
         else acts.appendChild(button('danger', '締め出す', function () { ban(u.id, u.name); }));
         li.appendChild(acts);
@@ -430,7 +454,7 @@
       $('panel').hidden = !r.admin;
       if (r.status !== 200) return fail('通信できませんでした。時間をおいて開き直してください。');
       if (r.user && !r.admin) $('sub').textContent = r.sub;
-      if (r.admin) show(location.hash.slice(1));
+      if (r.admin) { paintDevice(r.testerDevice); show(location.hash.slice(1)); }
     });
   }
 

@@ -1,6 +1,6 @@
 // 管理画面の API（SPEC-003）。管理者は Google の会員番号（sub）の一覧（シークレット ADMIN_SUBS）で見分ける。
 //
-//   GET  /api/admin/me              { admin, user, sub } sub はログインしている本人の会員番号（設定用）
+//   GET  /api/admin/me              { admin, user, sub, testerDevice } sub はログインしている本人の会員番号（設定用）
 //   GET  /api/admin/scores          タイトルごとの点数の分布と上位 10 件
 //   POST /api/admin/score/delete    { userId, game } 総合スコアの記録（自己ベストと生の成績）を消す
 //   GET  /api/admin/rta?regulation=&order=recent|time  RTA の完了した記録（100 件まで）
@@ -12,6 +12,8 @@
 //   GET  /api/admin/chat            全体チャットの直近 200 件（SPEC-004）
 //   POST /api/admin/chat/delete     { id } 発言を消す
 //   GET  /api/admin/portal?days=14  ポータルの計測（SPEC-009）。日ごと・できごとごとの回数
+//   POST /api/admin/tester-device   { on } この端末をテスターの端末にする／やめる（SPEC-009 3.2。Cookie を付け外しする）
+//   POST /api/admin/tester          { userId, on } アカウントにテスターの印を付ける／外す（前に作者が遊んだ仮アカウントなど）
 //
 // 締め出しの効き目（ランキングから隠す・記録を受け付けない）は api.js の側にある。
 
@@ -58,7 +60,7 @@ export function cleanReason(raw) {
  * 管理の API。api.js の handle から /api/admin/* を渡される。
  * portalOrigins：管理の API を受ける Origin（bearko.games の画面だけ。ゲームのサブドメインからは読ませない）
  */
-export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], chat = null, log = console.log }) {
+export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], chat = null, testerDevice = () => false, testerCookie = null, markTester = null, log = console.log }) {
   const isAdmin = (s) => !!s?.sub && adminSubs.includes(s.sub);
 
   async function scores(req) {
@@ -142,7 +144,7 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
     const cols = `u.id, u.name, u.google_sub IS NOT NULL AS login, u.created_at, u.last_seen,
       (SELECT COALESCE(SUM(score), 0) FROM title_scores WHERE user_id = u.id) AS total,
       (SELECT COUNT(*) FROM rta_runs WHERE user_id = u.id AND status = 'finished') AS runs,
-      u.id IN (SELECT user_id FROM bans) AS banned`;
+      u.id IN (SELECT user_id FROM bans) AS banned, u.tester`;
     const stmt = q
       ? db
           .prepare(`SELECT ${cols} FROM users u WHERE u.name LIKE ?1 ESCAPE '\\' OR u.id LIKE ?2 ORDER BY u.last_seen DESC LIMIT ?3`)
@@ -159,6 +161,7 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
         total: u.total,
         runs: u.runs,
         banned: !!u.banned,
+        tester: !!u.tester,
       })),
     });
   }
@@ -179,7 +182,7 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
 
     const s = await login(req);
     if (method === 'GET' && path === '/api/admin/me') {
-      return reply(req, 200, { admin: isAdmin(s), user: s ? { id: s.userId, name: s.name ?? null } : null, sub: s?.sub ?? null });
+      return reply(req, 200, { admin: isAdmin(s), user: s ? { id: s.userId, name: s.name ?? null } : null, sub: s?.sub ?? null, ...(isAdmin(s) ? { testerDevice: testerDevice(req) } : {}) });
     }
     if (!s) return reply(req, 401, { error: 'login' });
     if (!isAdmin(s)) return reply(req, 403, { error: 'admin' });
@@ -234,6 +237,22 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
         db.prepare('DELETE FROM rta_runs WHERE id = ?1').bind(body.runId),
       ]);
       audit('rta/delete', { runId: body.runId, userId: run.user_id, regulation: run.regulation, timeMs: run.time_ms });
+      return reply(req, 200, { ok: true });
+    }
+
+    // テスター（SPEC-009 3.2）：分析から除く印。ランキング・記録には効かない
+    if (method === 'POST' && path === '/api/admin/tester-device') {
+      if (!testerCookie) return reply(req, 503, { error: 'tester' });
+      const on = body.on !== false;
+      if (on && markTester) await markTester(s.userId);
+      audit('tester-device', { on });
+      return reply(req, 200, { ok: true, testerDevice: on }, [testerCookie(on)]);
+    }
+    if (method === 'POST' && path === '/api/admin/tester') {
+      if (typeof body.userId !== 'string' || !ID_RE.test(body.userId)) return reply(req, 400, { error: 'user' });
+      const r = await db.prepare('UPDATE users SET tester = ?2 WHERE id = ?1 RETURNING id').bind(body.userId, body.on === false ? 0 : 1).first();
+      if (!r) return reply(req, 404, { error: 'not_found' });
+      audit('tester', { userId: body.userId, on: body.on !== false });
       return reply(req, 200, { ok: true });
     }
 
