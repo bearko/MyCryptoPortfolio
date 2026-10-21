@@ -13,6 +13,7 @@
  *   BearkoGames.init({ game: 'tactics', presence: false });           // 同時接続数の「操作あり」を送らない（1.9.0。既定は送る。SPEC-007）。来訪のアチーブメントも送らない（1.10.0。SPEC-008）
  *   BearkoGames.openAvatarPicker();                                    // アイコン図鑑の窓（1.7.0。1.8.0 でトロフィーで解放する図鑑に）
  *   BearkoGames.getUser();          // { id, name, avatar } か null
+ *   BearkoGames.isTester();         // 作者・テスターの端末か（1.11.0。SPEC-009 3.2）。自前のプレイログを送らないのに使う。init のあとで読む
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
  *   await BearkoGames.rta.start({ regulation: 'survivor-normal' });   // RTA の計測を始める
@@ -75,6 +76,7 @@
         var before = JSON.stringify(state.user);
         state.user = r.user || null;
         state.guest = r.guest || null;
+        state.tester = !!r.tester;
         if (JSON.stringify(state.user) !== before) emit();
       }
       return r.ok ? { ok: true, user: state.user } : r;
@@ -1374,7 +1376,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.10.0',
+    version: '1.11.0',
     rta: rtaApi,
 
     /**
@@ -1443,6 +1445,7 @@
     },
 
     /** ログイン中なら { id, name }、していなければ null */
+    isTester: function () { return !!state.tester; },
     getUser: function () { return state.user ? { id: state.user.id, name: state.user.name, avatar: state.user.avatar || null } : null; },
 
     /** 仮アカウント（未ログインで記録を貯めている）があるか */

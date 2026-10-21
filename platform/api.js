@@ -70,6 +70,9 @@ export const API_ORIGINS = new Set([...PORTAL_ORIGINS, ...Object.values(GAME_HOS
 // Cookie の名前（新 → 古）。__Host- は Domain を持てないので、bearko.games だけに付く
 export const SESSION_COOKIE = '__Host-bg_session';
 export const GUEST_COOKIE = '__Host-bg_guest';
+// 作者・テスターの端末（SPEC-009 3.2）。管理画面で付け外しする。この端末で使ったアカウントに印を付け、ポータルの計測で数えない
+export const TESTER_COOKIE = '__Host-bg_tester';
+const TESTER_TTL = 400 * 24 * 3600e3;   // ブラウザが許す最長
 const LEGACY_COOKIE = { [SESSION_COOKIE]: 'bg_session', [GUEST_COOKIE]: 'bg_guest' };
 const IGT_MAX = { ms: 1e10, turns: 1e6, weeks: 1e4 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
 
@@ -175,6 +178,8 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
         )
         .bind(userId, guestId),
     ];
+    // 仮アカウントがテスターなら、本アカウントもテスター（SPEC-009 3.2）
+    stmts.push(db.prepare('UPDATE users SET tester = 1 WHERE id = ?1 AND (SELECT tester FROM users WHERE id = ?2) = 1').bind(userId, guestId));
     // 仮アカウントを締め出していたら、本アカウントも締め出す（同じ人とみなす。SPEC-003 5 章）
     stmts.push(
       db
@@ -234,8 +239,13 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     : null;
 
   // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）。
-  // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）
+  // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）。テスターの端末なら、そのアカウントに印を付ける（SPEC-009 3.2）
   async function accountFor(req) {
+    const acc = await resolveAccount(req);
+    if (acc.userId && testerDevice(req)) await markTester(acc.userId);
+    return acc;
+  }
+  async function resolveAccount(req) {
     const s = await login(req);
     if (s) return (await isBanned(s.userId)) ? { banned: true } : { userId: s.userId, kind: 'login', cookies: [] };
     const g = await guest(req);
@@ -243,6 +253,11 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const created = await createGuest(req);
     return { userId: created.id, kind: 'guest', cookies: [created.cookie] };
   }
+  const testerDevice = (req) => parseCookies(req.headers.get('cookie'))[TESTER_COOKIE] === '1';
+  async function markTester(userId) {
+    await db.prepare('UPDATE users SET tester = 1 WHERE id = ?1 AND tester = 0').bind(userId).run();
+  }
+  const testerCookie = (on) => cookie(TESTER_COOKIE, on ? '1' : '', on ? TESTER_TTL : 0);
 
   async function trophyIds(userId) {
     const { results } = await db.prepare('SELECT trophy_id FROM user_trophies WHERE user_id = ?1').bind(userId).all();
@@ -618,7 +633,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
   const login = (req) => sessionOf(req, SESSION_COOKIE, 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, GUEST_COOKIE, 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null, avatar: s.avatar ?? null });
-  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: [...PORTAL_ORIGINS, ...extraOrigins], chat: chatRoom, ...(log ? { log } : {}) });
+  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: [...PORTAL_ORIGINS, ...extraOrigins], chat: chatRoom, testerDevice, testerCookie, markTester, ...(log ? { log } : {}) });
 
   async function handle(req) {
     const url = new URL(req.url);
@@ -656,6 +671,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       if (!PORTAL_ORIGINS.includes(origin) && !extraOrigins.includes(origin)) return reply(req, 403, { error: 'origin' });
       const ev = portalEvent(body);
       if (!ev) return reply(req, 400, { error: 'event' });
+      if (testerDevice(req)) return reply(req, 204);   // 作者・テスターの端末は数えない（SPEC-009 3.2）
       if (portalLimit && !(await portalLimit(req))) return reply(req, 429, { error: 'rate' });
       await db
         .prepare('INSERT INTO portal_counts (day, event, game, source, n) VALUES (?1, ?2, ?3, ?4, 1) ON CONFLICT (day, event, game, source) DO UPDATE SET n = n + 1')
@@ -706,10 +722,16 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     }
 
     if (method === 'GET' && path === '/api/me') {
+      // tester：テスターの端末か（SPEC-009 3.2。ゲームは自分のプレイログを送らないのに使う）
+      const tester = testerDevice(req) ? { tester: true } : {};
       const s = await login(req);
-      if (s) return reply(req, 200, { user: publicUser(s), guest: null, ...((await isBanned(s.userId)) ? { banned: true } : {}) });
+      if (s) {
+        if (tester.tester) await markTester(s.userId);
+        return reply(req, 200, { user: publicUser(s), guest: null, ...tester, ...((await isBanned(s.userId)) ? { banned: true } : {}) });
+      }
       const g = await guest(req);
-      return reply(req, 200, { user: null, guest: g ? { id: g.userId } : null, ...(g && (await isBanned(g.userId)) ? { banned: true } : {}) });
+      if (g && tester.tester) await markTester(g.userId);
+      return reply(req, 200, { user: null, guest: g ? { id: g.userId } : null, ...tester, ...(g && (await isBanned(g.userId)) ? { banned: true } : {}) });
     }
 
     if (method === 'POST' && path === '/api/guest') {
@@ -746,6 +768,9 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       }
       if (g) cookies.push(cookie(GUEST_COOKIE, '', 0));
       if (!(await isBanned(user.id))) await grantJudged(user.id, 'login');   // SPEC-008：ログインのアチーブメント
+      // 管理者（作者）がログインした端末は、テスターの端末にする（SPEC-009 3.2）
+      if (adminSubs.includes(claims.sub)) cookies.push(testerCookie(true));
+      if (adminSubs.includes(claims.sub) || testerDevice(req)) await markTester(user.id);
       const old = await login(req);
       if (old) await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(old.hash).run();
       cookies.push(cookie(SESSION_COOKIE, await newSession(user.id, 'login', LOGIN_TTL), LOGIN_TTL));
