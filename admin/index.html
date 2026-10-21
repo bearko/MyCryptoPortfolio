@@ -122,6 +122,13 @@
         </table>
       </div>
       <p class="note" id="portal-moods"></p>
+      <h2>マインの案内とアチーブメント（日ごと）</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>日付</th><th>案内：はじめて／おかえり</th><th>アチーブメントへ</th><th>開いた：ログイン／先見せ／関所</th><th>解放の演出：始まった／最後まで／飛ばした</th><th>話：始めた／聞き終えた</th></tr></thead>
+          <tbody id="portal-ach"></tbody>
+        </table>
+      </div>
       <p class="note">「トップを見た」はタブごとに 1 回。「スクショ」は 0.8 秒以上流れたもの。「おすすめで見た」は手で切り替えたものだけ（自動で送ったぶんは数えない）。押したあと本当に起動したかは、各ゲームの起動のトロフィーで見る。</p>
     </section>
   </section>
@@ -356,8 +363,9 @@
   function renderPortal() {
     api('GET', '/api/admin/portal?days=' + $('pdays').value).then(function (r) {
       if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
-      var byDay = {}, byGame = {}, moods = {};
+      var byDay = {}, byGame = {}, moods = {}, ach = {};
       r.rows.forEach(function (x) {
+        if (x.event === 'ach' || x.event === 'mine') { var a = ach[x.day] || (ach[x.day] = {}); a[x.event + '.' + x.source] = (a[x.event + '.' + x.source] || 0) + x.n; return; }
         var d = byDay[x.day] || (byDay[x.day] = { view: 0, vnew: 0, vret: 0, open: 0, play: 0 });
         if (x.event === 'view') { d.view += x.n; if (x.source === 'return') d.vret += x.n; else d.vnew += x.n; }
         if (x.event === 'open') d.open += x.n;
@@ -387,6 +395,16 @@
         [PORTAL_NAMES[k] || k, nf(g.feat), nf(g.peek), nf(g.open), nf(g.play), [g.src.feat, g.src.sheet, g.src.cont, g.src.guide].map(nf).join('／')].forEach(function (v) { tr.appendChild(el('td', null, v)); });
         tg.appendChild(tr);
       });
+      var ta = $('portal-ach');
+      ta.textContent = '';
+      Object.keys(ach).sort().reverse().forEach(function (k) {
+        var a = ach[k], n = function (id) { return nf(a[id] || 0); };
+        var tr = el('tr');
+        [k, n('mine.intro') + '／' + n('mine.hello'), n('mine.go'), n('ach.login') + '／' + n('ach.preview') + '／' + n('ach.gate'),
+          n('ach.reveal') + '／' + n('ach.done') + '／' + n('ach.skip'), n('mine.story') + '／' + n('mine.heard')].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        ta.appendChild(tr);
+      });
+      if (!Object.keys(ach).length) { var none = el('tr'); var ntd = el('td', null, 'まだ記録がありません。'); ntd.colSpan = 6; none.appendChild(ntd); ta.appendChild(none); }
       var mk = Object.keys(moods);
       $('portal-moods').textContent = mk.length ? '遊び方で絞る：' + mk.sort(function (a, b) { return moods[b] - moods[a]; }).map(function (m) { return (MOOD_NAMES[m] || m) + ' ' + nf(moods[m]); }).join('、') : '';
     });

@@ -13,6 +13,10 @@ export const PORTAL_EVENTS = {
   open: { game: true, sources: ['card', 'feat', 'link'] },
   mood: { game: false, sources: MOODS },
   play: { game: true, sources: ['feat', 'sheet', 'cont', 'guide'] },
+  // アチーブメントの画面（SPEC-009 3.1）：開いた（ログイン・未ログインの先見せ・関所）／解放の演出が始まった・最後まで見た・飛ばした
+  ach: { game: false, sources: ['login', 'preview', 'gate', 'reveal', 'done', 'skip'] },
+  // マインの案内（SPEC-008 4 章）：初めての案内・おかえりを出した／アチーブメントへ進んだ／話を始めた・聞き終えた
+  mine: { game: false, sources: ['intro', 'hello', 'go', 'story', 'heard'] },
 };
 
 export const PORTAL_KEEP_DAYS = 400; // これより古い行は毎日の掃除で消す

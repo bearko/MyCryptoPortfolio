@@ -388,6 +388,7 @@
     }
     revealing = true;
     skipped = false;
+    if (window.BgStat) window.BgStat('ach', 'reveal');
     setRate(1);
     $('veil').hidden = false;
     var chain = wait(450).then(function () {
@@ -415,6 +416,7 @@
       if (skipped) unsealAnims().forEach(function (a) { a.finish(); });
       $('veil').hidden = true;
       $('reveal-cap').classList.remove('on');
+      if (window.BgStat) window.BgStat('ach', skipped ? 'skip' : 'done');
       revealing = false;
       setRate(1);
       return ids.length;
@@ -466,6 +468,8 @@
       preview = data.account !== 'login' && !!helloId && ownsHero();
       if (data.account === 'login' || preview) noteFresh();
       render();
+      // 開いた人の内訳（SPEC-009 3.1）。タブごとに 1 回
+      if (window.BgStat) window.BgStat('ach', data.account === 'login' ? 'login' : preview ? 'preview' : 'gate', true);
       if (busy) return;
       busy = true;
       return reveal()

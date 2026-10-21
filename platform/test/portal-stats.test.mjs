@@ -47,8 +47,11 @@ test('受け付ける値：できごと・作品・どこから', () => {
   assert.deepEqual(portalEvent({ e: 'play', g: 'tenbuy', s: 'feat' }), { event: 'play', game: 'tenbuy', source: 'feat' });
   assert.deepEqual(portalEvent({ e: 'peek', g: 'survivor' }), { event: 'peek', game: 'survivor', source: '' });
   assert.deepEqual(portalEvent({ e: 'mood', s: 'action' }), { event: 'mood', game: '', source: 'action' });
+  assert.deepEqual(portalEvent({ e: 'ach', s: 'preview' }), { event: 'ach', game: '', source: 'preview' });
+  assert.deepEqual(portalEvent({ e: 'mine', s: 'heard' }), { event: 'mine', game: '', source: 'heard' });
   for (const bad of [null, {}, { e: 'nope' }, { e: 'view', s: 'other' }, { e: 'view', g: 'survivor', s: 'new' }, { e: 'play', g: '10buy', s: 'feat' },
-    { e: 'play', g: 'survivor' }, { e: 'open', g: 'survivor', s: 'sheet' }, { e: 'feat' }, { e: 'play', g: ['survivor'], s: 'feat' }, { e: 'toString' }]) {
+    { e: 'play', g: 'survivor' }, { e: 'open', g: 'survivor', s: 'sheet' }, { e: 'feat' }, { e: 'play', g: ['survivor'], s: 'feat' }, { e: 'toString' },
+    { e: 'ach' }, { e: 'ach', s: 'view' }, { e: 'ach', g: 'survivor', s: 'login' }, { e: 'mine', s: 'other' }]) {
     assert.equal(portalEvent(bad), null, JSON.stringify(bad));
   }
   assert.equal(PORTAL_GAMES.length, 10);
