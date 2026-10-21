@@ -12,6 +12,8 @@
   if (!dlg || typeof dlg.showModal !== 'function') return;
 
   function read() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+  // 案内のどこまで進んだかを、日ごとの回数として数える（SPEC-009 3.1。js/stat.js）
+  function stat(s, once) { if (window.BgStat) window.BgStat('mine', s, once); }
   function write(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* 次に来たときもう一度出るだけ */ } }
 
   var PICKS = [
@@ -54,6 +56,7 @@
 
   // ---------------------------------------------------------------- 4.1 初めて来たとき
   function intro() {
+    stat('intro', true);
     var list = el('div', 'mine-picks');
     PICKS.forEach(function (g) {
       var a = el('a', 'mine-pick');
@@ -73,8 +76,9 @@
 
   // ---------------------------------------------------------------- 4.3 戻ってきたとき（ポータル）：アチーブメントの画面へ誘う
   function welcomeBack(hero) {
+    stat('hello', true);
     scene('08_sparkle', ['あっ、おかえり！ 君のプレイ、見てたよ！ とっても情熱的だった！', '「アチーブメント」を開いてみて。見せたいものがあるの！'], null, [
-      { label: 'アチーブメントを見る', href: 'achievements/?hello=' + encodeURIComponent(hero.id) },
+      { label: 'アチーブメントを見る', href: 'achievements/?hello=' + encodeURIComponent(hero.id), on: function () { stat('go'); } },
       { label: 'あとで', sub: true, on: function () { dlg.close(); } },
     ]);
   }
@@ -85,6 +89,7 @@
     return new Promise(function (done) {
       var heard = false;
       dlg.addEventListener('close', function () { done(heard); }, { once: true });
+      stat('story');
       scene('09_cry', ['ここにいるのは、MyCryptoHeroes で活躍していたヒーローたち。', '2026 年 9 月のサービス終了で、みんな散り散りになっちゃったの……'], null, [
         { label: '次へ', on: function () {
           scene('02_both_arms_up', ['でもヒーローは、ゲームを遊ぶ情熱に引き寄せられて戻ってくるの。', '一緒にヒーロー名鑑を 100 人ぶん埋めて、みんなを呼び戻して！ お願い！'], null, [
@@ -92,6 +97,7 @@
               if (e.currentTarget.disabled) return;
               e.currentTarget.disabled = true;   // 2 度押しても 1 回だけ送る
               write('story');
+              stat('heard');
               // 聞いてくれた記念のエクステンション（cross.welcome）。未ログインなら仮アカウントに貯まる
               fetch('/api/trophies/welcome', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { heard = true; dlg.close(); });
             } },
