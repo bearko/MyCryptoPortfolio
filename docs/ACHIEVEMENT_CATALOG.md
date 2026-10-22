@@ -2,7 +2,7 @@
 
 `node tools/achievements.mjs table` で `platform/trophies.js` から作る。手で直さない。
 
-## ヒーロー名鑑（100 枚：Common 8・Uncommon 26・Rare 27・Epic 28・Legendary 11）
+## ヒーロー名鑑（100 枚：Common 8・Uncommon 27・Rare 26・Epic 28・Legendary 11）
 
 ### MyCryptoTactics
 
@@ -40,11 +40,11 @@
 
 | No. | ID | レアリティ | 絵 | 名前 | 条件 |
 |---|---|---|---|---|---|
-| 023 | `survivor.stage1` | Common | シートン | 狼王ロボ | 最初のステージをクリアする（ボス撃破か 5 分耐久） |
-| 024 | `survivor.awaken` | Uncommon | 霧隠才蔵 | 忍術・毒霧 | スキルツリーの「サバイバーの覚醒」を解放する |
-| 025 | `survivor.stage2` | Uncommon | アナスタシア | 幻の生存者 | ステージ 2 をクリアする |
-| 026 | `survivor.tree5` | Uncommon | ジャックザリッパー | ランゲルライン | スキルツリーの節を 5 つ取る |
-| 027 | `survivor.stage3` | Rare | ワイアット・アープ | 不屈のガンマン | ステージ 3 にたどり着く |
+| 023 | `survivor.story` | Uncommon | 達磨 | 二入四行論 | ストーリーモードを最後まで（5-5）クリアする |
+| 024 | `survivor.stage1` | Common | シートン | 狼王ロボ | 最初のステージをクリアする（ボス撃破か 5 分耐久） |
+| 025 | `survivor.awaken` | Uncommon | 霧隠才蔵 | 忍術・毒霧 | スキルツリーの「サバイバーの覚醒」を解放する |
+| 026 | `survivor.stage2` | Uncommon | アナスタシア | 幻の生存者 | ステージ 2 をクリアする |
+| 027 | `survivor.tree5` | Uncommon | ジャックザリッパー | ランゲルライン | スキルツリーの節を 5 つ取る |
 | 028 | `survivor.fao` | Rare | ギルガメッシュ | フンババとの戦い | 覚醒魔王ファオを倒す |
 | 029 | `survivor.capstone` | Rare | 太公望 | 六韜 | スキルツリーの奥義をひとつ解放する |
 | 030 | `survivor.clear` | Epic | ニコラ・テスラ | テスラコイル | 全 3 ステージをクリアする |
@@ -164,7 +164,7 @@
 |  | `survivor.visit` | Epic | 慈愛の氷雪王妃クイーンスノー&ベビー | 慈愛の雪崩 | MyCryptoSurvivor を遊ぶ |
 |  | `survivor.firstboss` | Epic | アムールタイガー | タイガーシュート | 初めてボスを倒す |
 |  | `survivor.chest` | Epic | ドレークの遺産 | 世界を駆けたドラムライン | 宝箱を初めて開ける |
-|  | `survivor.story` | Epic | ベリーベリーパンケーキ | 酸味と甘味の絶妙なハーモニー | ストーリーモードを最後まで（5-5）クリアする |
+|  | `survivor.stage3` | Epic | ドラグーン | 荒野の一撃 | ステージ 3 にたどり着く |
 |  | `survivor.runs10` | Legendary | 絶対零度ゴールデンスノーマン | 黄金氷河期 | 挑戦を通算 10 回終える |
 |  | `education.visit` | Epic | ロゼッタ・ストーン | ヒエログリフ | MyCryptoEducation を遊ぶ |
 |  | `education.firstcraft` | Epic | 楽聖の羽ペン | ムジカノーヴァ | 初めてエクステンションを作る |
