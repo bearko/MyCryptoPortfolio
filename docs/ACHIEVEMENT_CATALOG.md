@@ -149,7 +149,7 @@
 | 099 | `cross.allext` | Legendary | 葛飾北斎 | 富嶽三十六景 | エクステンションのアチーブメントをすべて集める |
 | 100 | `cross.book99` | Legendary | 始皇帝 | 中国統一 | ヒーロー名鑑のほかの 99 枚をすべて埋める |
 
-## エクステンション（39 個：Common 0・Uncommon 0・Rare 0・Epic 29・Legendary 10）
+## エクステンション（40 個：Common 0・Uncommon 0・Rare 0・Epic 30・Legendary 10）
 
 | No. | ID | レアリティ | 絵 | 名前 | 条件 |
 |---|---|---|---|---|---|
@@ -164,6 +164,7 @@
 |  | `survivor.visit` | Epic | 慈愛の氷雪王妃クイーンスノー&ベビー | 慈愛の雪崩 | MyCryptoSurvivor を遊ぶ |
 |  | `survivor.firstboss` | Epic | アムールタイガー | タイガーシュート | 初めてボスを倒す |
 |  | `survivor.chest` | Epic | ドレークの遺産 | 世界を駆けたドラムライン | 宝箱を初めて開ける |
+|  | `survivor.story` | Epic | ベリーベリーパンケーキ | 酸味と甘味の絶妙なハーモニー | ストーリーモードを最後まで（5-5）クリアする |
 |  | `survivor.runs10` | Legendary | 絶対零度ゴールデンスノーマン | 黄金氷河期 | 挑戦を通算 10 回終える |
 |  | `education.visit` | Epic | ロゼッタ・ストーン | ヒエログリフ | MyCryptoEducation を遊ぶ |
 |  | `education.firstcraft` | Epic | 楽聖の羽ペン | ムジカノーヴァ | 初めてエクステンションを作る |

@@ -162,6 +162,7 @@ export const TROPHIES = [
   { id: 'survivor.visit', game: 'survivor', name: '慈愛の雪崩', nameFrom: 'エクステンション「慈愛の氷雪王妃クイーンスノー&ベビー」のスキル', avatar: 'ext:4126', avatarName: '慈愛の氷雪王妃クイーンスノー&ベビー', description: 'MyCryptoSurvivor を遊ぶ', visit: true },
   { id: 'survivor.firstboss', game: 'survivor', name: 'タイガーシュート', nameFrom: 'エクステンション「アムールタイガー」のスキル', avatar: 'ext:4021', avatarName: 'アムールタイガー', description: '初めてボスを倒す' },
   { id: 'survivor.chest', game: 'survivor', name: '世界を駆けたドラムライン', nameFrom: 'エクステンション「ドレークの遺産」のスキル', avatar: 'ext:4071', avatarName: 'ドレークの遺産', description: '宝箱を初めて開ける' },
+  { id: 'survivor.story', game: 'survivor', name: '酸味と甘味の絶妙なハーモニー', nameFrom: 'エクステンション「ベリーベリーパンケーキ」のスキル', avatar: 'ext:4129', avatarName: 'ベリーベリーパンケーキ', description: 'ストーリーモードを最後まで（5-5）クリアする' },
   { id: 'survivor.runs10', game: 'survivor', name: '黄金氷河期', nameFrom: 'エクステンション「絶対零度ゴールデンスノーマン」のスキル', avatar: 'ext:5126', avatarName: '絶対零度ゴールデンスノーマン', description: '挑戦を通算 10 回終える' },
   { id: 'education.visit', game: 'education', name: 'ヒエログリフ', nameFrom: 'エクステンション「ロゼッタ・ストーン」のスキル', avatar: 'ext:4050', avatarName: 'ロゼッタ・ストーン', description: 'MyCryptoEducation を遊ぶ', visit: true },
   { id: 'education.firstcraft', game: 'education', name: 'ムジカノーヴァ', nameFrom: 'エクステンション「楽聖の羽ペン」のスキル', avatar: 'ext:4003', avatarName: '楽聖の羽ペン', description: '初めてエクステンションを作る' },
