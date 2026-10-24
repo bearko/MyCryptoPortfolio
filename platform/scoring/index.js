@@ -1,7 +1,7 @@
 // 総合スコアの計算式の一覧（SPEC-002）。版を上げたら、保存してある生の成績から全員を計算し直す（SPEC-001 8.4）。
 //   kind 'run'：1 回の挑戦ごとに送る。'progress'：積み上げ（進み具合のいまの値を送る）
 import * as tactics from './tactics.v2.js';
-import * as survivor from './survivor.v4.js';
+import * as survivor from './survivor.v5.js';
 import * as fortress from './fortress.v3.js';
 import * as deckbattle from './deckbattle.v3.js';
 import * as education from './education.v2.js';
@@ -14,7 +14,7 @@ const v = (mod, version = 'v1') => ({ version, kind: mod.KIND, score: mod.score,
 
 export const SCORERS = {
   tactics: v(tactics, 'v2'), // v2：レギュレーション倍率を共通基盤の難易度の係数に（SPEC-002 3.1）
-  survivor: v(survivor, 'v4'), // v4：ゲームのバランスの版ごとの係数（v1.2 で点が約 2 倍に。v1.1 までの成績は v3 と同じ点）
+  survivor: v(survivor, 'v5'), // v5：Extra パネルのレベルを難易度の係数に足す（上限 2.0。extra のない成績は v4 と同じ点）。v4：ゲームのバランスの版ごとの係数
   fortress: v(fortress, 'v3'), // v3：ふつうのクリアの基準を自動プレイの実測に（v2：レベルごとの自己ベストの合計と早呼びのボーナス。SPEC-002 3.3）
   deckbattle: v(deckbattle, 'v3'), // v3：戦力をノードごとのふつうの戦力との割合に・ノードごとの上限（SPEC-002 3.4）
   education: v(education, 'v2'), // v2：ゲームクリアと加点（MyCryptoEducation#1）
