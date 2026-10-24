@@ -229,7 +229,7 @@ test('Survivor：名前のない古い成績は、ゲームが計算した倍率
 });
 
 test('Survivor v3：難易度の係数は共通基盤で決める（名前と ABSOLUTE の 4 軸。SPEC-002 5.1 #27）', () => {
-  assert.equal(SCORERS.survivor.version, 'v4', 'v4 でも難易度の係数は v3 と同じ');
+  assert.equal(SCORERS.survivor.version, 'v5', 'v5 でも難易度の係数は v3 と同じ');
   const v = (extra, reportScore = 150000) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, ...extra });
   const ax = (spawnMul, hpMul, dmgMul, speedMul) => ({ spawnMul, hpMul, dmgMul, speedMul });
   assert.equal(v({ difficulty: 'normal' }), 10000);
@@ -259,6 +259,21 @@ test('Survivor v4：ゲームのバランスの版ごとの係数。v1.1 まで�
   assert.equal(v({ balance: 4 }, 300000), null, '知らない版');
   assert.equal(v({ balance: 1.5 }, 300000), null);
   assert.equal(s('survivor', { stagesCleared: 2, cleared: false, balance: 2 }), 3000, '節目の点は同じ');
+});
+
+test('Survivor v5：Extra パネルのレベルを係数に足す（上限 2.0）。extra のない成績は v4 と同じ点', () => {
+  const v = (extra, reportScore = 2800000, more = {}) => s('survivor', { stagesCleared: 3, cleared: true, reportScore, difficulty: 'normal', balance: 3, ...more, ...(extra === undefined ? {} : { extra }) });
+  assert.equal(v(undefined), 10000, 'extra なし：v4 と同じ');
+  assert.equal(v({}), 10000);
+  assert.equal(v({ horde: 10 }), 5000 + 5000 * 1.3, '大軍の令 Lv.10：+0.30');
+  assert.equal(v({ horde: 2, bell: 1, famine: 1, overlord: 1 }), 5000 + Math.round(5000 * 1.14), 'ゲームの店の表示 ×1.14 と同じ');
+  assert.equal(v({ horde: 10, gale: 10, iron: 10, famine: 10, trial: 10, harsh: 10, bell: 10, overlord: 10 }), 15000, '上限 2.0');
+  assert.equal(v({ horde: 10 }, 2800000, { difficulty: 'absolute', absolute: { spawnMul: 2, hpMul: 2, dmgMul: 2, speedMul: 2 } }), 15000, 'ABSOLUTE と合わせても 2.0 まで');
+  assert.equal(v({ horde: 11 }), null, '範囲の外');
+  assert.equal(v({ horde: 1.5 }), null);
+  assert.equal(v({ unknown: 1 }), null, '知らないパネル');
+  assert.equal(v([1, 2]), null);
+  assert.equal(s('survivor', { stagesCleared: 2, cleared: false, extra: { horde: 3 } }), 3000, '節目の点には掛けない');
 });
 
 test('ありえない成績は受け付けない', () => {
