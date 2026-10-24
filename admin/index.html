@@ -13,6 +13,7 @@
 <style>
   /* 管理画面だけの見た目（SPEC-003）。色は account.css のものを使う */
   .card.admin { max-width: 880px; }
+  body.chat-docked { padding-right: 320px; }   /* PC の右側のチャット（幅 320px）のぶん */
   .scroll { overflow-x: auto; margin: 8px 0; }
   table { width: 100%; border-collapse: collapse; font-size: .85rem; font-variant-numeric: tabular-nums; }
   th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -172,7 +173,7 @@
         </select>
       </div>
       <div class="kpis" id="kpi-sum"></div>
-      <svg class="chart" id="kpi-chart" viewBox="0 0 800 200" role="img" aria-label="DAU・WAU・MAU の推移"></svg>
+      <svg class="chart" id="kpi-chart" viewBox="0 0 800 240" role="img" aria-label="DAU・WAU・MAU の推移（横軸は日付）"></svg>
       <div class="legend"><span><i style="background:#a78bfa"></i>DAU</span><span><i style="background:#22d3ee"></i>WAU</span><span><i style="background:#f59e0b"></i>MAU</span></div>
       <h2>日ごと</h2>
       <div class="scroll">
@@ -518,24 +519,46 @@
   function rrText(x) { return !x || !x.of ? '—' : Math.round((x.kept / x.of) * 100) + '%（' + x.kept + '/' + x.of + '）'; }
   function rrShort(x) { return !x || !x.of ? '—' : Math.round((x.kept / x.of) * 100) + '%'; }
   function kpiCard(label, value, cls) { var d = el('div', cls || null); d.appendChild(el('small', null, label)); d.appendChild(el('b', null, value)); return d; }
+  // DAU・WAU・MAU の推移。横軸は日付（月/日）、縦軸は 0・半分・最大の目盛り。表示の幅に合わせて文字の大きさと日付の数を決める
   function drawChart(svg, rows) {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-    var W = 800, H = 200, P = 24, n = rows.length;
-    var max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r.mau; })));
     var NS = 'http://www.w3.org/2000/svg';
-    var axis = document.createElementNS(NS, 'line');
-    axis.setAttribute('x1', P); axis.setAttribute('x2', W - P); axis.setAttribute('y1', H - P); axis.setAttribute('y2', H - P); axis.setAttribute('stroke', 'rgba(255,255,255,.15)');
-    svg.appendChild(axis);
-    var top = document.createElementNS(NS, 'text');
-    top.setAttribute('x', P); top.setAttribute('y', 14); top.setAttribute('fill', '#9aa1b5'); top.setAttribute('font-size', '12'); top.textContent = '最大 ' + max;
-    svg.appendChild(top);
+    var W = 800, H = 240, n = rows.length;
+    var px = W / Math.max(1, svg.clientWidth || W);   // 画面の 1px が viewBox のいくつか
+    var fs = Math.round(12 * px);                      // 画面で 12px の文字
+    var L = Math.round(fs * 3), R = Math.round(fs * 1.5), T = Math.round(fs * 0.8), B = Math.round(fs * 2.4);
+    var max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r.mau; })));
+    var x = function (i) { return L + (n > 1 ? (i * (W - L - R)) / (n - 1) : (W - L - R) / 2); };
+    var y = function (v) { return H - B - (v / max) * (H - T - B); };
+    function add(tag, attrs, text) {
+      var e = document.createElementNS(NS, tag);
+      Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+      if (text != null) e.textContent = text;
+      svg.appendChild(e);
+      return e;
+    }
+    // 縦軸：0・半分・最大の補助線と数
+    [0, Math.round(max / 2), max].filter(function (v, i, a) { return a.indexOf(v) === i; }).forEach(function (v) {
+      add('line', { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: v ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.2)' });
+      add('text', { x: L - fs * 0.5, y: y(v) + fs * 0.35, fill: '#9aa1b5', 'font-size': fs, 'text-anchor': 'end' }, String(v));
+    });
+    // 横軸：日付。最初と最後の日を必ず出し、間はおよそ等しく（文字が重ならない数まで）
+    var slots = Math.max(2, Math.min(n, Math.floor((W - L - R) / (fs * 4.2))));
+    var shown = {};
+    for (var k = 0; k < slots; k++) shown[Math.round((k * (n - 1)) / Math.max(1, slots - 1))] = true;
+    rows.forEach(function (r, i) {
+      if (!shown[i]) return;
+      var m = /^\d{4}-(\d{2})-(\d{2})$/.exec(r.day);
+      add('line', { x1: x(i), x2: x(i), y1: H - B, y2: H - B + fs * 0.4, stroke: 'rgba(255,255,255,.3)' });
+      add('text', { x: x(i), y: H - B + fs * 1.6, fill: '#9aa1b5', 'font-size': fs, 'text-anchor': i === 0 && n > 1 ? 'start' : i === n - 1 && n > 1 ? 'end' : 'middle' }, m ? Number(m[1]) + '/' + Number(m[2]) : r.day);
+    });
     [['dau', '#a78bfa'], ['wau', '#22d3ee'], ['mau', '#f59e0b']].forEach(function (k) {
-      var pts = rows.map(function (r, i) { return [P + (n > 1 ? (i * (W - 2 * P)) / (n - 1) : 0), H - P - (r[k[0]] / max) * (H - 2 * P)].map(Math.round).join(','); });
-      var pl = document.createElementNS(NS, 'polyline');
-      pl.setAttribute('points', pts.join(' ')); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', k[1]); pl.setAttribute('stroke-width', '2.5'); pl.setAttribute('stroke-linejoin', 'round');
-      svg.appendChild(pl);
+      var pts = rows.map(function (r, i) { return Math.round(x(i)) + ',' + Math.round(y(r[k[0]])); });
+      add('polyline', { points: pts.join(' '), fill: 'none', stroke: k[1], 'stroke-width': Math.max(2, 2.5 * px * 0.8), 'stroke-linejoin': 'round' });
     });
   }
+  window.addEventListener('resize', function () { if (current === 'kpi' && lastKpiRows) drawChart($('kpi-chart'), lastKpiRows); });
+  var lastKpiRows = null;
   function renderKpi() {
     api('GET', '/api/admin/kpi?game=' + encodeURIComponent($('kgame').value) + '&days=' + $('kdays').value).then(function (r) {
       if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
@@ -549,6 +572,7 @@
       var first = 0;
       while (first < r.rows.length - 1 && !r.rows[first].dau && !r.rows[first].mau) first++;
       var rows = r.rows.slice(first);
+      lastKpiRows = rows;
       drawChart($('kpi-chart'), rows);
       var tb = $('kpi-days');
       tb.textContent = '';
@@ -652,7 +676,17 @@
     BG.login().then(function (r) { if (!r.ok && r.error !== 'closed') fail('ログインできませんでした。'); });
   });
   BG.onChange(start);
-  BG.init({ game: 'portal', apiBase: location.origin }).then(start);
+  // PC（1100px 以上）は右側にチャットのドック。開いているあいだは画面を左に詰める（表やグラフが隠れないように）
+  function dockSync() {
+    var docked = !!(BG.chat && BG.chat.layout() === 'dock' && BG.chat.isOpen());
+    if (document.body.classList.contains('chat-docked') === docked) return;
+    document.body.classList.toggle('chat-docked', docked);
+    if (current === 'kpi' && lastKpiRows) drawChart($('kpi-chart'), lastKpiRows);
+  }
+  BG.init({ game: 'portal', apiBase: location.origin }).then(function () {
+    if (BG.chat) { BG.chat.onToggle(dockSync); window.addEventListener('resize', dockSync); dockSync(); }
+    start();
+  });
 })();
 </script>
 </body>
