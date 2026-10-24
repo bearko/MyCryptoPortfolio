@@ -34,6 +34,26 @@
   .device b { font-weight: 700; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
   select { font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  /* KPI とチュートリアル（SPEC-010） */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+  .kpis div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .kpis small { display: block; color: var(--muted); font-size: .75rem; }
+  .kpis b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+  .kpis div.warn { border-color: var(--danger); }
+  .chart { width: 100%; height: auto; display: block; margin: 8px 0 0; }
+  .legend { display: flex; gap: 14px; font-size: .8rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+  tr.pick { cursor: pointer; }
+  tr.pick:hover, tr.pick.on { background: var(--panel-2); }
+  .funnel { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+  .funnel li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: .85rem; }
+  .funnel li.worst { border-color: var(--danger); }
+  .funnel .lbl b { font-weight: 700; }
+  .funnel .lbl small, .funnel .num small { color: var(--muted); }
+  .funnel .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .funnel .bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+  .funnel .bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .funnel li.worst .bar span { background: var(--danger); }
   code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
 </style>
 </head>
@@ -68,6 +88,8 @@
       <button type="button" data-tab="players">プレイヤー</button>
       <button type="button" data-tab="chat">チャット</button>
       <button type="button" data-tab="portal">ポータル</button>
+      <button type="button" data-tab="kpi">KPI</button>
+      <button type="button" data-tab="tutorial">チュートリアル</button>
     </nav>
 
     <section data-pane="scores" hidden>
@@ -139,6 +161,63 @@
         </table>
       </div>
       <p class="note">「トップを見た」はタブごとに 1 回。「スクショ」は 0.8 秒以上流れたもの。「おすすめで見た」は手で切り替えたものだけ（自動で送ったぶんは数えない）。押したあと本当に起動したかは、各ゲームの起動のトロフィーで見る。</p>
+    </section>
+
+    <!-- SPEC-010 4 章：NUU・DAU・WAU・MAU・RR1/3/7。タイトル横断とタイトル別 -->
+    <section data-pane="kpi" hidden>
+      <div class="controls">
+        <select id="kgame" aria-label="タイトル"><option value="">タイトル横断</option></select>
+        <select id="kdays" aria-label="期間">
+          <option value="14">直近 14 日</option><option value="30" selected>直近 30 日</option><option value="90">直近 90 日</option>
+        </select>
+      </div>
+      <div class="kpis" id="kpi-sum"></div>
+      <svg class="chart" id="kpi-chart" viewBox="0 0 800 200" role="img" aria-label="DAU・WAU・MAU の推移"></svg>
+      <div class="legend"><span><i style="background:#a78bfa"></i>DAU</span><span><i style="background:#22d3ee"></i>WAU</span><span><i style="background:#f59e0b"></i>MAU</span></div>
+      <h2>日ごと</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>日付</th><th>NUU</th><th>DAU</th><th>WAU</th><th>MAU</th><th>RR1</th><th>RR3</th><th>RR7</th></tr></thead>
+          <tbody id="kpi-days"></tbody>
+        </table>
+      </div>
+      <h2>タイトルごと（期間のまとめ）</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>タイトル</th><th>NUU</th><th>DAU 平均</th><th>WAU</th><th>MAU</th><th>RR1</th><th>RR3</th><th>RR7</th></tr></thead>
+          <tbody id="kpi-games"></tbody>
+        </table>
+      </div>
+      <p class="note">「遊んだ」はゲームで操作した日（日本時間）。NUU はその日が初めて遊んだ日の人数（タイトル別はそのゲームを初めて遊んだ日）。WAU・MAU はその日までの 7 日・30 日。RR は新しく来た人のうち、ちょうど 1・3・7 日後に遊んだ人の割合（その日が終わるまでは「—」）。まとめの RR は期間内の新しい人をまとめて割る。テスターのアカウントは除く。2026-10-24 より前は、アチーブメントと成績の時刻からの近似。行を押すとそのタイトルに切り替わる。</p>
+    </section>
+
+    <!-- SPEC-010 6.2：チュートリアルの離脱 -->
+    <section data-pane="tutorial" hidden>
+      <div class="controls">
+        <select id="tgame" aria-label="ゲーム"></select>
+        <select id="tdays" aria-label="期間">
+          <option value="7">直近 7 日に始めた人</option><option value="14">直近 14 日に始めた人</option><option value="30" selected>直近 30 日に始めた人</option><option value="90">直近 90 日に始めた人</option>
+        </select>
+      </div>
+      <p class="muted" id="tut-empty" hidden>チュートリアルの段を送っているゲームはまだありません（SDK の <code>BearkoGames.tutorialStep(step, id)</code>）。</p>
+      <div class="kpis" id="tut-sum"></div>
+      <h2>段ごと</h2>
+      <ol class="funnel" id="tut-steps"></ol>
+      <h2>終えた人と終えなかった人の戻り</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th></th><th>RR1</th><th>RR7</th></tr></thead>
+          <tbody id="tut-rr"></tbody>
+        </table>
+      </div>
+      <h2>日ごと</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>始めた日</th><th>始めた</th><th>終えた</th><th>終えた割合</th></tr></thead>
+          <tbody id="tut-days"></tbody>
+        </table>
+      </div>
+      <p class="note">「着いた」は、その段かそれより先の段まで進んだ人（記録の抜けた段も通ったとみなす）。時間は始めてからその段に着くまでの中央値。赤い段は、前の段からいちばん人が減ったところ。戻りの RR は、始めた日のちょうど 1・7 日後にそのゲームを遊んだ人の割合で、アカウントと結びつく人だけ（プレイログから移した過去の分は入らない）。テスターは除く。</p>
     </section>
   </section>
 
@@ -435,7 +514,108 @@
   }
 
   // ---------------------------------------------------------------- 画面の切り替え
-  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat, portal: renderPortal };
+  // ---------------------------------------------------------------- KPI（SPEC-010 4 章）
+  function rrText(x) { return !x || !x.of ? '—' : Math.round((x.kept / x.of) * 100) + '%（' + x.kept + '/' + x.of + '）'; }
+  function rrShort(x) { return !x || !x.of ? '—' : Math.round((x.kept / x.of) * 100) + '%'; }
+  function kpiCard(label, value, cls) { var d = el('div', cls || null); d.appendChild(el('small', null, label)); d.appendChild(el('b', null, value)); return d; }
+  function drawChart(svg, rows) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 800, H = 200, P = 24, n = rows.length;
+    var max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r.mau; })));
+    var NS = 'http://www.w3.org/2000/svg';
+    var axis = document.createElementNS(NS, 'line');
+    axis.setAttribute('x1', P); axis.setAttribute('x2', W - P); axis.setAttribute('y1', H - P); axis.setAttribute('y2', H - P); axis.setAttribute('stroke', 'rgba(255,255,255,.15)');
+    svg.appendChild(axis);
+    var top = document.createElementNS(NS, 'text');
+    top.setAttribute('x', P); top.setAttribute('y', 14); top.setAttribute('fill', '#9aa1b5'); top.setAttribute('font-size', '12'); top.textContent = '最大 ' + max;
+    svg.appendChild(top);
+    [['dau', '#a78bfa'], ['wau', '#22d3ee'], ['mau', '#f59e0b']].forEach(function (k) {
+      var pts = rows.map(function (r, i) { return [P + (n > 1 ? (i * (W - 2 * P)) / (n - 1) : 0), H - P - (r[k[0]] / max) * (H - 2 * P)].map(Math.round).join(','); });
+      var pl = document.createElementNS(NS, 'polyline');
+      pl.setAttribute('points', pts.join(' ')); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', k[1]); pl.setAttribute('stroke-width', '2.5'); pl.setAttribute('stroke-linejoin', 'round');
+      svg.appendChild(pl);
+    });
+  }
+  function renderKpi() {
+    api('GET', '/api/admin/kpi?game=' + encodeURIComponent($('kgame').value) + '&days=' + $('kdays').value).then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      var sel = $('kgame');
+      if (sel.options.length < 2) r.games.forEach(function (g) { if (g.game) { var o = el('option', null, g.name); o.value = g.game; sel.appendChild(o); } });
+      sel.value = r.game;
+      var s = r.summary, sum = $('kpi-sum');
+      sum.textContent = '';
+      [['NUU（合計）', nf(s.nuu)], ['DAU（平均）', String(s.dauAvg)], ['WAU', nf(s.wau)], ['MAU', nf(s.mau)], ['RR1', rrShort(s.rr[1])], ['RR3', rrShort(s.rr[3])], ['RR7', rrShort(s.rr[7])]].forEach(function (c) { sum.appendChild(kpiCard(c[0], c[1])); });
+      // 記録の始まる前の日（どの数も 0）は出さない
+      var first = 0;
+      while (first < r.rows.length - 1 && !r.rows[first].dau && !r.rows[first].mau) first++;
+      var rows = r.rows.slice(first);
+      drawChart($('kpi-chart'), rows);
+      var tb = $('kpi-days');
+      tb.textContent = '';
+      rows.slice().reverse().forEach(function (d) {
+        var tr = el('tr');
+        [d.day, nf(d.nuu), nf(d.dau), nf(d.wau), nf(d.mau), rrText(d.rr[1]), rrText(d.rr[3]), rrText(d.rr[7])].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        tb.appendChild(tr);
+      });
+      var tg = $('kpi-games');
+      tg.textContent = '';
+      r.games.forEach(function (g) {
+        var tr = el('tr', 'pick' + (g.game === r.game ? ' on' : ''));
+        [g.name, nf(g.nuu), String(g.dauAvg), nf(g.wau), nf(g.mau), rrShort(g.rr[1]), rrShort(g.rr[3]), rrShort(g.rr[7])].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        tr.addEventListener('click', function () { $('kgame').value = g.game; renderKpi(); });
+        tg.appendChild(tr);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- チュートリアル（SPEC-010 6.2）
+  function dur(sec) {
+    if (sec == null) return '—';
+    if (sec < 60) return sec + ' 秒';
+    if (sec < 3600) return Math.floor(sec / 60) + ' 分' + (sec % 60 ? ' ' + (sec % 60) + ' 秒' : '');
+    return Math.floor(sec / 3600) + ' 時間 ' + Math.round((sec % 3600) / 60) + ' 分';
+  }
+  function pct(x) { return Math.round(x * 100) + '%'; }
+  function renderTutorial() {
+    api('GET', '/api/admin/tutorial?game=' + encodeURIComponent($('tgame').value) + '&days=' + $('tdays').value).then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      var sel = $('tgame');
+      if (!sel.options.length) r.games.forEach(function (g) { var o = el('option', null, g.name); o.value = g.game; sel.appendChild(o); });
+      sel.value = r.game;
+      $('tut-empty').hidden = !!r.games.length;
+      var f = r.funnel, sum = $('tut-sum'), ol = $('tut-steps'), rr = $('tut-rr'), days = $('tut-days');
+      [sum, ol, rr, days].forEach(function (x) { x.textContent = ''; });
+      if (!f) return;
+      var worst = f.steps.filter(function (s) { return s.step === f.worstStep; })[0];
+      [['始めた', nf(f.started)], ['終えた', nf(f.finished)], ['終えた割合', f.started ? pct(f.finished / f.started) : '—'], ['いちばん減った段', worst ? worst.id + '（−' + worst.lost + '）' : '—', worst ? 'warn' : null]].forEach(function (c) { sum.appendChild(kpiCard(c[0], c[1], c[2])); });
+      f.steps.forEach(function (s) {
+        var li = el('li', s.step === f.worstStep ? 'worst' : null);
+        var lbl = el('div', 'lbl');
+        lbl.appendChild(el('b', null, s.step + '. ' + s.id));
+        lbl.appendChild(el('small', null, '　始めてから ' + dur(s.medianSec)));
+        var num = el('div', 'num');
+        num.appendChild(document.createTextNode(nf(s.reached) + ' 人 ・ ' + pct(s.ofStart) + ' '));
+        num.appendChild(el('small', null, s.step ? '（前の段から ' + pct(s.ofPrev) + (s.lost ? '・−' + s.lost : '') + '）' : ''));
+        var bar = el('div', 'bar'), fill = el('span');
+        fill.style.width = (s.ofStart * 100).toFixed(1) + '%';
+        bar.appendChild(fill);
+        li.appendChild(lbl); li.appendChild(num); li.appendChild(bar);
+        ol.appendChild(li);
+      });
+      if (f.retention) [['終えた人', f.retention.finished], ['終えなかった人', f.retention.unfinished]].forEach(function (x) {
+        var tr = el('tr');
+        [x[0], rrText(x[1][1]), rrText(x[1][7])].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        rr.appendChild(tr);
+      });
+      f.daily.forEach(function (d) {
+        var tr = el('tr');
+        [d.day, nf(d.started), nf(d.finished), d.started ? pct(d.finished / d.started) : '—'].forEach(function (v) { tr.appendChild(el('td', null, v)); });
+        days.appendChild(tr);
+      });
+    });
+  }
+
+  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat, portal: renderPortal, kpi: renderKpi, tutorial: renderTutorial };
   function show(tab) {
     current = renderers[tab] ? tab : 'scores';
     Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', String(b.dataset.tab === current)); });
@@ -462,6 +642,10 @@
   $('reg').addEventListener('change', renderRuns);
   $('order').addEventListener('change', renderRuns);
   $('pdays').addEventListener('change', renderPortal);
+  $('kgame').addEventListener('change', renderKpi);
+  $('kdays').addEventListener('change', renderKpi);
+  $('tgame').addEventListener('change', renderTutorial);
+  $('tdays').addEventListener('change', renderTutorial);
   $('search').addEventListener('submit', function (e) { e.preventDefault(); renderUsers(); });
   $('login').addEventListener('click', function () {
     fail('');

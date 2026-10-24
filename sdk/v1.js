@@ -13,6 +13,7 @@
  *   BearkoGames.init({ game: 'tactics', presence: false });           // 同時接続数の「操作あり」を送らない（1.9.0。既定は送る。SPEC-007）。来訪のアチーブメントも送らない（1.10.0。SPEC-008）
  *   BearkoGames.openAvatarPicker();                                    // アイコン図鑑の窓（1.7.0。1.8.0 でトロフィーで解放する図鑑に）
  *   BearkoGames.getUser();          // { id, name, avatar } か null
+ *   BearkoGames.tutorialStep(1, 'list_home');  // チュートリアルの段に着いた（1.12.0。SPEC-010 5 章）。0 が「始めた」、最後は id 'done'
  *   BearkoGames.isTester();         // 作者・テスターの端末か（1.11.0。SPEC-009 3.2）。自前のプレイログを送らないのに使う。init のあとで読む
  *   await BearkoGames.login();      // { ok, user }
  *   await BearkoGames.unlockTrophy('tactics.ch1');  // { ok, account, unlocked, total }
@@ -282,6 +283,7 @@
   // SPEC-008：来訪のアチーブメント。ゲームで最初に操作したとき 1 回だけ（開いただけでは送らない）。
   // 仮アカウントはこのとき作られる（すでに持っていればサーバーが 1 つにまとめる）
   var visited = false;
+  var tutorialSent = {};   // このページで送ったチュートリアルの段（同じ段を 2 度送らない。SPEC-010）
   function visitOnce() {
     if (visited || !state.game || state.game === 'portal') return;
     visited = true;
@@ -1376,7 +1378,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.11.0',
+    version: '1.12.0',
     rta: rtaApi,
 
     /**
@@ -1531,6 +1533,18 @@
      * トロフィーを獲得する。未ログインなら仮アカウントに貯める（ログインしたときにまとめて登録）。
      * 新しく得たら通知を出す（init({ ui: false }) なら出さない）。{ ok, account, unlocked, total }
      */
+    /**
+     * チュートリアルの段に着いた（1.12.0。SPEC-010 5 章）。step は 0〜99 の整数（0 が「始めた」、大きいほど先）、
+     * id は段の名前（英小文字・数字・_・-、40 文字まで。最後の段は 'done'）。管理画面の漏斗に出る。{ ok } か { ok: false, error }
+     */
+    tutorialStep: function (step, id) {
+      if (!state.game || state.game === 'portal') return Promise.resolve({ ok: false, error: 'game' });
+      if (!(step === (step | 0) && step >= 0 && step <= 99) || typeof id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(id)) return Promise.resolve({ ok: false, error: 'step' });
+      if (tutorialSent[step]) return Promise.resolve({ ok: true, sent: false });
+      tutorialSent[step] = true;
+      return call('POST', '/api/tutorial/step', { game: state.game, step: step, id: id });
+    },
+
     unlockTrophy: function (id) {
       return call('POST', '/api/trophies/unlock', { id: id }).then(announce);
     },

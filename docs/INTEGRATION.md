@@ -102,12 +102,19 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 - 作者・テスターの端末では送らない：`await BearkoGames.init(...)` のあと `BearkoGames.isTester()` が true なら、プレイログを送らない（SDK が読めないときは false 扱いで送ってよい）
 - テスターの端末にするのは管理画面（bearko.games/admin/）の上の「この端末」。管理者がログインした端末は自動でテスターになる
 
+### 3.7 チュートリアルの段（SDK 1.12.0。SPEC-010 5 章）
+
+- 段に着いたら `BearkoGames.tutorialStep(step, id)`。`step` は 0〜99 の整数（0 が「始めた」、大きいほど先）、`id` は英小文字・数字・`_`・`-` の 40 文字まで。最後の段は `id: 'done'`
+- 同じ段は何度呼んでもよい（SDK はページの中で 1 回、サーバーは人ごとに最初の 1 回だけ残す）。チュートリアルを飛ばせるゲームは、飛ばしたときに `done` を送る
+- 管理画面の「チュートリアル」タブに、段ごとの着いた人数・割合・時間の中央値と、いちばん減った段が出る。「KPI」タブ（NUU・DAU・WAU・MAU・RR）はゲーム側の作業なしで出る（来訪で数える）
+
 ## 4. 本番の D1（データベース）
 
 - データベース：`bearko-platform`（ID `387e2f22-d55e-4ddd-bcc1-bdb072f68a55`）
 - 表を足すときは `migrations/000N_*.sql` を作り、**マージの前に本番に適用する**（Worker が新しい表を使う前に）
 - これまでの 0001〜0009 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
 - `0008_achievements.sql`（SPEC-008。行を足すだけ）は 2026-10-18 に作者の確認のうえ同じ方法で適用した（足した行 17：来訪 13・`deckbattle.firstwin` 2・`cross.visit2` 2。`ON CONFLICT DO NOTHING` なので流し直しても増えない）
+- `0011_kpi.sql`（SPEC-010。表を 2 つ足し、遊んだ日をアチーブメントと成績の時刻から埋める）は 2026-10-24 に同じ方法で適用した。`INSERT OR IGNORE` なので流し直しても増えない
 - `0010_testers.sql`（SPEC-009 3.2。`users` に `tester` の列を足すだけ）は 2026-10-21 に同じ方法で適用した。`ALTER TABLE ... ADD COLUMN` は流し直すと「列がもうある」で失敗する（壊れはしない）
 - 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）
 
