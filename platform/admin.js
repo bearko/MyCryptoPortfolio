@@ -12,6 +12,8 @@
 //   GET  /api/admin/chat            全体チャットの直近 200 件（SPEC-004）
 //   POST /api/admin/chat/delete     { id } 発言を消す
 //   GET  /api/admin/portal?days=14  ポータルの計測（SPEC-009）。日ごと・できごとごとの回数
+//   GET  /api/admin/kpi?game=&days=30  NUU・DAU・WAU・MAU・RR1/3/7（SPEC-010 4 章）。game が空ならタイトル横断。テスターは除く
+//   GET  /api/admin/tutorial?game=&days=30  チュートリアルの漏斗（SPEC-010 6.2）。その期間に始めた人
 //   POST /api/admin/tester-device   { on } この端末をテスターの端末にする／やめる（SPEC-009 3.2。Cookie を付け外しする）
 //   POST /api/admin/tester          { userId, on } アカウントにテスターの印を付ける／外す（前に作者が遊んだ仮アカウントなど）
 //
@@ -20,6 +22,8 @@
 import { SCORERS } from './scoring/index.js';
 import { REGULATION_BY_ID, publicRegulations } from './rta.js';
 import { GAME_NAMES } from './trophies.js';
+import { kpi, tutorialFunnel, addDays } from './kpi.js';
+import { jstDay } from './portal-stats.js';
 
 const LIST_LIMIT = 100;
 const TOP_LIMIT = 10;
@@ -238,6 +242,48 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
       ]);
       audit('rta/delete', { runId: body.runId, userId: run.user_id, regulation: run.regulation, timeMs: run.time_ms });
       return reply(req, 200, { ok: true });
+    }
+
+    // KPI（SPEC-010 4 章）。遊んだ日の表を読み、ここで数える（いまの規模なら数千行）
+    if (method === 'GET' && path === '/api/admin/kpi') {
+      const game = url.searchParams.get('game') || '';
+      if (game && (!Object.hasOwn(GAME_NAMES, game) || game === 'cross')) return reply(req, 400, { error: 'game' });
+      const days = Math.min(400, Math.max(7, Math.floor(Number(url.searchParams.get('days')) || 30)));
+      const today = jstDay(now());
+      const span = { from: addDays(today, -(days - 1)), to: today, today };
+      const { results } = await db
+        .prepare('SELECT d.user_id AS user, d.game, d.day FROM user_days d LEFT JOIN users u ON u.id = d.user_id WHERE COALESCE(u.tester, 0) = 0 AND d.day <= ?1')
+        .bind(today)
+        .all();
+      const of = (g) => (g ? results.filter((r) => r.game === g) : results);
+      const main = kpi(of(game), span);
+      const games = [{ game: '', name: 'タイトル横断', ...(game ? kpi(results, span).summary : main.summary) }];
+      for (const g of Object.keys(GAME_NAMES)) if (g !== 'cross') games.push({ game: g, name: GAME_NAMES[g], ...(g === game ? main.summary : kpi(of(g), span).summary) });
+      return reply(req, 200, { game, days, from: span.from, to: today, rows: main.days, summary: main.summary, games });
+    }
+
+    // チュートリアルの漏斗（SPEC-010 6.2）。記録のあるゲームだけ選べる
+    if (method === 'GET' && path === '/api/admin/tutorial') {
+      const { results: gs } = await db.prepare('SELECT game, COUNT(DISTINCT user_id) AS n FROM tutorial_steps GROUP BY game ORDER BY n DESC').all();
+      const games = gs.map((g) => ({ game: g.game, name: GAME_NAMES[g.game] || g.game }));
+      const game = url.searchParams.get('game') || games[0]?.game || '';
+      const days = Math.min(400, Math.max(1, Math.floor(Number(url.searchParams.get('days')) || 30)));
+      const today = jstDay(now());
+      const from = addDays(today, -(days - 1));
+      if (!game) return reply(req, 200, { games, game: '', days, from, funnel: null });
+      if (!games.some((g) => g.game === game)) return reply(req, 400, { error: 'game' });
+      const { results: rows } = await db
+        .prepare('SELECT t.user_id AS user, t.step, t.step_id AS stepId, t.at FROM tutorial_steps t LEFT JOIN users u ON u.id = t.user_id WHERE t.game = ?1 AND COALESCE(u.tester, 0) = 0')
+        .bind(game)
+        .all();
+      const { results: act } = await db
+        .prepare('SELECT user_id, day FROM user_days WHERE game = ?1 AND user_id IN (SELECT user_id FROM tutorial_steps WHERE game = ?1)')
+        .bind(game)
+        .all();
+      const activeDays = new Map();
+      for (const a of act) { if (!activeDays.has(a.user_id)) activeDays.set(a.user_id, new Set()); activeDays.get(a.user_id).add(a.day); }
+      const funnel = tutorialFunnel(rows, { fromMs: Date.parse(`${from}T00:00:00+09:00`), toMs: now() + 1, activeDays, today });
+      return reply(req, 200, { games, game, days, from, funnel });
     }
 
     // テスター（SPEC-009 3.2）：分析から除く印。ランキング・記録には効かない

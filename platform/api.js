@@ -13,6 +13,7 @@
 //   GET    /api/me/trophies    { account: 'login'|'guest'|null, trophies: [{id, at}] }
 //   POST   /api/trophies/unlock { id } 獲得（未ログインなら仮アカウントに貯める）→ { account, unlocked, total }
 //   POST   /api/trophies/welcome   マインの話を聞いた（ポータルから。SPEC-008 4.3）→ { account, unlocked, total }
+//   POST   /api/tutorial/step  { game, step, id } チュートリアルの段に着いた（SPEC-010 5 章）→ { account }
 //   POST   /api/trophies/visit { game } 来訪のアチーブメント（SDK が最初の操作で 1 回送る。SPEC-008）→ { account, unlocked, total }
 //   GET    /api/rta/regulations  RTA のレギュレーション（6.6）
 //   POST   /api/rta/start      { regulation } → { runId, startedAt, account }
@@ -57,7 +58,7 @@ const DAY = 86400e3;
 const NAME_MAX = 16;
 
 // 段階 2 以降で増える「user_id を持つ表」。仮アカウントの記録を移す・退会で消すときに使う
-export const USER_TABLES = ['user_trophies', 'rta_runs', 'plays', 'title_scores', 'rta_cross'];
+export const USER_TABLES = ['user_trophies', 'rta_runs', 'plays', 'title_scores', 'rta_cross', 'user_days', 'tutorial_steps'];
 const PLAY_TTL = 90 * DAY; // 自己ベストのもとになっていない生の成績は 90 日で消す（SPEC-001 11 章）
 const METRICS_MAX = 4096; // 成績の JSON の大きさの上限（バイト）
 const SCORE_GAMES = Object.keys(SCORERS).map((g) => `'${g}'`).join(', '); // SQL に埋める（定数だけ）
@@ -239,10 +240,12 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     : null;
 
   // 記録先のアカウント：ログイン中なら本アカウント、そうでなければ仮アカウント（なければ作る）。
-  // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）。テスターの端末なら、そのアカウントに印を付ける（SPEC-009 3.2）
-  async function accountFor(req) {
+  // 締め出し中なら { banned: true }（呼ぶ側は 403 を返す）。テスターの端末なら、そのアカウントに印を付ける（SPEC-009 3.2）。
+  // game を渡すと、その日にそのゲームで遊んだと記録する（SPEC-010 3 章。どの受け口もゲームで操作したときにだけ呼ばれる）
+  async function accountFor(req, game = null) {
     const acc = await resolveAccount(req);
     if (acc.userId && testerDevice(req)) await markTester(acc.userId);
+    if (acc.userId && game) await db.prepare('INSERT OR IGNORE INTO user_days (user_id, game, day) VALUES (?1, ?2, ?3)').bind(acc.userId, game, jstDay(now())).run();
     return acc;
   }
   async function resolveAccount(req) {
@@ -512,7 +515,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     if (!json || json.length > METRICS_MAX) return reply(req, 400, { error: 'metrics' });
     let r = sc.score(metrics);
     if (!r) return reply(req, 400, { error: 'metrics' });
-    const acc = await accountFor(req);
+    const acc = await accountFor(req, body.game);
     if (acc.banned) return reply(req, 403, { error: 'banned' });
     const at = now();
     // 成績を束ねるタイトル（combine）：前回の自己ベストのもとと束ねてから計算する（別の端末・古いセーブで送っても下がらない）
@@ -845,7 +848,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const t = TROPHY_BY_ID[body.id];
       if (!t || t.game === 'cross') return reply(req, 400, { error: 'trophy' });
       if (!fromGame(req, t.game)) return reply(req, 403, { error: 'game' });
-      const acc = await accountFor(req);
+      const acc = await accountFor(req, t.game);
       if (acc.banned) return reply(req, 403, { error: 'banned' });
       const unlocked = [];
       if (await grant(acc.userId, t.id)) unlocked.push(t.id, ...(await grantCross(acc.userId)));
@@ -858,12 +861,25 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const id = VISIT_TROPHY[body.game];
       if (!id) return reply(req, 400, { error: 'game' });
       if (!fromGame(req, body.game)) return reply(req, 403, { error: 'game' });
-      const acc = await accountFor(req);
+      const acc = await accountFor(req, body.game);
       if (acc.banned) return reply(req, 403, { error: 'banned' });
       const unlocked = [];
       if (await grant(acc.userId, id)) unlocked.push(id, ...(await grantCross(acc.userId)));
       const total = (await trophyIds(acc.userId)).length;
       return reply(req, 200, { account: acc.kind, unlocked, total }, acc.cookies);
+    }
+
+    // SPEC-010 5 章：チュートリアルの段に着いた（SDK 1.12.0 の tutorialStep）。人・ゲーム・段ごとに最初の 1 回の時刻だけ残す
+    if (method === 'POST' && path === '/api/tutorial/step') {
+      if (typeof body.game !== 'string' || !Object.hasOwn(GAME_HOSTS, body.game)) return reply(req, 400, { error: 'game' });
+      if (!fromGame(req, body.game)) return reply(req, 403, { error: 'game' });
+      const step = body.step;
+      if (!Number.isInteger(step) || step < 0 || step > 99) return reply(req, 400, { error: 'step' });
+      if (typeof body.id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(body.id)) return reply(req, 400, { error: 'id' });
+      const acc = await accountFor(req, body.game);
+      if (acc.banned) return reply(req, 403, { error: 'banned' });
+      await db.prepare('INSERT OR IGNORE INTO tutorial_steps (user_id, game, step, step_id, at) VALUES (?1, ?2, ?3, ?4, ?5)').bind(acc.userId, body.game, step, body.id, now()).run();
+      return reply(req, 200, { account: acc.kind }, acc.cookies);
     }
 
     // SPEC-008 4.3：マインの話を最後まで聞いた（ポータルから。未ログインでも仮アカウントに記録する）
@@ -956,7 +972,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
       const reg = REGULATION_BY_ID[body.regulation];
       if (!reg || reg.deprecated) return reply(req, 400, { error: 'regulation' });
       if (!fromGame(req, reg.game)) return reply(req, 403, { error: 'game' });
-      const acc = await accountFor(req);
+      const acc = await accountFor(req, reg.game);
       if (acc.banned) return reply(req, 403, { error: 'banned' });
       const id = randomToken().slice(0, 32);
       const at = now();
