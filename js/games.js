@@ -184,6 +184,23 @@ export const GAMES = [
     wide: true,        // PC の画面（1280×720）。スマホは簡易版
     support: 'PC 推奨',
   },
+  {
+    id: 'successor',
+    no: 11,
+    title: 'MyCryptoSuccessor',
+    genre: '経営シミュレーション',
+    play: '工房と店で町を制覇して、偉人ヒーローに会社を任せる',
+    moods: ['think', 'idle'],
+    status: 'α版',
+    url: 'https://successor.bearko.games/',
+    repo: 'https://github.com/bearko/MyCryptoSuccessor',
+    accent: '#ffb81f',
+    icon: MCH + 'Image/Heroes/12026.png',
+    lead: '偉人ヒーローと働く、爆速の会社経営',
+    body: '新天地のランド「Lime」で、工房とお店から商売を始める経営シミュレーション。作って、運んで、売って、町のエリア 1 位をめざそう。荒れ地を発掘して研究を進め、歴史上の偉人ヒーローを雇って部門を任せれば、会社は町から町へ。最後に経営を託されるのは、あなた。',
+    tags: ['経営', 'シミュレーション', '街づくり', '発掘'],
+    shots: 0,          // 画面写真（PC 1280×800）はまだ。届いたら 3 にして wide を付ける
+  },
 ];
 
 // ⓪ 全作品の土台。ゲームではないので一覧の最後に別枠で出す

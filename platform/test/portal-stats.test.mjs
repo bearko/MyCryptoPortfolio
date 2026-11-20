@@ -54,7 +54,7 @@ test('受け付ける値：できごと・作品・どこから', () => {
     { e: 'ach' }, { e: 'ach', s: 'view' }, { e: 'ach', g: 'survivor', s: 'login' }, { e: 'mine', s: 'other' }]) {
     assert.equal(portalEvent(bad), null, JSON.stringify(bad));
   }
-  assert.equal(PORTAL_GAMES.length, 11);
+  assert.equal(PORTAL_GAMES.length, 12);
   assert.equal(jstDay(Date.parse('2026-10-19T14:59:59Z')), '2026-10-19');
   assert.equal(jstDay(Date.parse('2026-10-19T15:00:00Z')), '2026-10-20', '日本時間の 0 時で日が変わる');
 });
