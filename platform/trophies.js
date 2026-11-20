@@ -18,6 +18,7 @@ export const GAME_HOSTS = {
   deckbattle: 'deckbattle.bearko.games',
   trading: 'trading.bearko.games',
   successor: 'successor.bearko.games',
+  triathlon: 'triathlon.bearko.games',
 };
 
 export const GAME_NAMES = {
@@ -32,6 +33,7 @@ export const GAME_NAMES = {
   deckbattle: 'MyCryptoDeckBattle',
   trading: 'MyCryptoTrading',
   successor: 'MyCryptoSuccessor',
+  triathlon: 'MyCryptoTriathlon',
   cross: 'タイトル横断',
 };
 
@@ -190,6 +192,7 @@ export const TROPHIES = [
   { id: 'deckbattle.heroes100', game: 'deckbattle', name: '十二の功業', nameFrom: 'エクステンション「キングヘラクレス」のスキル', avatar: 'ext:5136', avatarName: 'キングヘラクレス', description: '仲間を 100 人集める' },
   { id: 'trading.visit', game: 'trading', name: 'みかじめ料', nameFrom: 'エクステンション「ワニ革財布」のスキル', avatar: 'ext:4172', avatarName: 'ワニ革財布', description: 'MyCryptoTrading を遊ぶ', visit: true },
   { id: 'successor.visit', game: 'successor', name: '金瘡治療の計', nameFrom: 'エクステンション「義士の采配」のスキル', avatar: 'ext:4095', avatarName: '義士の采配', description: 'MyCryptoSuccessor を遊ぶ', visit: true },
+  { id: 'triathlon.visit', game: 'triathlon', name: '衝角', nameFrom: 'エクステンション「チャリオット」のスキル', avatar: 'ext:4090', avatarName: 'チャリオット', description: 'MyCryptoTriathlon を遊ぶ', visit: true },
   { id: 'cross.welcome', game: 'cross', name: 'シューティング・スター', nameFrom: 'エクステンション「流星のホーキ」のスキル', avatar: 'ext:4080', avatarName: '流星のホーキ', description: 'マインの話を聞く', judge: 'welcome' },
   { id: 'cross.login', game: 'cross', name: 'クレイジーMaster Nobの御加護', nameFrom: 'エクステンション「クレイジーMCHメダル」のスキル', avatar: 'ext:4033', avatarName: 'クレイジーMCHメダル', description: 'Google でログインする', judge: 'login' },
   { id: 'cross.avatar', game: 'cross', name: '奉神礼', nameFrom: 'エクステンション「宝冠」のスキル', avatar: 'ext:4036', avatarName: '宝冠', description: 'アイコンを変える', judge: 'avatar' },

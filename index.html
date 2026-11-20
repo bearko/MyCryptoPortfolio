@@ -68,13 +68,30 @@
       <div class="feat-dots" id="feat-dots" role="group" aria-label="おすすめを切り替える"></div>
     </section>
 
-    <section class="all" aria-labelledby="all-title">
-      <div class="sec-head">
-        <h2 class="sec-title" id="all-title">すべてのゲーム</h2>
-        <div class="moods" id="moods" role="group" aria-label="遊び方で絞る"></div>
-      </div>
-      <div class="grid" id="grid" aria-label="ゲーム一覧"></div>
-    </section>
+    <!-- 一覧は 3 つのくくり（js/games.js の stage）。遊び方の絞り込みは 3 つともにかかる -->
+    <div class="games" id="games">
+      <section class="all" aria-labelledby="all-title">
+        <div class="sec-head">
+          <h2 class="sec-title" id="all-title">公開中のゲーム</h2>
+          <div class="moods" id="moods" role="group" aria-label="遊び方で絞る"></div>
+        </div>
+        <div class="grid" id="grid" aria-label="公開中のゲーム"></div>
+      </section>
+      <section class="all stage" id="sec-dev" aria-labelledby="dev-title">
+        <div class="sec-head">
+          <h2 class="sec-title" id="dev-title">開発中のゲーム</h2>
+          <p class="sec-sub">遊べます。ゲームバランスを調整しているところです</p>
+        </div>
+        <div class="grid" id="grid-dev" aria-label="開発中のゲーム"></div>
+      </section>
+      <section class="all stage" id="sec-paused" aria-labelledby="paused-title">
+        <div class="sec-head">
+          <h2 class="sec-title" id="paused-title">開発を一時停止しているゲーム</h2>
+          <p class="sec-sub">いまは開発を止めているので、遊べません</p>
+        </div>
+        <div class="grid" id="grid-paused" aria-label="開発を一時停止しているゲーム"></div>
+      </section>
+    </div>
   </main>
 
   <footer class="foot">
@@ -125,7 +142,7 @@
     var msgs = BearkoGames.chat.getMessages().filter(function (m) { return m.parent == null; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 12);
     ticker.hidden = !msgs.length;
     if (!msgs.length) return;
-    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', successor: 'Successor', portal: 'bearko.games' };
+    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', successor: 'Successor', triathlon: 'Triathlon', portal: 'bearko.games' };
     track.textContent = '';
     // 同じ列を 2 回並べ、半分ぶん流して戻すと切れ目なく回る
     [0, 1].forEach(function (k) {

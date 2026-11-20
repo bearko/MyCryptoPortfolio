@@ -1,8 +1,12 @@
 import { GAMES, ASSETS, MOODS, FEATURED } from './games.js';
 
-const ALL = [...GAMES, ASSETS];
+// 一覧のくくり（games.js の stage）。並びは画面と同じ：公開中 → 素材 → 開発中 → 一時停止（詳細シートの ‹ › もこの順）
+const RELEASED = GAMES.filter((g) => !g.stage);
+const DEV = GAMES.filter((g) => g.stage === 'dev');
+const PAUSED = GAMES.filter((g) => g.stage === 'paused');
+const ALL = [...RELEASED, ASSETS, ...DEV, ...PAUSED];
 const $ = (id) => document.getElementById(id);
-const grid = $('grid');
+const list = $('games');   // 3 つのくくりをまとめた枠。カードの操作はここで受ける
 const sheet = $('sheet');
 const body = $('sheet-body');
 const lightbox = $('lightbox');
@@ -47,7 +51,7 @@ function statView(back) {
 // カードには「どう遊ぶか」を一言で出す。マウスを乗せる（スマホは画面の真ん中に来る）と、
 // スクリーンショットが順に流れて、中身がひと目で分かる（デモの代わり）
 $('count').textContent = GAMES.length;
-grid.innerHTML = ALL.map((g, i) => `
+const cardHtml = (g, i) => `
   <button class="card${g === ASSETS ? ' asset' : ''}${g.playable === false ? ' wip' : ''}" style="--c:${g.accent};--i:${i}" data-id="${g.id}"
           aria-label="${esc(g.title)}（${esc(g.genre)}）の詳細">
     <span class="thumb">
@@ -63,9 +67,15 @@ grid.innerHTML = ALL.map((g, i) => `
       </span>
     </span>
     ${g.play ? `<span class="play-how">${esc(g.play)}</span>` : ''}
-  </button>`).join('');
+  </button>`;
+const fill = (id, games, at) => { $(id).innerHTML = games.map((g, k) => cardHtml(g, at + k)).join(''); };
+fill('grid', [...RELEASED, ASSETS], 0);
+fill('grid-dev', DEV, RELEASED.length + 1);
+fill('grid-paused', PAUSED, RELEASED.length + 1 + DEV.length);
+$('sec-dev').hidden = !DEV.length;
+$('sec-paused').hidden = !PAUSED.length;
 
-grid.addEventListener('click', (e) => {
+list.addEventListener('click', (e) => {
   const card = e.target.closest('.card');
   if (card) open(card.dataset.id, { source: 'card' });
 });
@@ -86,15 +96,15 @@ function peek(card, on) {
 }
 if (!reduced) {
   if (matchMedia('(hover: hover)').matches) {
-    grid.addEventListener('pointerover', (e) => { const c = e.target.closest('.card'); if (c) peek(c, true); });
-    grid.addEventListener('pointerout', (e) => { const c = e.target.closest('.card'); if (c && !c.contains(e.relatedTarget)) peek(c, false); });
+    list.addEventListener('pointerover', (e) => { const c = e.target.closest('.card'); if (c) peek(c, true); });
+    list.addEventListener('pointerout', (e) => { const c = e.target.closest('.card'); if (c && !c.contains(e.relatedTarget)) peek(c, false); });
   } else if ('IntersectionObserver' in window) {
     // スマホ：画面の真ん中の帯にかかっているカードだけ流す（全部を同時に動かさない）
     const io = new IntersectionObserver((list) => list.forEach((x) => peek(x.target, x.isIntersecting)), { rootMargin: '-42% 0px -42% 0px' });
-    grid.querySelectorAll('.card').forEach((c) => io.observe(c));
+    list.querySelectorAll('.card').forEach((c) => io.observe(c));
   }
-  grid.addEventListener('focusin', (e) => { const c = e.target.closest('.card'); if (c) peek(c, true); });
-  grid.addEventListener('focusout', (e) => { const c = e.target.closest('.card'); if (c) peek(c, false); });
+  list.addEventListener('focusin', (e) => { const c = e.target.closest('.card'); if (c) peek(c, true); });
+  list.addEventListener('focusout', (e) => { const c = e.target.closest('.card'); if (c) peek(c, false); });
 }
 
 // 遊び方で絞る（すべて・サクッと・アクション…）。合わないカードは隠す
@@ -107,10 +117,15 @@ moods.addEventListener('click', (e) => {
   const id = b.dataset.mood;
   stat('mood', '', id);
   moods.querySelectorAll('.mood').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  grid.querySelectorAll('.card').forEach((c) => {
+  list.querySelectorAll('.card').forEach((c) => {
     const g = ALL.find((x) => x.id === c.dataset.id);
     c.hidden = !!id && !(g.moods || []).includes(id);
   });
+  // 開発中・一時停止のくくりは、絞りこんで 1 本も残らなければ見出しごと隠す
+  for (const sec of [$('sec-dev'), $('sec-paused')]) {
+    const cards = [...sec.querySelectorAll('.card')];
+    sec.hidden = !cards.length || cards.every((c) => c.hidden);
+  }
 });
 
 // ───────── はじめての人に（カルーセル） ─────────
