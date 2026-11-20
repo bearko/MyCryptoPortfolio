@@ -1,6 +1,8 @@
 // 掲載するゲームの台帳。並び順がそのまま一覧の並び順になる。
 //   thumb  … assets/thumbs/<id>.webp（1200×630）
 //   shots  … assets/shots/<id>-1..3.webp（縦 9:16）。1枚目が一番「どんなゲームか」が伝わるもの
+//   wide   … true のとき、shots は横 16:9（PC の画面のゲーム）。一覧・はじめての人に・詳細の 3 か所が横長で出す
+//   support … 詳細の「対応」の欄（省くと「スマホ / PC」）
 //   icon   … 詳細シートのアイコンに出すドット絵（bearko/mycryptoheroes の画像）
 //   playable … false のとき、一覧でグレーにして「プレイする」を押せなくする（開発中のもの）
 //   play     … どう遊ぶか（操作）を一言で。一覧のカードに出す
@@ -162,6 +164,25 @@ export const GAMES = [
     body: 'マーケットでヒーローを買い集め、同じヒーロー3体で合成してパーティを強化するオートバトラー。編成したパーティがエネミー部隊と自動で戦い、10勝でクエストクリア。プレイヤーごとに異なるスキルで攻略法が変わります。',
     tags: ['オートバトラー', '合成', 'パーティ編成', 'ストーリー'],
     shots: 3,
+  },
+  {
+    id: 'trading',
+    no: 10,
+    title: 'MyCryptoTrading',
+    genre: '店舗経営・取引',
+    play: '仕入れて、値切って、高く売る',
+    moods: ['think', 'idle'],
+    status: '公開中',
+    url: 'https://trading.bearko.games/',
+    repo: 'https://github.com/bearko/MyCryptoTrading',
+    accent: '#ffd21f',
+    icon: MCH + 'Image/Heroes/10004.png',
+    lead: '値切って、目利きして、店を買い取れ。',
+    body: 'CryptoWorld に飛ばされたあなたは、福沢諭吉に救われて交易店を開きます。ヒーローたちが持ちこむエクステンションを買い取り、欲しがる客に売って GUM を稼ぎましょう。レプリカを見抜き、壺で合成し、5 つの勢力と付き合いながら、7 日ごとに上がる家賃を越えて店の権利書を買い取ればクリアです。',
+    tags: ['経営シミュ', '取引・値切り', 'マス目の棚', 'PC 推奨'],
+    shots: 3,
+    wide: true,        // PC の画面（1280×720）。スマホは簡易版
+    support: 'PC 推奨',
   },
 ];
 

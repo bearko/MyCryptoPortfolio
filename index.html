@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MyCrypto Games — bearko のゲームポートフォリオ</title>
-<meta name="description" content="My Crypto Heroes のアセットで作ったブラウザゲーム9本。デッキ構築ローグライク・経営シム・サバイバルアクション・教育クイズ・タワーディフェンスなど。">
+<meta name="description" content="My Crypto Heroes のアセットで作ったブラウザゲーム10本。デッキ構築ローグライク・経営シム・サバイバルアクション・教育クイズ・タワーディフェンスなど。">
 <meta name="theme-color" content="#0b0d14">
 <meta property="og:type" content="website">
 <meta property="og:title" content="MyCrypto Games — bearko のゲームポートフォリオ">
-<meta property="og:description" content="My Crypto Heroes のアセットで作ったブラウザゲーム9本を、スクリーンショットつきで紹介します。">
+<meta property="og:description" content="My Crypto Heroes のアセットで作ったブラウザゲーム10本を、スクリーンショットつきで紹介します。">
 <meta property="og:url" content="https://bearko.games/">
 <meta property="og:image" content="https://bearko.games/og-image.jpg">
 <meta property="og:image:width" content="1200">
@@ -125,7 +125,7 @@
     var msgs = BearkoGames.chat.getMessages().filter(function (m) { return m.parent == null; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 12);
     ticker.hidden = !msgs.length;
     if (!msgs.length) return;
-    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', portal: 'bearko.games' };
+    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', portal: 'bearko.games' };
     track.textContent = '';
     // 同じ列を 2 回並べ、半分ぶん流して戻すと切れ目なく回る
     [0, 1].forEach(function (k) {

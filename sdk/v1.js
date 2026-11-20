@@ -482,7 +482,7 @@
     listeners: [], toggles: [], composes: [], mounts: [], sheetWatching: false, focused: 0,
   };
   var CHAT_CLOSE_AFTER = 30e3, CHAT_PING_EVERY = 25e3, CHAT_MAX = 200, CHAT_KEEP = 600, CHAT_PAGE = 50;
-  var GAME_LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', '10buy-year': '10 buy year!', education: 'Education', advance: 'Advance', portal: 'bearko.games' };
+  var GAME_LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', '10buy-year': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', portal: 'bearko.games' };
   var ASSET_BASE = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
   var CHAT_ERR = { rate: '少し待ってから送ってください', login: 'ログインすると参加できます', name: '名前を決めると参加できます', banned: 'このアカウントは発言できません', long: '1〜200 文字で送ってください', parent: 'その発言はもうありません', not_found: 'その発言はもうありません', owner: '自分の発言だけ直せます' };
 
