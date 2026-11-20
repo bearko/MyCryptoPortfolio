@@ -16,6 +16,7 @@ export const GAME_HOSTS = {
   fortress: 'fortress.bearko.games',
   '10buy': '10-buy-year.bearko.games',
   deckbattle: 'deckbattle.bearko.games',
+  trading: 'trading.bearko.games',
 };
 
 export const GAME_NAMES = {
@@ -28,6 +29,7 @@ export const GAME_NAMES = {
   fortress: 'MyCryptoFortress',
   '10buy': '10 buy year！',
   deckbattle: 'MyCryptoDeckBattle',
+  trading: 'MyCryptoTrading',
   cross: 'タイトル横断',
 };
 
@@ -184,6 +186,7 @@ export const TROPHIES = [
   { id: 'deckbattle.firstwin', game: 'deckbattle', name: '開拓者の一歩', nameFrom: 'エクステンション「大西部のブーツ」のスキル', avatar: 'ext:4031', avatarName: '大西部のブーツ', description: '初めてバトルに勝つ' },
   { id: 'deckbattle.merge', game: 'deckbattle', name: '無限の循環', nameFrom: 'エクステンション「帝国式機光戦輪ウロボロス」のスキル', avatar: 'ext:4192', avatarName: '帝国式機光戦輪ウロボロス', description: '初めてヒーローを合成する' },
   { id: 'deckbattle.heroes100', game: 'deckbattle', name: '十二の功業', nameFrom: 'エクステンション「キングヘラクレス」のスキル', avatar: 'ext:5136', avatarName: 'キングヘラクレス', description: '仲間を 100 人集める' },
+  { id: 'trading.visit', game: 'trading', name: 'みかじめ料', nameFrom: 'エクステンション「ワニ革財布」のスキル', avatar: 'ext:4172', avatarName: 'ワニ革財布', description: 'MyCryptoTrading を遊ぶ', visit: true },
   { id: 'cross.welcome', game: 'cross', name: 'シューティング・スター', nameFrom: 'エクステンション「流星のホーキ」のスキル', avatar: 'ext:4080', avatarName: '流星のホーキ', description: 'マインの話を聞く', judge: 'welcome' },
   { id: 'cross.login', game: 'cross', name: 'クレイジーMaster Nobの御加護', nameFrom: 'エクステンション「クレイジーMCHメダル」のスキル', avatar: 'ext:4033', avatarName: 'クレイジーMCHメダル', description: 'Google でログインする', judge: 'login' },
   { id: 'cross.avatar', game: 'cross', name: '奉神礼', nameFrom: 'エクステンション「宝冠」のスキル', avatar: 'ext:4036', avatarName: '宝冠', description: 'アイコンを変える', judge: 'avatar' },

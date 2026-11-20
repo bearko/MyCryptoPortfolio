@@ -52,7 +52,7 @@ grid.innerHTML = ALL.map((g, i) => `
           aria-label="${esc(g.title)}（${esc(g.genre)}）の詳細">
     <span class="thumb">
       <img src="${thumb(g)}" alt="" loading="${g.no <= 4 ? 'eager' : 'lazy'}" decoding="async">
-      ${g.shots ? '<span class="peek" aria-hidden="true"></span>' : ''}
+      ${g.shots ? `<span class="peek${g.wide ? ' wide' : ''}" aria-hidden="true"></span>` : ''}
       ${g.status !== '公開中' ? `<span class="badge">${esc(g.status)}</span>` : ''}
     </span>
     <span class="meta">
@@ -114,7 +114,7 @@ moods.addEventListener('click', (e) => {
 });
 
 // ───────── はじめての人に（カルーセル） ─────────
-// 1 枚ずつ大きく：背景にサムネイル、右に縦のスクリーンショットを流す「スマホの画面」、
+// 1 枚ずつ大きく：背景にサムネイル、右に縦のスクリーンショットを流す「スマホの画面」（wide のゲームは横長の「PC の画面」）、
 // 左に名前・一言・遊び方と「遊ぶ」。7 秒ごとに次へ（触っている間・見えていない間・動きを減らす設定では止める）
 const track = $('feat-track');
 const dots = $('feat-dots');
@@ -133,7 +133,7 @@ track.innerHTML = feats.map(({ g, hook }, i) => `
         <button type="button" class="btn sub" data-open="${g.id}">どんなゲーム？</button>
       </div>
     </div>
-    <div class="phone" aria-hidden="true" style="--n:${g.shots}">
+    <div class="phone${g.wide ? ' wide' : ''}" aria-hidden="true" style="--n:${g.shots}">
       <img class="base" src="${shot(g, 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async">
       ${Array.from({ length: g.shots }, (_, k) => `<img src="${shot(g, k + 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async" style="--k:${k}">`).join('')}
     </div>
@@ -260,7 +260,7 @@ function render(g) {
     <div class="stats">
       <div class="${g.status === '公開中' ? '' : 'st-wip'}"><b>${esc(g.status)}</b>状態</div>
       <div><b>${isAsset ? 'GitHub' : '無料'}</b>${isAsset ? '公開先' : 'ブラウザ'}</div>
-      <div><b>${isAsset ? '402体' : 'スマホ / PC'}</b>${isAsset ? 'ヒーロー' : '対応'}</div>
+      <div><b>${isAsset ? '402体' : esc(g.support || 'スマホ / PC')}</b>${isAsset ? 'ヒーロー' : '対応'}</div>
     </div>
 
     <div class="actions">
@@ -271,9 +271,9 @@ function render(g) {
     </div>
 
     <div class="shots" aria-label="スクリーンショット">
-      ${shots.map((src, i) => `<button class="tall" data-zoom="${src}">
+      ${shots.map((src, i) => `<button class="${g.wide ? 'land' : 'tall'}" data-zoom="${src}">
         <img src="${src}" alt="${esc(g.title)} のスクリーンショット ${i + 1}"></button>`).join('')}
-      <button class="wide" data-zoom="${thumb(g)}"><img src="${thumb(g)}" alt="${esc(g.title)} のサムネイル"></button>
+      <button class="wide${g.wide ? ' land' : ''}" data-zoom="${thumb(g)}"><img src="${thumb(g)}" alt="${esc(g.title)} のサムネイル"></button>
     </div>
 
     <section class="about">

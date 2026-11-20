@@ -135,6 +135,9 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .phone img.base, .peek img.base { animation: none; opacity: 1; transform: none; }
 .peek img.base { transform: translateX(-50%); }
 @keyframes flip { 0% { opacity: 0; transform: scale(1.04); } 5%, 33% { opacity: 1; transform: none; } 38%, 100% { opacity: 0; } }
+/* 横 16:9 の画面写真（games.js の wide。PC の画面のゲーム）は「PC の画面」の枠で流す */
+.phone.wide { width: 300px; aspect-ratio: 16 / 9; border-radius: 10px; transform: rotate(2deg); }
+.phone.wide img { object-position: center; }
 
 .feat-dots { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
 .dot { width: 28px; height: 6px; padding: 0; border: 0; border-radius: 99px; background: var(--panel-2); cursor: pointer; }
@@ -182,6 +185,8 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   animation-name: flip-c; }
 @keyframes flip-c { 0% { opacity: 0; } 5%, 33% { opacity: 1; } 38%, 100% { opacity: 0; } }
 .card.peeking .peek { opacity: 1; }
+/* 横長の画面写真は、カードの枠いっぱいに流す */
+.peek.wide img, .peek.wide img.base { left: 0; width: 100%; aspect-ratio: auto; border-inline: 0; object-position: center; transform: none; }
 .card .meta { display: flex; align-items: center; gap: 6px; padding: 7px 8px 2px; }
 .card .no { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
   font-family: "DotGothic16"; font-size: 12px; color: #0b0d14; background: var(--c); }
@@ -236,6 +241,9 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   .slide-hero { width: 56px; height: 56px; }
   .slide-bg { -webkit-mask-image: none; mask-image: none; opacity: .22; }
   .slide-tx > :not(.slide-acts) { padding-right: 100px; }   /* 右上のスマホ画面に重ならない */
+  /* 横長の「PC の画面」は右上に入らないので、文字の上に幅いっぱいで置く */
+  .phone.wide { position: relative; top: auto; right: auto; order: -1; width: 100%; transform: none; }
+  .slide:has(.phone.wide) .slide-tx > :not(.slide-acts) { padding-right: 0; }
   .slide-hook { font-size: 13px; }
   .slide-acts .btn { flex: 1; padding: 0 12px; font-size: 14px; }
   .slide-acts .btn.play { flex: 1; }
@@ -263,6 +271,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
   .sec-title { font-size: 19px; }
   .slide { min-height: 340px; padding: 30px 36px; }
   .phone { width: 172px; }
+  .phone.wide { width: 360px; }
   .slide-hook { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -336,6 +345,9 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .shots img { display: block; height: min(40dvh, 380px); border-radius: 12px; border: 1px solid var(--line); background: #000; }
 .shots .wide img { aspect-ratio: 1200 / 630; }
 .shots .tall img { aspect-ratio: 9 / 16; object-fit: cover; object-position: top; }
+/* 横長の画面写真（wide のゲーム）は幅でそろえる。サムネイルも同じ幅にして、行の高さを縦長のぶんに引っぱらない */
+.shots .land img { height: auto; width: min(86vw, 640px); aspect-ratio: 16 / 9; object-fit: cover; }
+.shots .wide.land img { aspect-ratio: 1200 / 630; }
 
 .about h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 900; }
 .about .lead { margin: 0 0 6px; font-weight: 900; font-size: 15px; }

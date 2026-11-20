@@ -3,7 +3,7 @@
 bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合スコア）の作業を、新しいセッションが続けられるようにまとめたもの。**仕様（なぜそうするか）は SPEC、手順と注意点はこのファイル**。
 
 - 仕様：[SPEC-001](specs/SPEC-001-bearko-games-platform.md)（全体・決定 D1〜D11）、[SPEC-002](specs/SPEC-002-total-score.md)（総合スコアの計算式）、[SPEC-003](specs/SPEC-003-admin.md)（管理画面・締め出し）、[SPEC-009](specs/SPEC-009-portal-stats.md)（ポータルの計測）
-- 最終更新：2026-10-17
+- 最終更新：2026-11-20（Trading を登録）
 
 ## 1. いまの状態
 
@@ -19,6 +19,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | 10 buy year | bearko/10buy-year（`claude/resale-game-mvp-mzm460`） | 10-buy-year.bearko.games | 対応 | 未対応 | 対応（継承・師匠は記録だけ） | `docs/17_platform_score.md` |
 | Education | bearko/MyCryptoEducation（`main`） | education.bearko.games | 対応 | 区切りだけ（`hero1` → `clear`。入口は未対応） | 対応（v2：クリアと加点） | `docs/platform-score.md`・`docs/game-clear.md` |
 | TCG | bearko/MyCryptoTCG（`main`） | tcg.bearko.games | 未対応 | 未対応 | 保留 | — |
+| Trading | bearko/MyCryptoTrading（`main`） | trading.bearko.games | 来訪だけ（ほかは案。ゲーム側に口はある） | 未対応（案：`trading-deed`） | 未対応（案あり） | `src/ui/platform.ts`（チュートリアルの段 18 個・チャットは `float`） |
 
 本番のブランチにマージすると、Cloudflare の Workers Builds が自動で本番に公開する（どのリポジトリも同じ）。
 
@@ -47,7 +48,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 1. ゲームの HTML で SDK を読み込む：`<script defer src="https://bearko.games/sdk/v1.js"></script>`
    - **ゲーム本体（module）より先に置く**。Vite でビルドするゲーム（Fortress・Workshop）は、Vite が本体を `<head>` に入れるので、SDK も `<head>` の中に置く（body の最後だと本体が先に動き、`init` が空振りする。実際に起きた）
 2. ゲームに窓口のファイル（`platform.js` など）を作り、起動時に `BearkoGames.init({ game: '<タイトル ID>', version })` を呼ぶ
-   - タイトル ID は `platform/trophies.js` の `GAME_HOSTS` のキー（`tactics` `survivor` `fortress` `deckbattle` `factory` `workshop` `10buy` `education` `tcg`）
+   - タイトル ID は `platform/trophies.js` の `GAME_HOSTS` のキー（`tactics` `survivor` `fortress` `deckbattle` `factory` `workshop` `10buy` `education` `tcg` `trading`）
    - SDK が遅れて読まれる可能性があるなら、`load` で読めたら `init` する（Fortress・Workshop の窓口が例）
    - 通知（トロフィー・RTA の記録・自己ベスト）は既定で画面の下に出る。結果画面のボタンと重なるなら `init({ toast: 'top', toastOffset: <px> })` か `BearkoGames.setToastPosition({ position: 'top', offset })` で上に寄せる（SDK 1.5.0。Survivor が例）
 3. 守ること
