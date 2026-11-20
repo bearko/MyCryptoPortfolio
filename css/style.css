@@ -38,6 +38,11 @@ body { overflow-x: hidden; }
 .ticker { margin-top: 10px; }
 .home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; margin-top: 16px; }
 .home > * { min-width: 0; }   /* 横に流す行（気分・カルーセル）の中身の幅で、ページが横に広がらないように */
+/* 一覧の 3 つのくくり（公開中・開発中・一時停止）。くくりの間は、ほかの段と同じだけ空ける */
+.games { display: grid; grid-template-columns: minmax(0, 1fr); gap: inherit; }
+.games > * { min-width: 0; }
+.all.stage .sec-head { margin-bottom: 10px; }
+.all[hidden] { display: none; }
 .foot { margin-top: 26px; }
 
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

@@ -149,7 +149,7 @@
 | 099 | `cross.allext` | Legendary | 葛飾北斎 | 富嶽三十六景 | エクステンションのアチーブメントをすべて集める |
 | 100 | `cross.book99` | Legendary | 始皇帝 | 中国統一 | ヒーロー名鑑のほかの 99 枚をすべて埋める |
 
-## エクステンション（42 個：Common 0・Uncommon 0・Rare 0・Epic 32・Legendary 10）
+## エクステンション（43 個：Common 0・Uncommon 0・Rare 0・Epic 33・Legendary 10）
 
 | No. | ID | レアリティ | 絵 | 名前 | 条件 |
 |---|---|---|---|---|---|
@@ -188,6 +188,7 @@
 |  | `deckbattle.heroes100` | Legendary | キングヘラクレス | 十二の功業 | 仲間を 100 人集める |
 |  | `trading.visit` | Epic | ワニ革財布 | みかじめ料 | MyCryptoTrading を遊ぶ |
 |  | `successor.visit` | Epic | 義士の采配 | 金瘡治療の計 | MyCryptoSuccessor を遊ぶ |
+|  | `triathlon.visit` | Epic | チャリオット | 衝角 | MyCryptoTriathlon を遊ぶ |
 |  | `cross.welcome` | Epic | 流星のホーキ | シューティング・スター | マインの話を聞く |
 |  | `cross.login` | Epic | クレイジーMCHメダル | クレイジーMaster Nobの御加護 | Google でログインする |
 |  | `cross.avatar` | Epic | 宝冠 | 奉神礼 | アイコンを変える |

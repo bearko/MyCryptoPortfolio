@@ -241,10 +241,10 @@ test('アチーブメント（SPEC-008）：名鑑は 100 枚、エクステン�
   for (const t of heroes) assert.ok(RARITIES.includes(rarityOf(t.avatar)), `${t.id} は図鑑に出るヒーロー`);
   const avatars = TROPHIES.map((t) => t.avatar);
   assert.equal(new Set(avatars).size, avatars.length, '絵は重ならない');
-  // trading・successor は来訪だけ先に登録した（アチーブメントの中身はまだ決めていない）
+  // trading・successor・triathlon は来訪だけ先に登録した（アチーブメントの中身はまだ決めていない）
   for (const g of Object.keys(GAME_HOSTS).filter((g) => g !== 'tcg')) {
     assert.ok(TROPHIES.some((t) => t.game === g && t.visit), `${g} の来訪`);
-    if (!['trading', 'successor'].includes(g)) assert.ok(TROPHIES.some((t) => t.game === g && t.clear), `${g} のクリア`);
+    if (!['trading', 'successor', 'triathlon'].includes(g)) assert.ok(TROPHIES.some((t) => t.game === g && t.clear), `${g} のクリア`);
   }
   // 名鑑の最後の 1 枚は「ほかの 99 枚」。すべてのエクステンションのヒーローも要る
   const allButLast = heroes.filter((t) => t.id !== 'cross.book99' && t.id !== 'cross.allext').map((t) => t.id);

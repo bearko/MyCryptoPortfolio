@@ -4,7 +4,9 @@
 //   wide   … true のとき、shots は横 16:9（PC の画面のゲーム）。一覧・はじめての人に・詳細の 3 か所が横長で出す
 //   support … 詳細の「対応」の欄（省くと「スマホ / PC」）
 //   icon   … 詳細シートのアイコンに出すドット絵（bearko/mycryptoheroes の画像）
-//   playable … false のとき、一覧でグレーにして「プレイする」を押せなくする（開発中のもの）
+//   playable … false のとき、一覧でグレーにして「プレイする」を押せなくする（遊べないもの）
+//   stage    … 一覧のくくり。省くと「公開中のゲーム」。'dev'＝開発中（遊べるが、ゲームバランスを調整中）、
+//              'paused'＝開発を一時停止（遊べない）。くくりの見出しは index.html
 //   play     … どう遊ぶか（操作）を一言で。一覧のカードに出す
 //   moods    … 「気分で選ぶ」の絞り込み（MOODS の id）
 const MCH = 'https://raw.githubusercontent.com/bearko/mycryptoheroes/main/';
@@ -68,8 +70,9 @@ export const GAMES = [
     genre: 'カードゲーム',
     play: 'ターン制のカードバトル',
     moods: ['think'],
-    status: '開発中',
-    playable: false,   // 一覧ではグレーにし、詳細の「プレイする」を押せなくする（公開まで）
+    status: '開発停止中',
+    stage: 'paused',   // 開発を一時停止しているくくり
+    playable: false,   // 一覧ではグレーにし、詳細の「プレイする」を押せなくする
     url: 'https://tcg.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoTCG',
     accent: '#facc15',
@@ -155,7 +158,8 @@ export const GAMES = [
     genre: 'デッキ構築型RPG',
     play: '買って並べると、自動で戦う',
     moods: ['think'],
-    status: '公開中',
+    status: '開発中',
+    stage: 'dev',      // 遊べるが、ゲームバランスを調整中
     url: 'https://deckbattle.bearko.games/',
     repo: 'https://github.com/bearko/mycryptodeckbattle',
     accent: '#fde047',
@@ -172,7 +176,8 @@ export const GAMES = [
     genre: '店舗経営・取引',
     play: '仕入れて、値切って、高く売る',
     moods: ['think', 'idle'],
-    status: '公開中',
+    status: '開発中',
+    stage: 'dev',      // 遊べるが、ゲームバランスを調整中
     url: 'https://trading.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoTrading',
     accent: '#ffd21f',
@@ -191,7 +196,8 @@ export const GAMES = [
     genre: '経営シミュレーション',
     play: '工房と店で町を制覇して、偉人ヒーローに会社を任せる',
     moods: ['think', 'idle'],
-    status: 'α版',
+    status: '開発中',
+    stage: 'dev',      // 遊べるが、ゲームバランスを調整中
     url: 'https://successor.bearko.games/',
     repo: 'https://github.com/bearko/MyCryptoSuccessor',
     accent: '#ffb81f',
@@ -200,6 +206,26 @@ export const GAMES = [
     body: '新天地のランド「Lime」で、工房とお店から商売を始める経営シミュレーション。作って、運んで、売って、町のエリア 1 位をめざそう。荒れ地を発掘して研究を進め、歴史上の偉人ヒーローを雇って部門を任せれば、会社は町から町へ。最後に経営を託されるのは、あなた。',
     tags: ['経営', 'シミュレーション', '街づくり', '発掘'],
     shots: 0,          // 画面写真（PC 1280×800）はまだ。届いたら 3 にして wide を付ける
+  },
+  {
+    id: 'triathlon',
+    no: 12,
+    title: 'MyCryptoTriathlon',
+    genre: 'レースアクション',
+    play: '横持ち。走って・潜って・飛んで、50組の頂点へ',
+    moods: ['action'],
+    status: '開発中',
+    stage: 'dev',      // 遊べるが、ゲームバランスを調整中
+    url: 'https://triathlon.bearko.games/',
+    repo: 'https://github.com/bearko/mycryptotriathlon',
+    accent: '#ff2e6c',
+    icon: MCH + 'Image/Heroes/4001.png',
+    lead: '陸・海・空。50組から、最後の1組へ。',
+    body: '歴史の英雄3人でリレーを組み、50組が同時に走る陸・海・空の3種目に挑むレースアクション。陸は上位30組、海は秘宝を掘り当てた10組だけが先へ進み、空は10機のバトルロワイヤル。審判の目を盗んだ妨害、順位が低いほど強いお助けアイテム、実況つきのお祭りさわぎ。最初は予選落ちが当たり前——負けるたびにスキルツリーで強くなり、もう一度スタートラインへ。',
+    tags: ['レース', 'アクション', 'ローグライト', 'スキルツリー', '横持ち'],
+    shots: 3,
+    wide: true,        // 横 16:9（1280×720）
+    support: 'スマホ横 / PC',
   },
 ];
 
