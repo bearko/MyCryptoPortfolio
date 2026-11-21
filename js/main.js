@@ -134,12 +134,12 @@ moods.addEventListener('click', (e) => {
 const track = $('feat-track');
 const dots = $('feat-dots');
 const feats = FEATURED.map((f) => ({ ...f, g: GAMES.find((x) => x.id === f.id) })).filter((f) => f.g);
-track.innerHTML = feats.map(({ g, hook }, i) => `
+track.innerHTML = feats.map(({ g, hook, badge }, i) => `
   <article class="slide" style="--c:${g.accent}" data-id="${g.id}" aria-roledescription="スライド" aria-label="${i + 1} / ${feats.length}：${esc(g.title)}">
     <img class="slide-bg" src="${thumb(g)}" alt="" decoding="async">
     <div class="slide-tx">
       <img class="slide-hero" src="${g.icon}" alt="">
-      <p class="slide-genre">${esc(g.genre)}</p>
+      <p class="slide-genre">${badge ? `<span class="slide-new">${esc(badge)}</span>` : ''}${esc(g.genre)}</p>
       <h3 class="slide-title">${esc(short(g.title))}</h3>
       <p class="slide-hook">${esc(hook)}</p>
       <p class="slide-reward" data-reward="${g.id}" hidden></p>

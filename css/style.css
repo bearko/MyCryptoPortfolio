@@ -113,6 +113,8 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .slide-hero { width: 72px; height: 72px; image-rendering: pixelated; animation: bob 2.4s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-6px); } }
 .slide-genre { margin: 0; font-size: 12px; font-weight: 700; color: var(--c); }
+/* 新作などの札（games.js の FEATURED の badge） */
+.slide-new { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; background: var(--c); color: #0b0d14; font-size: 11px; font-weight: 900; letter-spacing: .04em; vertical-align: 1px; }
 .slide-title { margin: 0; font-family: "DotGothic16", "M PLUS 1p", sans-serif; font-weight: 400; font-size: clamp(26px, 6vw, 40px); line-height: 1.1; }
 .slide-hook { margin: 2px 0 0; font-size: 14px; line-height: 1.6; font-weight: 700; }
 .slide-reward { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: #e9e3ff; }
