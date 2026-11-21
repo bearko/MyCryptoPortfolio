@@ -142,7 +142,7 @@
     var msgs = BearkoGames.chat.getMessages().filter(function (m) { return m.parent == null; }).sort(function (a, b) { return b.id - a.id; }).slice(0, 12);
     ticker.hidden = !msgs.length;
     if (!msgs.length) return;
-    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', successor: 'Successor', triathlon: 'Triathlon', portal: 'bearko.games' };
+    var LABEL = { survivor: 'Survivor', tactics: 'Tactics', workshop: 'Workshop', factory: 'Factory', fortress: 'Fortress', deckbattle: 'DeckBattle', '10buy': '10 buy year!', education: 'Education', advance: 'Advance', trading: 'Trading', successor: 'Successor', triathlon: 'Triathlon', football: 'Football', portal: 'bearko.games' };
     track.textContent = '';
     // 同じ列を 2 回並べ、半分ぶん流して戻すと切れ目なく回る
     [0, 1].forEach(function (k) {

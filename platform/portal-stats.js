@@ -2,7 +2,7 @@
 // だれかを見分ける値（アカウント・Cookie・IP・端末の番号）は受け取らない・残さない。
 
 // 作品はポータルの台帳（js/games.js）の id。共通基盤のタイトル ID（10buy）とは違う（tenbuy）
-export const PORTAL_GAMES = ['tactics', 'factory', 'survivor', 'tcg', 'education', 'workshop', 'fortress', 'tenbuy', 'deckbattle', 'trading', 'successor', 'triathlon', 'heroes'];
+export const PORTAL_GAMES = ['tactics', 'factory', 'survivor', 'tcg', 'education', 'workshop', 'fortress', 'tenbuy', 'deckbattle', 'trading', 'successor', 'triathlon', 'football', 'heroes'];
 const MOODS = ['', 'quick', 'action', 'think', 'idle', 'learn'];
 
 // できごと → 作品が要るか・「どこから」に入ってよい値
