@@ -227,6 +227,26 @@ export const GAMES = [
     wide: true,        // 横 16:9（1280×720）
     support: 'スマホ横 / PC',
   },
+  {
+    id: 'football',
+    no: 13,
+    title: 'MyCryptoFootball',
+    genre: '育成カードゲーム（スポーツ）',
+    play: '横持ち。練習カードで鍛えて、作戦カードで勝つ',
+    moods: ['think'],
+    status: '開発中',
+    stage: 'dev',      // 最後まで遊べる。難しさとアチーブメントは調整中
+    url: 'https://football.bearko.games/',
+    repo: 'https://github.com/bearko/mycryptofootball',
+    accent: '#ffe14a',
+    icon: MCH + 'Image/Heroes/5019.png',
+    lead: '一芸もちのヒーローと、名門校をめざせ。',
+    body: 'ヒーロー7人の素人アメフト部の監督になり、練習カードで鍛え、作戦カードの読み合いで試合に勝つ育成ゲーム。勝てば部の格が上がって部員がふえ、試合は6人制から11人制へ。3年で卒業する部員を送り出しながら、世代を重ねて全国大会の頂点を目指します。マネージャーが最初の1週間を案内するので、アメフトを知らなくても遊べます。',
+    tags: ['育成', 'カードゲーム', 'スポーツ', 'アメフト', '横持ち'],
+    shots: 3,
+    wide: true,        // 横 16:9（1280×720）
+    support: 'スマホ横 / PC',
+  },
 ];
 
 // ⓪ 全作品の土台。ゲームではないので一覧の最後に別枠で出す
