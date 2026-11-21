@@ -17,7 +17,7 @@
   function write(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* 次に来たときもう一度出るだけ */ } }
 
   var PICKS = [
-    { id: 'football', name: 'MyCryptoFootball', url: 'https://football.bearko.games/', img: 'Image/Heroes/5019.png', text: '練習カードで鍛えて、作戦カードで勝つ。最初の 1 週間はマネージャーが案内' },
+    { id: 'football', name: 'MyCryptoFootball', url: 'https://football.bearko.games/', img: 'Image/Heroes/5019.png', text: 'マイクリ大学アメフト部の監督として、チームを優勝に導こう！育成好きな人にオススメ！' },
     { id: 'survivor', name: 'MyCryptoSurvivor', url: 'https://survivor.bearko.games/', img: 'Image/Heroes/1004.png', text: '逃げて、倒して、強くなる。最初のステージは 5 分' },
     { id: 'workshop', name: 'MyCryptoWorkshop', url: 'https://workshop.bearko.games/', img: 'Image/Heroes/1007.png', text: 'エクステンションを作って売るお店。1 日は 1〜3 分' },
   ];
