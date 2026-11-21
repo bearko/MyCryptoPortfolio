@@ -280,7 +280,7 @@ export const MOODS = [
 // マインの案内（js/guide.js の PICKS・SPEC-008 4.1）と同じ 3 本・同じ言い方にそろえる
 // badge … スライドの名前の上に出す札（新作など）
 export const FEATURED = [
-  { id: 'football', hook: '練習カードで鍛えて、作戦カードで勝つ。最初の 1 週間はマネージャーが案内', badge: '新作' },
+  { id: 'football', hook: 'マイクリ大学アメフト部の監督として、チームを優勝に導こう！育成好きな人にオススメ！', badge: '新作' },
   { id: 'survivor', hook: '最初のステージは 5 分。逃げて、倒して、強くなる' },
   { id: 'workshop', hook: '1 日は 1〜3 分。作って並べて、売れたら勝ち' },
 ];
