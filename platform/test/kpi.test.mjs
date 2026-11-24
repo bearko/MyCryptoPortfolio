@@ -7,7 +7,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { createApi } from '../api.js';
-import { kpi, tutorialFunnel, addDays, dayRange } from '../kpi.js';
+import { kpi, tutorialFunnel, addDays, dayRange, burstGuests } from '../kpi.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const MIGRATIONS = readdirSync(join(ROOT, 'migrations')).sort();
@@ -188,6 +188,54 @@ test('管理画面：KPI（横断・タイトル別）とチュートリアル�
   await someone.call('POST', '/api/auth/google', { credential: 'ok:someone' });
   assert.equal((await someone.call('GET', '/api/admin/kpi', undefined, null)).status, 403);
   assert.equal((await someone.call('GET', '/api/admin/tutorial', undefined, null)).status, 403);
+});
+
+test('bot：使い捨ての仮アカウントが 1 時間に 8 個以上まとまったら、その全部（SPEC-010 7 章）', () => {
+  const H = 3600e3, M = 60e3;
+  const at = (n, step) => Array.from({ length: n }, (_, i) => ({ user: `u${i}`, createdAt: i * step }));
+  assert.equal(burstGuests(at(7, M)).size, 0, '7 個ではまとまりとみなさない');
+  assert.equal(burstGuests(at(8, M)).size, 8);
+  assert.equal(burstGuests(at(8, 10 * M)).size, 0, '1 時間に 8 個そろわなければ数える');
+  // 1 時間ごとに 1 人ずつ（ふつうの来訪）は、何人いても除かない
+  assert.equal(burstGuests(at(50, H + 1)).size, 0);
+  // まとまりの前後にいた 1 人は巻きこまない
+  const mixed = [{ user: 'early', createdAt: -3 * H }, ...at(9, 5 * M), { user: 'late', createdAt: 5 * H }];
+  const out = burstGuests(mixed);
+  assert.equal(out.size, 9);
+  assert.ok(!out.has('early') && !out.has('late'));
+});
+
+test('管理画面：bot を数えない（印を付けたもの・まとまって作られた使い捨ての仮アカウント）。人は残る', async () => {
+  const { db, device, tick } = setup();
+  // 人：来訪して、チュートリアルを 1 段進めた
+  const human = device();
+  await human.call('POST', '/api/tutorial/step', { game: '10buy', step: 0, id: 'start' }, TENBUY);
+  await human.call('POST', '/api/tutorial/step', { game: '10buy', step: 1, id: 'list_home' }, TENBUY);
+  // 人：何もせずに帰った（1 人だけならまとまりではないので数える）
+  const bounce = device();
+  await bounce.call('POST', '/api/trophies/visit', { game: '10buy' }, TENBUY);
+  tick(2 * 3600e3);
+  // bot：2 分おきに 8 個、来訪と「始めた」だけ
+  for (let i = 0; i < 8; i++) {
+    const b = device();
+    await b.call('POST', '/api/trophies/visit', { game: '10buy' }, TENBUY);
+    await b.call('POST', '/api/tutorial/step', { game: '10buy', step: 0, id: 'start' }, TENBUY);
+    tick(2 * 60e3);
+  }
+  // 作者が印を付けた 1 人（チュートリアルを進めていても除く）
+  const marked = device();
+  await marked.call('POST', '/api/tutorial/step', { game: '10buy', step: 0, id: 'start' }, TENBUY);
+  await marked.call('POST', '/api/tutorial/step', { game: '10buy', step: 1, id: 'list_home' }, TENBUY);
+  const ids = db.sqlite.prepare('SELECT id FROM users ORDER BY created_at DESC, rowid DESC').all();
+  db.sqlite.prepare('UPDATE users SET bot = 1 WHERE id = ?').run(ids[0].id);
+  const boss = device();
+  await boss.call('POST', '/api/auth/google', { credential: 'ok:boss' });
+  const k = (await boss.call('GET', '/api/admin/kpi?game=10buy&days=7', undefined, null)).body;
+  assert.equal(k.summary.nuu, 2, '人の 2 人だけ');
+  assert.deepEqual(k.bots, { manual: 1, auto: 8 });
+  const tu = (await boss.call('GET', '/api/admin/tutorial?game=10buy&days=7', undefined, null)).body;
+  assert.equal(tu.funnel.started, 1, 'チュートリアルを始めた人は 1 人（bot の 8 個と印の 1 人を除く）');
+  assert.deepEqual(tu.bots, { manual: 1, auto: 8 });
 });
 
 test('移行 0011：アチーブメントと成績の時刻から、遊んだ日を埋める（タイトル横断は除く）', () => {

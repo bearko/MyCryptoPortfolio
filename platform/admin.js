@@ -22,7 +22,7 @@
 import { SCORERS } from './scoring/index.js';
 import { REGULATION_BY_ID, publicRegulations } from './rta.js';
 import { GAME_NAMES } from './trophies.js';
-import { kpi, tutorialFunnel, addDays } from './kpi.js';
+import { kpi, tutorialFunnel, addDays, burstGuests } from './kpi.js';
 import { jstDay } from './portal-stats.js';
 
 const LIST_LIMIT = 100;
@@ -244,6 +244,32 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
       return reply(req, 200, { ok: true });
     }
 
+    // bot とみなして数えないアカウント（SPEC-010 7 章）：作者が印を付けたもの（users.bot）と、
+    // 使い捨ての仮アカウントがまとまって作られたもの（kpi.js の burstGuests）。テスターはもともと除いている
+    async function botUsers() {
+      const { results: marked } = await db.prepare('SELECT id FROM users WHERE bot = 1').all();
+      const { results: cands } = await db
+        .prepare(`SELECT u.id AS user, u.created_at AS createdAt FROM users u
+          WHERE u.google_sub IS NULL AND u.bot = 0 AND u.tester = 0
+            AND NOT EXISTS (SELECT 1 FROM user_trophies t WHERE t.user_id = u.id AND t.trophy_id NOT LIKE '%.visit')
+            AND NOT EXISTS (SELECT 1 FROM tutorial_steps s WHERE s.user_id = u.id AND s.step > 0)
+            AND NOT EXISTS (SELECT 1 FROM plays p WHERE p.user_id = u.id)
+            AND NOT EXISTS (SELECT 1 FROM rta_runs r WHERE r.user_id = u.id)
+            AND (SELECT COUNT(*) FROM user_days d WHERE d.user_id = u.id) <= 1`)
+        .all();
+      return { manual: new Set(marked.map((r) => r.id)), auto: burstGuests(cands) };
+    }
+    // 行のうち bot の分を除き、除いた人数（印・自動）を数える
+    function dropBots(rows, bots) {
+      const manual = new Set(), auto = new Set();
+      const kept = rows.filter((r) => {
+        if (bots.manual.has(r.user)) { manual.add(r.user); return false; }
+        if (bots.auto.has(r.user)) { auto.add(r.user); return false; }
+        return true;
+      });
+      return { kept, bots: { manual: manual.size, auto: auto.size } };
+    }
+
     // KPI（SPEC-010 4 章）。遊んだ日の表を読み、ここで数える（いまの規模なら数千行）
     if (method === 'GET' && path === '/api/admin/kpi') {
       const game = url.searchParams.get('game') || '';
@@ -251,15 +277,19 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
       const days = Math.min(400, Math.max(7, Math.floor(Number(url.searchParams.get('days')) || 30)));
       const today = jstDay(now());
       const span = { from: addDays(today, -(days - 1)), to: today, today };
-      const { results } = await db
+      const { results: all } = await db
         .prepare('SELECT d.user_id AS user, d.game, d.day FROM user_days d LEFT JOIN users u ON u.id = d.user_id WHERE COALESCE(u.tester, 0) = 0 AND d.day <= ?1')
         .bind(today)
         .all();
+      const botSet = await botUsers();
+      const { kept: results } = dropBots(all, botSet);
       const of = (g) => (g ? results.filter((r) => r.game === g) : results);
+      // 期間の中に遊んだ日がある人のうち、bot として除いた人数（選んだタイトルの分）
+      const { bots } = dropBots(all.filter((r) => r.day >= span.from && (!game || r.game === game)), botSet);
       const main = kpi(of(game), span);
       const games = [{ game: '', name: 'タイトル横断', ...(game ? kpi(results, span).summary : main.summary) }];
       for (const g of Object.keys(GAME_NAMES)) if (g !== 'cross') games.push({ game: g, name: GAME_NAMES[g], ...(g === game ? main.summary : kpi(of(g), span).summary) });
-      return reply(req, 200, { game, days, from: span.from, to: today, rows: main.days, summary: main.summary, games });
+      return reply(req, 200, { game, days, from: span.from, to: today, rows: main.days, summary: main.summary, games, bots });
     }
 
     // チュートリアルの漏斗（SPEC-010 6.2）。記録のあるゲームだけ選べる
@@ -272,18 +302,23 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
       const from = addDays(today, -(days - 1));
       if (!game) return reply(req, 200, { games, game: '', days, from, funnel: null });
       if (!games.some((g) => g.game === game)) return reply(req, 400, { error: 'game' });
-      const { results: rows } = await db
+      const { results: allRows } = await db
         .prepare('SELECT t.user_id AS user, t.step, t.step_id AS stepId, t.at FROM tutorial_steps t LEFT JOIN users u ON u.id = t.user_id WHERE t.game = ?1 AND COALESCE(u.tester, 0) = 0')
         .bind(game)
         .all();
+      const botSet = await botUsers();
+      const { kept: rows } = dropBots(allRows, botSet);
+      const fromMs = Date.parse(`${from}T00:00:00+09:00`);
+      // 期間の中に始めた人のうち、bot として除いた人数
+      const { bots } = dropBots(allRows.filter((r) => r.step === 0 && r.at >= fromMs), botSet);
       const { results: act } = await db
         .prepare('SELECT user_id, day FROM user_days WHERE game = ?1 AND user_id IN (SELECT user_id FROM tutorial_steps WHERE game = ?1)')
         .bind(game)
         .all();
       const activeDays = new Map();
       for (const a of act) { if (!activeDays.has(a.user_id)) activeDays.set(a.user_id, new Set()); activeDays.get(a.user_id).add(a.day); }
-      const funnel = tutorialFunnel(rows, { fromMs: Date.parse(`${from}T00:00:00+09:00`), toMs: now() + 1, activeDays, today });
-      return reply(req, 200, { games, game, days, from, funnel });
+      const funnel = tutorialFunnel(rows, { fromMs, toMs: now() + 1, activeDays, today });
+      return reply(req, 200, { games, game, days, from, funnel, bots });
     }
 
     // テスター（SPEC-009 3.2）：分析から除く印。ランキング・記録には効かない
