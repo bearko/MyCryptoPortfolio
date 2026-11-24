@@ -173,6 +173,7 @@
         </select>
       </div>
       <div class="kpis" id="kpi-sum"></div>
+      <p class="note" id="kpi-bots" hidden></p>
       <svg class="chart" id="kpi-chart" viewBox="0 0 800 240" role="img" aria-label="DAU・WAU・MAU の推移（横軸は日付）"></svg>
       <div class="legend"><span><i style="background:#a78bfa"></i>DAU</span><span><i style="background:#22d3ee"></i>WAU</span><span><i style="background:#f59e0b"></i>MAU</span></div>
       <h2>日ごと</h2>
@@ -189,7 +190,7 @@
           <tbody id="kpi-games"></tbody>
         </table>
       </div>
-      <p class="note">「遊んだ」はゲームで操作した日（日本時間）。NUU はその日が初めて遊んだ日の人数（タイトル別はそのゲームを初めて遊んだ日）。WAU・MAU はその日までの 7 日・30 日。RR は新しく来た人のうち、ちょうど 1・3・7 日後に遊んだ人の割合（その日が終わるまでは「—」）。まとめの RR は期間内の新しい人をまとめて割る。テスターのアカウントは除く。2026-10-24 より前は、アチーブメントと成績の時刻からの近似。行を押すとそのタイトルに切り替わる。</p>
+      <p class="note">「遊んだ」はゲームで操作した日（日本時間）。NUU はその日が初めて遊んだ日の人数（タイトル別はそのゲームを初めて遊んだ日）。WAU・MAU はその日までの 7 日・30 日。RR は新しく来た人のうち、ちょうど 1・3・7 日後に遊んだ人の割合（その日が終わるまでは「—」）。まとめの RR は期間内の新しい人をまとめて割る。テスターのアカウントと bot（印を付けたもの・使い捨ての仮アカウントが 1 時間に 8 個以上まとまって作られたもの）は除く。2026-10-24 より前は、アチーブメントと成績の時刻からの近似。行を押すとそのタイトルに切り替わる。</p>
     </section>
 
     <!-- SPEC-010 6.2：チュートリアルの離脱 -->
@@ -202,6 +203,7 @@
       </div>
       <p class="muted" id="tut-empty" hidden>チュートリアルの段を送っているゲームはまだありません（SDK の <code>BearkoGames.tutorialStep(step, id)</code>）。</p>
       <div class="kpis" id="tut-sum"></div>
+      <p class="note" id="tut-bots" hidden></p>
       <h2>段ごと</h2>
       <ol class="funnel" id="tut-steps"></ol>
       <h2>終えた人と終えなかった人の戻り</h2>
@@ -559,6 +561,12 @@
   }
   window.addEventListener('resize', function () { if (current === 'kpi' && lastKpiRows) drawChart($('kpi-chart'), lastKpiRows); });
   var lastKpiRows = null;
+  // bot として数えなかった人数（SPEC-010 7 章）。0 人なら出さない
+  function botNote(p, b, what) {
+    var n = b ? b.manual + b.auto : 0;
+    p.hidden = !n;
+    if (n) p.textContent = what + 'うち ' + nf(n) + ' 人を bot として数えていません（印を付けたもの ' + nf(b.manual) + ' 人・使い捨ての仮アカウントがまとまって作られたもの ' + nf(b.auto) + ' 人）。';
+  }
   function renderKpi() {
     api('GET', '/api/admin/kpi?game=' + encodeURIComponent($('kgame').value) + '&days=' + $('kdays').value).then(function (r) {
       if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
@@ -568,6 +576,7 @@
       var s = r.summary, sum = $('kpi-sum');
       sum.textContent = '';
       [['NUU（合計）', nf(s.nuu)], ['DAU（平均）', String(s.dauAvg)], ['WAU', nf(s.wau)], ['MAU', nf(s.mau)], ['RR1', rrShort(s.rr[1])], ['RR3', rrShort(s.rr[3])], ['RR7', rrShort(s.rr[7])]].forEach(function (c) { sum.appendChild(kpiCard(c[0], c[1])); });
+      botNote($('kpi-bots'), r.bots, '期間の中に遊んだ');
       // 記録の始まる前の日（どの数も 0）は出さない
       var first = 0;
       while (first < r.rows.length - 1 && !r.rows[first].dau && !r.rows[first].mau) first++;
@@ -609,6 +618,7 @@
       $('tut-empty').hidden = !!r.games.length;
       var f = r.funnel, sum = $('tut-sum'), ol = $('tut-steps'), rr = $('tut-rr'), days = $('tut-days');
       [sum, ol, rr, days].forEach(function (x) { x.textContent = ''; });
+      botNote($('tut-bots'), r.bots, '期間の中に始めた');
       if (!f) return;
       var worst = f.steps.filter(function (s) { return s.step === f.worstStep; })[0];
       [['始めた', nf(f.started)], ['終えた', nf(f.finished)], ['終えた割合', f.started ? pct(f.finished / f.started) : '—'], ['いちばん減った段', worst ? worst.id + '（−' + worst.lost + '）' : '—', worst ? 'warn' : null]].forEach(function (c) { sum.appendChild(kpiCard(c[0], c[1], c[2])); });

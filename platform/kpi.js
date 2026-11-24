@@ -152,3 +152,21 @@ export function tutorialFunnel(rows, { fromMs, toMs, activeDays = null, today = 
     retention,
   };
 }
+
+/**
+ * 使い捨ての仮アカウントがまとまって作られたものを bot とみなす（SPEC-010 7 章）。
+ * cands：[{ user, createdAt }]。仮アカウントで、来訪と「始めた」の段より先の記録が無く、遊んだ日が 1 日以下のもの（admin.js が選ぶ）。
+ * どこかの windowMs（既定 1 時間）の中に min 個（既定 8）以上作られていれば、その中の全部を返す。
+ * 人が 1 人で来て何もせずに帰っても、1 時間に 8 人そろうことはまずない（2026-11-24 の 10 buy year! は 1 時間に 9〜38 個）
+ */
+export const BOT_BURST = { windowMs: 3600e3, min: 8 };
+export function burstGuests(cands, { windowMs = BOT_BURST.windowMs, min = BOT_BURST.min } = {}) {
+  const s = [...cands].sort((a, b) => a.createdAt - b.createdAt);
+  const out = new Set();
+  let i = 0;
+  for (let j = 0; j < s.length; j++) {
+    while (s[j].createdAt - s[i].createdAt > windowMs) i++;
+    if (j - i + 1 >= min) for (let k = i; k <= j; k++) out.add(s[k].user);
+  }
+  return out;
+}
