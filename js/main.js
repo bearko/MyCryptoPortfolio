@@ -18,6 +18,12 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (m) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 const thumb = (g) => `assets/thumbs/${g.id}.webp`;
 const shot = (g, i) => `assets/shots/${g.id}-${i}.webp`;
+// 紹介動画（games.js の video）：詳細シートは音声あり、カードとカルーセルは音声なしの軽い版
+const vid = (g, kind = '') => `assets/videos/${g.id}${kind}.mp4`;
+const poster = (g) => `assets/videos/${g.id}.webp`;
+// 音を出さずに流す動画（muted・loop・インライン）。止まっていても最初の絵が出る
+const loopVideo = (g, cls, preload) => `<video class="${cls}" src="${vid(g, '-loop')}" poster="${poster(g)}" muted loop playsinline preload="${preload}" disablepictureinpicture></video>`;
+const playIf = (v, on) => { if (!v) return; if (on && !reduced && !document.hidden) v.play().catch(() => {}); else v.pause(); };
 const short = (t) => t.replace(/^MyCrypto/, '');
 // 丸数字は ⓪①②… の並び（U+24EA と U+2460〜）
 const circled = (n) => (n === 0 ? '⓪' : String.fromCodePoint(0x245f + n));
@@ -56,7 +62,7 @@ const cardHtml = (g, i) => `
           aria-label="${esc(g.title)}（${esc(g.genre)}）の詳細">
     <span class="thumb">
       <img src="${thumb(g)}" alt="" loading="${g.no <= 4 ? 'eager' : 'lazy'}" decoding="async">
-      ${g.shots ? `<span class="peek${g.wide ? ' wide' : ''}" aria-hidden="true"></span>` : ''}
+      ${g.video ? '<span class="peek vid" aria-hidden="true"></span>' : g.shots ? `<span class="peek${g.wide ? ' wide' : ''}" aria-hidden="true"></span>` : ''}
       ${g.status !== '公開中' ? `<span class="badge">${esc(g.status)}</span>` : ''}
     </span>
     <span class="meta">
@@ -84,8 +90,12 @@ list.addEventListener('click', (e) => {
 function peek(card, on) {
   const box = card.querySelector('.peek');
   if (!box) return;
-  if (on && !box.childElementCount) {
-    const g = ALL.find((x) => x.id === card.dataset.id);
+  const g = ALL.find((x) => x.id === card.dataset.id);
+  if (g.video) {
+    // 紹介動画のあるゲームは、画面写真の代わりに動画を流す（はじめて見るときに読み込む）
+    if (on && !box.childElementCount) box.innerHTML = `<i class="peek-bg" style="background-image:url(${thumb(g)})"></i>` + loopVideo(g, 'base', 'auto');
+    playIf(box.querySelector('video'), on);
+  } else if (on && !box.childElementCount) {
     // 背景はサムネイルをぼかしたもの。url() は CSS の変数に入れず、要素の style に直接書く（変数に入れると css/ からの相対パスになる）
     box.innerHTML = `<i class="peek-bg" style="background-image:url(${thumb(g)})"></i><img class="base" src="${shot(g, 1)}" alt="" decoding="async">` +
       Array.from({ length: g.shots }, (_, i) => `<img src="${shot(g, i + 1)}" alt="" decoding="async" style="--k:${i}">`).join('');
@@ -148,10 +158,13 @@ track.innerHTML = feats.map(({ g, hook, badge }, i) => `
         <button type="button" class="btn sub" data-open="${g.id}">どんなゲーム？</button>
       </div>
     </div>
-    <div class="phone${g.wide ? ' wide' : ''}" aria-hidden="true" style="--n:${g.shots}">
+    ${g.video
+    // 紹介動画は縦なので「スマホの画面」の枠で流す（いま見えているスライドだけ）
+    ? `<div class="phone" aria-hidden="true">${loopVideo(g, 'base', i ? 'none' : 'metadata')}</div>`
+    : `<div class="phone${g.wide ? ' wide' : ''}" aria-hidden="true" style="--n:${g.shots}">
       <img class="base" src="${shot(g, 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async">
       ${Array.from({ length: g.shots }, (_, k) => `<img src="${shot(g, k + 1)}" alt="" loading="${i ? 'lazy' : 'eager'}" decoding="async" style="--k:${k}">`).join('')}
-    </div>
+    </div>`}
   </article>`).join('');
 dots.innerHTML = feats.map(({ g }, i) => `<button type="button" class="dot" data-to="${i}" aria-label="${esc(short(g.title))}" aria-current="${i === 0}"></button>`).join('');
 
@@ -170,8 +183,14 @@ track.addEventListener('scroll', () => {
   if (hold && featAt !== was) stat('feat', feats[featAt].id, '', `feat:${feats[featAt].id}`);
   dots.querySelectorAll('.dot').forEach((d, k) => d.setAttribute('aria-current', String(k === featAt)));
   slides().forEach((s, k) => s.classList.toggle('on', k === featAt));
+  featVideos();
 }, { passive: true });
 slides()[0]?.classList.add('on');
+// カルーセルの動画は、いま見えているスライドで、カルーセルが画面に入っているあいだだけ流す
+function featVideos() {
+  slides().forEach((s, k) => playIf(s.querySelector('.phone video'), k === featAt && featSeen && !sheet.open));
+}
+document.addEventListener('visibilitychange', () => featVideos());
 dots.addEventListener('click', (e) => { const d = e.target.closest('.dot'); if (d) featGo(Number(d.dataset.to)); });
 track.addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) open(b.dataset.open, { source: 'feat' }); });
 
@@ -180,7 +199,8 @@ const feat = $('feat');
 ['pointerenter', 'focusin', 'touchstart'].forEach((ev) => feat.addEventListener(ev, () => { hold = true; }, { passive: true }));
 ['pointerleave', 'focusout'].forEach((ev) => feat.addEventListener(ev, () => { hold = false; }));
 let featSeen = true;
-if ('IntersectionObserver' in window) new IntersectionObserver(([x]) => { featSeen = x.isIntersecting; }).observe(feat);
+if ('IntersectionObserver' in window) new IntersectionObserver(([x]) => { featSeen = x.isIntersecting; featVideos(); }).observe(feat);
+else featVideos();
 if (!reduced && feats.length > 1) {
   setInterval(() => { if (!hold && featSeen && !document.hidden && !sheet.open) featGo(featAt + 1); }, 7000);
 }
@@ -286,6 +306,7 @@ function render(g) {
     </div>
 
     <div class="shots" aria-label="スクリーンショット">
+      ${g.video ? `<div class="vid"><video src="${vid(g)}" poster="${poster(g)}" controls playsinline preload="metadata" aria-label="${esc(g.title)} の紹介動画"></video></div>` : ''}
       ${shots.map((src, i) => `<button class="${g.wide ? 'land' : 'tall'}" data-zoom="${src}">
         <img src="${src}" alt="${esc(g.title)} のスクリーンショット ${i + 1}"></button>`).join('')}
       <button class="wide${g.wide ? ' land' : ''}" data-zoom="${thumb(g)}"><img src="${thumb(g)}" alt="${esc(g.title)} のサムネイル"></button>
@@ -307,6 +328,7 @@ function open(id, { push = true, source = null } = {}) {
   current = g;
   render(g);
   if (!sheet.open) sheet.showModal();
+  featVideos();   // シートを開いているあいだ、カルーセルの動画は止める
   if (push && location.hash !== `#${id}`) history.replaceState(null, '', `#${id}`);
 }
 
@@ -320,6 +342,8 @@ function step(d) {
 }
 
 sheet.addEventListener('close', () => {
+  body.querySelectorAll('video').forEach((v) => v.pause());   // 閉じたら紹介動画の音も止める
+  featVideos();
   current = null;
   lightbox.hidden = true;
   history.replaceState(null, '', location.pathname + location.search);
