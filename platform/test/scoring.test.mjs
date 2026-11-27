@@ -21,6 +21,8 @@ test('基準プレイ：A（ひととおり）≒ 1,000、B（ふつうにクリ
     ['workshop', { day: 30 }, { day: 300, clearBest: 7200 }],
     ['10buy', { years: 10, netWorth: -100000, difficulty: 'normal' }, { years: 10, netWorth: 5e7, difficulty: 'normal' }],
     ['factory', { factoryLevel: 2 }, { factoryLevel: 5, weeksToLv5: 248, questsCleared: 88, crafted: { common: 4, uncommon: 6, rare: 9, epic: 13, legendary: 23 } }],
+    // Football：A は同好会になったところ（練習試合と地区大会の 1 回戦）、B はふつうに遊んだ 10 年目のおわり（自動プレイ 60 部の中央。頂上決戦はまだ）
+    ['football', { tier: 1, years: 1, wins: 2, titles: [0, 0, 0, 0], nation: false, summit: false }, { tier: 6, years: 10, wins: 52, titles: [1, 2, 1, 1], nation: true, summit: false }],
   ];
   for (const [game, a, b] of cases) {
     const sa = s(game, a), sb = s(game, b);
@@ -43,6 +45,9 @@ test('節目の点は決まった点', () => {
   assert.equal(s('deckbattle', { nodesCleared: MAIN_NODES }), 5000);
   assert.equal(s('deckbattle', { nodesCleared: [...MAIN_NODES, ...SPECIAL_NODES] }), 10000);
   assert.equal(s('factory', { factoryLevel: 5 }), 5000);
+  assert.equal(s('football', { tier: 0, years: 1, wins: 0, titles: [0, 0, 0, 0], nation: false, summit: false }), 0, 'まだ素人');
+  assert.equal(s('football', { tier: 1, years: 1, wins: 0, titles: [0, 0, 0, 0], nation: false, summit: false }), 1000, '同好会');
+  assert.equal(SCORERS.football.score({ tier: 6, years: 6, wins: 38, titles: [1, 2, 2, 0], nation: false, summit: true }).milestone, 5000, '頂上決戦の勝利（自動プレイで 6 年目に勝った部）');
   assert.equal(s('fortress', { levelId: 'L5', won: false }), 0, '負けは 0');
   assert.equal(s('10buy', { years: 4, netWorth: -1e6 }), 400, '途中で終わって純資産がマイナスなら年数 × 100 だけ');
 });
@@ -286,6 +291,12 @@ test('ありえない成績は受け付けない', () => {
   assert.equal(s('factory', { factoryLevel: 3, weeksToLv5: 10 }), null, 'Lv 5 でないのに Lv 5 の週数');
   assert.equal(s('factory', { factoryLevel: 5, crafted: { mythic: 1 } }), null);
   assert.equal(s('10buy', { years: 10, netWorth: 1, difficulty: 'nightmare' }), null);
+  const fb = { tier: 6, years: 10, wins: 52, titles: [1, 2, 1, 1], nation: true, summit: false };
+  assert.equal(s('football', { ...fb, tier: 7 }), null, '格は 0〜6');
+  assert.equal(s('football', { ...fb, titles: [1, 2, 1] }), null, '大会は 4 つ');
+  assert.equal(s('football', { ...fb, wins: 4 }), null, '優勝の回数は勝ち数より多くならない');
+  assert.equal(s('football', { ...fb, tier: 5, summit: true }), null, '頂上決戦は名門だけ');
+  assert.equal(s('football', { ...fb, nation: 'yes' }), null);
 });
 
 // ---------------------------------------------------------------- API
@@ -450,6 +461,6 @@ test('API：退会で点も消える', async () => {
 test('API：対象タイトルの一覧（TCG は対応予定）', async () => {
   const { browser } = setup();
   const g = (await browser()('GET', '/api/score/games')).body.games;
-  assert.equal(g.filter((x) => x.status === 'live').length, 8);
+  assert.equal(g.filter((x) => x.status === 'live').length, 9);
   assert.deepEqual(g.filter((x) => x.status === 'planned').map((x) => x.id), ['tcg']);
 });

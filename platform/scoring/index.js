@@ -8,6 +8,7 @@ import * as education from './education.v2.js';
 import * as workshop from './workshop.v1.js';
 import * as tenbuy from './10buy.v2.js';
 import * as factory from './factory.v2.js';
+import * as football from './football.v1.js';
 
 // combine：成績を束ねる関数を持つタイトル（レベルごとの自己ベストの合計など）は、共通基盤が前回の自己ベストと束ねてから計算する
 const v = (mod, version = 'v1') => ({ version, kind: mod.KIND, score: mod.score, ...(mod.combine ? { combine: mod.combine } : {}) });
@@ -21,6 +22,7 @@ export const SCORERS = {
   workshop: v(workshop),
   '10buy': v(tenbuy, 'v2'), // v2：事業売却をクリアに・難易度と継承の係数・途中で終わった周は 3 割（SPEC-002 3.8）
   factory: v(factory, 'v2'), // v2：係数を自動プレイの実測に（SPEC-002 3.9）
+  football: v(football), // 自動プレイの実測から（SPEC-002 3.10）
 };
 
 /** 総合スコアにまだ入れないタイトル（SPEC-002 3.5） */

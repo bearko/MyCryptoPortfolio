@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TROPHIES, GAME_NAMES, kindOf, rarityOf } from '../platform/trophies.js';
+import { TROPHIES, GAME_NAMES, chapterOf, kindOf, rarityOf } from '../platform/trophies.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const [cmd, repo] = process.argv.slice(2);
@@ -39,8 +39,12 @@ if (cmd === 'table') {
   const rar = (list) => ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map((r) => `${r} ${list.filter((t) => rarityOf(t.avatar) === r).length}`).join('・');
   const heroes = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero');
   const exts = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext');
-  out.push(`## ヒーロー名鑑（${heroes.length} 枚：${rar(heroes)}）`, '');
-  for (const g of [...new Set(heroes.map((t) => t.game))]) out.push(`### ${GAME_NAMES[g] || g}`, '', head, ...heroes.filter((t) => t.game === g).map(row), '');
+  // 名鑑は章ごと（SPEC-008 5.2。章の枚数はその章のヒーローだけ）
+  for (const ch of [...new Set(heroes.map(chapterOf))].sort((a, b) => a - b)) {
+    const list = heroes.filter((t) => chapterOf(t) === ch);
+    out.push(`## ヒーロー名鑑 第 ${ch} 章（${list.length} 枚：${rar(list)}）`, '');
+    for (const g of [...new Set(list.map((t) => t.game))]) out.push(`### ${GAME_NAMES[g] || g}`, '', head, ...list.filter((t) => t.game === g).map(row), '');
+  }
   out.push(`## エクステンション（${exts.length} 個：${rar(exts)}）`, '', head, ...exts.map(row), '');
   writeFileSync(join(ROOT, 'docs/ACHIEVEMENT_CATALOG.md'), out.join('\n'));
   console.log('docs/ACHIEVEMENT_CATALOG.md');

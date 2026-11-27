@@ -2,7 +2,7 @@
 // ID は変えない。区切りが変わったときは新しい ID を足し、古いものは deprecated: true にする（過去の記録は消さない）。
 //   checkpoints：レギュレーションが通る区切り（決めた順番どおりに送る）
 //     minMs：計測の開始からこれより速く着くのはありえない、という最短時間（6.5）
-//   igt：IGT の単位。省略すると 'ms'（ゲーム内時間）。'turns' はターン数を igtMs の欄にそのまま入れる（Tactics。6.9）。'weeks' はゲームの通算の週（10 buy year。6.18）
+//   igt：IGT の単位。省略すると 'ms'（ゲーム内時間）。'turns' はターン数を igtMs の欄にそのまま入れる（Tactics。6.9）。'weeks' はゲームの通算の週（10 buy year。6.18）。'days' はカレンダーの日数（Football。6.19）
 //   rank：'igt' なら IGT の少ない順に並べる（同じなら実時間）。省略すると実時間
 //     minIgt：区切りの IGT がこれより小さいのはありえない（rank: 'igt' のとき。前の区切りより小さいのもはじく）
 
@@ -204,6 +204,19 @@ export const REGULATIONS = [
     checkpoints: [
       { id: 'win5', kind: 'stage', label: '5 勝', minMs: 7e3 },
       { id: 'clear', kind: 'clear', label: '10 勝（クリア）', minMs: 15e3 },
+    ],
+  },
+  // Football（SPEC-001 6.19）。IGT はカレンダーの日数（4 月 5 日が 1 日目。1 年 365 日で年をまたいで数える）。順位はほかと同じ実時間
+  {
+    id: 'football-district',
+    game: 'football',
+    name: 'Football 地区大会制覇',
+    rule: '新しい部の入部説明会から、地区大会の優勝まで（マネージャーの説明なし）',
+    igt: 'days',
+    checkpoints: [
+      { id: 'first_win', kind: 'milestone', label: '最初の勝利', minMs: 70e3 },
+      { id: 'club', kind: 'milestone', label: '同好会', minMs: 140e3 },
+      { id: 'district', kind: 'clear', label: '地区大会の優勝', minMs: 280e3 },
     ],
   },
 ];

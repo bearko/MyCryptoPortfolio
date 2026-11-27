@@ -184,6 +184,7 @@
     if (v == null) return '—';
     if (unit === 'weeks') return (Math.floor(v / 48) + 1) + ' 年 ' + (v % 48 + 1) + ' 週目'; // SPEC の表記（391 → 9 年 8 週目）
     if (unit === 'turns') return v + ' ターン';
+    if (unit === 'days') return v + ' 日目'; // Football：4 月 5 日が 1 日目、年をまたいで数える（6.19）
     return BG.rta.formatTime(v);
   }
 
