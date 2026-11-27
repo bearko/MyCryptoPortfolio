@@ -28,6 +28,12 @@
   .item .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
   .item .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
   .acts button { font-size: .8rem; padding: 4px 10px; }
+  .pochi-form { display: grid; gap: 10px; margin: 8px 0; }
+  .pochi-form label { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+  .pochi-form input, .pochi-form textarea { width: 100%; box-sizing: border-box; font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .pochi-form textarea { min-height: 4.5em; resize: vertical; }
+  .pochi-form .count { justify-self: end; font-size: .75rem; }
+  .pochi-form .count.over { color: var(--danger); }
   .badge.guest { border: 1px solid var(--muted); color: var(--muted); }
   .badge.ban { border: 1px solid var(--danger); color: var(--danger); }
   .badge.tester { border: 1px solid var(--accent); color: var(--accent); }
@@ -91,6 +97,7 @@
       <button type="button" data-tab="portal">ポータル</button>
       <button type="button" data-tab="kpi">KPI</button>
       <button type="button" data-tab="tutorial">チュートリアル</button>
+      <button type="button" data-tab="pochi">ポチゲー通知</button>
     </nav>
 
     <section data-pane="scores" hidden>
@@ -221,6 +228,25 @@
         </table>
       </div>
       <p class="note">「着いた」は、その段かそれより先の段まで進んだ人（記録の抜けた段も通ったとみなす）。時間は始めてからその段に着くまでの中央値。赤い段は、前の段からいちばん人が減ったところ。戻りの RR は、始めた日のちょうど 1・7 日後にそのゲームを遊んだ人の割合で、アカウントと結びつく人だけ（プレイログから移した過去の分は入らない）。テスターは除く。</p>
+    </section>
+
+    <!-- SPEC-011：ポチゲーポータルのプッシュ通知。出来事をフィードに載せ、共通ハブへ知らせる -->
+    <section data-pane="pochi" hidden>
+      <p class="note" id="pochi-state"></p>
+      <form class="pochi-form" id="pochi-form">
+        <label>チャンネル ID（ポチゲーの編集ページで登録したもの）<input id="pochi-channel" value="new_title" maxlength="40" required pattern="[a-z0-9_]{1,40}"></label>
+        <label>タイトル<input id="pochi-title" maxlength="60" required><small class="count" id="pochi-title-n"></small></label>
+        <label>本文<textarea id="pochi-body" maxlength="160" required></textarea><small class="count" id="pochi-body-n"></small></label>
+        <label>押したときの行き先（https://bearko.games の中）<input id="pochi-url" value="https://bearko.games/" maxlength="500" required></label>
+        <div class="row">
+          <button type="submit">フィードに載せて、ポチゲーに知らせる</button>
+          <button class="secondary" type="button" id="pochi-again">もう一度ハブに知らせる</button>
+        </div>
+      </form>
+      <h2>送った通知</h2>
+      <ul class="list" id="pochi-list"></ul>
+      <p class="muted" id="pochi-empty" hidden>まだ送っていません。</p>
+      <p class="note">押すと、いまの時刻の出来事をフィードに載せ、すぐに共通ハブへ知らせます。ハブはフィードを取りに来て、このゲーム（とチャンネル）の通知をオンにしている端末へ配ります。取りに来た時点で 15 分より古い出来事は配られないので、あとから送り直すときは新しく作ってください。知らせる間隔は 60 秒以上。タイトルは 60 文字・本文は 160 文字まで、改行と &lt; &gt; は使えません。不特定多数へ公開できる中身だけにしてください（ポチゲーの掲載規約 第 6 条）。</p>
     </section>
   </section>
 
@@ -649,7 +675,66 @@
     });
   }
 
-  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat, portal: renderPortal, kpi: renderKpi, tutorial: renderTutorial };
+  // ---------------------------------------------------------------- ポチゲー通知（SPEC-011）
+  var POCHI_ERR = { channel: 'チャンネル ID は英小文字・数字・_ の 40 文字まで', title: 'タイトルは 1〜60 文字（改行と < > は使えない）', body: '本文は 1〜160 文字（改行と < > は使えない）', url: '行き先は https://bearko.games の中の URL', gap: '前に知らせてから 60 秒たっていません', no_key: 'API キー（シークレット POCHI_API_KEY）が無いので送れません', empty: 'まだ出来事がありません' };
+  function hubText(status, queued) {
+    if (status == null) return '未送信';
+    if (status === 202) return queued === 0 || queued === false ? '受け付け（購読している端末がいない＝だれにも届かない）' : '受け付け（ハブがフィードを取りに来る）';
+    if (status === 401) return '401：API キーが無い・違う';
+    if (status === 403) return '403：通知が停止中・非掲載・規約に未同意';
+    if (status === 429) return '429：間隔が短い（少し待って「もう一度ハブに知らせる」）';
+    if (status === 0) return '通信できなかった';
+    return String(status);
+  }
+  function pochiCount(input, out, max) {
+    var n = Array.from(input.value).length;
+    out.textContent = n + ' / ' + max;
+    out.classList.toggle('over', n > max);
+  }
+  function renderPochi() {
+    pochiCount($('pochi-title'), $('pochi-title-n'), 60);
+    pochiCount($('pochi-body'), $('pochi-body-n'), 160);
+    api('GET', '/api/admin/pochi').then(function (r) {
+      if (r.status !== 200) return fail('読み込めませんでした（' + (r.error || r.status) + '）。');
+      $('pochi-state').textContent = (r.ready ? 'ポチゲーに送れます（ゲームキー ' + r.gameKey + '）。' : 'API キー（シークレット POCHI_API_KEY）が無いので、いまは送れません。') +
+        'イベントフィードの URL：' + r.feed + (r.waitMs ? '（次に知らせられるまで あと ' + Math.ceil(r.waitMs / 1000) + ' 秒）' : '');
+      var ul = $('pochi-list');
+      ul.textContent = '';
+      r.events.forEach(function (e) {
+        var li = el('li', 'item');
+        var head = el('div', 'head');
+        head.appendChild(el('b', null, e.title));
+        head.appendChild(badge('ref', e.channel));
+        li.appendChild(head);
+        li.appendChild(el('div', null, e.body));
+        li.appendChild(el('small', null, day(e.published_at) + ' ・ ' + e.url + ' ・ ID ' + e.id));
+        li.appendChild(el('small', null, 'ハブ：' + hubText(e.hub_status, e.hub_queued) + (e.hub_at ? '（' + day(e.hub_at) + '）' : '')));
+        ul.appendChild(li);
+      });
+      $('pochi-empty').hidden = !!r.events.length;
+    });
+  }
+  function pochiDone(res) {
+    if (res.status !== 200) return fail('送れませんでした：' + (POCHI_ERR[res.error] || res.error || res.status));
+    $('error').hidden = true;
+    var h = res.hub || {};
+    window.alert('ハブの返事：' + hubText(h.status, h.queued) + (h.retryAfter ? '（' + h.retryAfter + ' 秒後に送り直せます）' : '') + (h.error ? '\n' + h.error : ''));
+    renderPochi();
+  }
+  $('pochi-title').addEventListener('input', function () { pochiCount($('pochi-title'), $('pochi-title-n'), 60); });
+  $('pochi-body').addEventListener('input', function () { pochiCount($('pochi-body'), $('pochi-body-n'), 160); });
+  $('pochi-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var msg = { channel: $('pochi-channel').value.trim(), title: $('pochi-title').value.trim(), body: $('pochi-body').value.replace(/\s*\n\s*/g, ' ').trim(), url: $('pochi-url').value.trim() };
+    if (!window.confirm('ポチゲーの購読者に通知します。よろしいですか？\n\n' + msg.title + '\n' + msg.body)) return;
+    api('POST', '/api/admin/pochi/send', msg).then(pochiDone);
+  });
+  $('pochi-again').addEventListener('click', function () {
+    if (!window.confirm('いちばん新しい出来事について、もう一度ハブに知らせますか？（15 分より古いと配られません）')) return;
+    api('POST', '/api/admin/pochi/hub').then(pochiDone);
+  });
+
+  var renderers = { scores: renderScores, rta: renderRuns, players: renderUsers, chat: renderChat, portal: renderPortal, kpi: renderKpi, tutorial: renderTutorial, pochi: renderPochi };
   function show(tab) {
     current = renderers[tab] ? tab : 'scores';
     Array.prototype.forEach.call($('tabs').children, function (b) { b.setAttribute('aria-current', String(b.dataset.tab === current)); });

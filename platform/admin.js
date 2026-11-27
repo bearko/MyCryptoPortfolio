@@ -16,6 +16,9 @@
 //   GET  /api/admin/tutorial?game=&days=30  チュートリアルの漏斗（SPEC-010 6.2）。その期間に始めた人
 //   POST /api/admin/tester-device   { on } この端末をテスターの端末にする／やめる（SPEC-009 3.2。Cookie を付け外しする）
 //   POST /api/admin/tester          { userId, on } アカウントにテスターの印を付ける／外す（前に作者が遊んだ仮アカウントなど）
+//   GET  /api/admin/pochi           ポチゲーの通知（SPEC-011）：送った出来事の一覧と、送れるかどうか
+//   POST /api/admin/pochi/send      { channel, title, body, url } 出来事をフィードに載せ、共通ハブへ知らせる
+//   POST /api/admin/pochi/hub       もう一度ハブへ知らせる（前回が 429・通信の失敗だったとき。フィードは変えない）
 //
 // 締め出しの効き目（ランキングから隠す・記録を受け付けない）は api.js の側にある。
 
@@ -24,6 +27,7 @@ import { REGULATION_BY_ID, publicRegulations } from './rta.js';
 import { GAME_NAMES } from './trophies.js';
 import { kpi, tutorialFunnel, addDays, burstGuests } from './kpi.js';
 import { jstDay } from './portal-stats.js';
+import { checkEvent, eventId, notifyHub, HUB_GAP_MS } from './pochi-notify.js';
 
 const LIST_LIMIT = 100;
 const TOP_LIMIT = 10;
@@ -64,7 +68,7 @@ export function cleanReason(raw) {
  * 管理の API。api.js の handle から /api/admin/* を渡される。
  * portalOrigins：管理の API を受ける Origin（bearko.games の画面だけ。ゲームのサブドメインからは読ませない）
  */
-export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], chat = null, testerDevice = () => false, testerCookie = null, markTester = null, log = console.log }) {
+export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigins = [], chat = null, testerDevice = () => false, testerCookie = null, markTester = null, pochi = null, log = console.log }) {
   const isAdmin = (s) => !!s?.sub && adminSubs.includes(s.sub);
 
   async function scores(req) {
@@ -242,6 +246,46 @@ export function createAdmin({ db, now, login, reply, adminSubs = [], portalOrigi
       ]);
       audit('rta/delete', { runId: body.runId, userId: run.user_id, regulation: run.regulation, timeMs: run.time_ms });
       return reply(req, 200, { ok: true });
+    }
+
+    // ---- ポチゲーポータルのプッシュ通知（SPEC-011）。pochi：{ hub, gameKey, apiKey, fetch }（API キーが無ければ null）
+    const lastHubAt = async () => (await db.prepare('SELECT MAX(hub_at) AS t FROM pochi_events').first())?.t ?? 0;
+    async function tellHub() {
+      const r = await notifyHub(pochi, pochi.fetch || fetch);
+      log('pochi/hub', JSON.stringify(r));   // 返事の状態だけ（API キーは出さない）
+      return r;
+    }
+    if (method === 'GET' && path === '/api/admin/pochi') {
+      const { results } = await db.prepare('SELECT * FROM pochi_events ORDER BY published_at DESC LIMIT 20').all();
+      const last = await lastHubAt();
+      return reply(req, 200, { ready: !!pochi, gameKey: pochi?.gameKey ?? null, feed: 'https://bearko.games/api/game-events/', events: results, waitMs: Math.max(0, last + HUB_GAP_MS - now()) });
+    }
+    if (method === 'POST' && path === '/api/admin/pochi/send') {
+      if (!pochi) return reply(req, 503, { error: 'no_key' });
+      const c = checkEvent(body);
+      if (!c.ok) return reply(req, 400, { error: c.error });
+      if (now() - (await lastHubAt()) < HUB_GAP_MS) return reply(req, 429, { error: 'gap' });
+      const at = now();
+      const id = eventId(c.value.channel, at);
+      await db.prepare('INSERT INTO pochi_events (id, channel, title, body, url, published_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+        .bind(id, c.value.channel, c.value.title, c.value.body, c.value.url, at).run();
+      // フィードに載せたあとでハブへ知らせる（ハブはすぐ取りに来る）
+      const hub = await tellHub();
+      await db.prepare('UPDATE pochi_events SET hub_status = ?2, hub_queued = ?3, hub_at = ?4 WHERE id = ?1')
+        .bind(id, hub.status, hub.queued === null ? null : Number(hub.queued), now()).run();
+      audit('pochi/send', { id, channel: c.value.channel, status: hub.status, queued: hub.queued });
+      return reply(req, 200, { id, hub });
+    }
+    if (method === 'POST' && path === '/api/admin/pochi/hub') {
+      if (!pochi) return reply(req, 503, { error: 'no_key' });
+      if (now() - (await lastHubAt()) < HUB_GAP_MS) return reply(req, 429, { error: 'gap' });
+      const latest = await db.prepare('SELECT id FROM pochi_events ORDER BY published_at DESC LIMIT 1').first();
+      if (!latest) return reply(req, 400, { error: 'empty' });
+      const hub = await tellHub();
+      await db.prepare('UPDATE pochi_events SET hub_status = ?2, hub_queued = ?3, hub_at = ?4 WHERE id = ?1')
+        .bind(latest.id, hub.status, hub.queued === null ? null : Number(hub.queued), now()).run();
+      audit('pochi/hub', { id: latest.id, status: hub.status, queued: hub.queued });
+      return reply(req, 200, { id: latest.id, hub });
     }
 
     // bot とみなして数えないアカウント（SPEC-010 7 章）：作者が印を付けたもの（users.bot）と、
