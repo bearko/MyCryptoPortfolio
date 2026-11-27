@@ -387,6 +387,34 @@
     }, 9000);
   }
 
+  // 区切りを 1 つ送る（rtaApi.checkpoint が順番に呼ぶ）。通信に失敗したら 2 秒後に 1 回だけ送り直す
+  function sendCheckpoint(run, id, body) {
+    var send = function () { return call('POST', '/api/rta/checkpoint', body); };
+    return send()
+      .then(function (r) { return r.ok || r.error !== 'network' ? r : new Promise(function (res) { setTimeout(function () { send().then(res); }, 2000); }); })
+      .then(function (r) {
+        if (!r.ok) {
+          if ((r.status === 409 || r.status === 404) && rta === run) endRun(); // この計測はもう続けられない
+          return r;
+        }
+        if (r.unlocked && r.unlocked.length) announce(r);   // SPEC-008：RTA の完走でアチーブメント
+        return loadRegs().then(function (all) {
+          var reg = all[run.regulation];
+          if (r.rejected) {
+            toast({ kicker: 'RTA', title: '記録できませんでした', lines: ['この計測は無効になりました'] }, 6000);
+          } else if (r.finished) {
+            showFinish(r, reg, run.regulation);
+          } else {
+            var cp = reg && reg.checkpoints.filter(function (c) { return c.id === id; })[0];
+            toast({ kicker: 'RTA ' + (cp ? cp.label : id), title: fmt(r.splitMs), time: true }, 3500);
+          }
+          if (r.cross) showCross(r.cross);
+          if (r.finished && rta === run) endRun();
+          return r;
+        });
+      });
+  }
+
   var rtaApi = {
     /** 計測を始める。{ regulation, timer: 'top' | 'bottom' | false, timerOffset: px }。前の計測は中断になる → { ok, runId, account } */
     start: function (opts) {
@@ -405,35 +433,18 @@
     },
 
     /** 区切りを通った。{ igtMs }（ゲーム内時間、参考値）。最後の区切りなら計測が終わる → { ok, splitMs, finished, timeMs, reference, best, rank } */
+    //   同じ瞬間に 2 つ着いたとき（Football：練習試合に負けて 1 回戦に勝つと「最初の勝利」と「同好会」が一度に来る）も、
+    //   前の区切りの返事を待ってから次を送る（1.12.1）。並んで届くと、サーバーが後ろを先に受けて「順番が違う」（409）になり、計測が終わってしまう
     checkpoint: function (id, opts) {
       if (!rta) return Promise.resolve({ ok: false, error: 'not_running' });
       var run = rta;
       var body = { runId: run.runId, checkpoint: id, igtMs: opts && opts.igtMs != null ? opts.igtMs : null, idleMs: idleNow() };
       run.lastSent = Date.now();
-      var send = function () { return call('POST', '/api/rta/checkpoint', body); };
-      return send()
-        .then(function (r) { return r.ok || r.error !== 'network' ? r : new Promise(function (res) { setTimeout(function () { send().then(res); }, 2000); }); })
-        .then(function (r) {
-          if (!r.ok) {
-            if ((r.status === 409 || r.status === 404) && rta === run) endRun(); // この計測はもう続けられない
-            return r;
-          }
-          if (r.unlocked && r.unlocked.length) announce(r);   // SPEC-008：RTA の完走でアチーブメント
-          return loadRegs().then(function (all) {
-            var reg = all[run.regulation];
-            if (r.rejected) {
-              toast({ kicker: 'RTA', title: '記録できませんでした', lines: ['この計測は無効になりました'] }, 6000);
-            } else if (r.finished) {
-              showFinish(r, reg, run.regulation);
-            } else {
-              var cp = reg && reg.checkpoints.filter(function (c) { return c.id === id; })[0];
-              toast({ kicker: 'RTA ' + (cp ? cp.label : id), title: fmt(r.splitMs), time: true }, 3500);
-            }
-            if (r.cross) showCross(r.cross);
-            if (r.finished && rta === run) endRun();
-            return r;
-          });
-        });
+      var mine = (run.queue || Promise.resolve()).then(function () {
+        return rta === run ? sendCheckpoint(run, id, body) : { ok: false, error: 'not_running' };
+      });
+      run.queue = mine.catch(function () {});
+      return mine;
     },
 
     /** 中断（ゲームオーバー・タイトルに戻ったとき） */
@@ -1378,7 +1389,7 @@
   var nf = function (n) { return Math.round(n).toLocaleString('ja-JP'); };
 
   var api = {
-    version: '1.12.0',
+    version: '1.12.1',
     rta: rtaApi,
 
     /**

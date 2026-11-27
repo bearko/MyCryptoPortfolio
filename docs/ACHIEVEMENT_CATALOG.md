@@ -2,7 +2,7 @@
 
 `node tools/achievements.mjs table` で `platform/trophies.js` から作る。手で直さない。
 
-## ヒーロー名鑑（100 枚：Common 8・Uncommon 27・Rare 26・Epic 28・Legendary 11）
+## ヒーロー名鑑 第 1 章（100 枚：Common 8・Uncommon 27・Rare 26・Epic 28・Legendary 11）
 
 ### MyCryptoTactics
 
@@ -149,7 +149,20 @@
 | 099 | `cross.allext` | Legendary | 葛飾北斎 | 富嶽三十六景 | エクステンションのアチーブメントをすべて集める |
 | 100 | `cross.book99` | Legendary | 始皇帝 | 中国統一 | ヒーロー名鑑のほかの 99 枚をすべて埋める |
 
-## エクステンション（45 個：Common 0・Uncommon 0・Rare 0・Epic 35・Legendary 10）
+## ヒーロー名鑑 第 2 章（6 枚：Common 1・Uncommon 2・Rare 2・Epic 1・Legendary 0）
+
+### MyCryptoFootball
+
+| No. | ID | レアリティ | 絵 | 名前 | 条件 |
+|---|---|---|---|---|---|
+| 101 | `football.club` | Common | ヘルクレスオオカブト | ローリングドライバー | 同好会になる |
+| 102 | `football.district` | Uncommon | 石田三成 | 大一大万大吉 | 地区大会で優勝する（春か秋の決勝に勝つ） |
+| 103 | `football.eleven` | Uncommon | UKA | 遮二無二 | 11 人制の試合に勝つ |
+| 104 | `football.meimon` | Rare | 猿飛佐助 | 地雷火 | 名門になる |
+| 105 | `football.nation` | Rare | ロビンフッド | 緑衣の義賊 | 全国大会で優勝する |
+| 106 | `football.summit` | Epic | 本多忠勝 | 花実兼備 | 頂上決戦で社会人王者に勝つ |
+
+## エクステンション（49 個：Common 0・Uncommon 0・Rare 0・Epic 38・Legendary 11）
 
 | No. | ID | レアリティ | 絵 | 名前 | 条件 |
 |---|---|---|---|---|---|
@@ -190,6 +203,10 @@
 |  | `successor.visit` | Epic | 義士の采配 | 金瘡治療の計 | MyCryptoSuccessor を遊ぶ |
 |  | `triathlon.visit` | Epic | チャリオット | 衝角 | MyCryptoTriathlon を遊ぶ |
 |  | `football.visit` | Epic | バイソン | レイドブル | MyCryptoFootball を遊ぶ |
+|  | `football.first_win` | Epic | 武将陣羽織 | 戦の矜持 | はじめて試合に勝つ（練習試合をふくむ） |
+|  | `football.special_td` | Epic | 太陽のオリフラム | 黄金の炎 | 特別作戦のカードでタッチダウンを決める |
+|  | `football.graduate` | Epic | バッタ野武士 | 不撓不屈 | 卒業生をはじめて送り出す |
+|  | `football.onside` | Legendary | ジョーカー | 死神は最後に笑う | オンサイドキックを成功させる |
 |  | `smash.visit` | Epic | アルルカン | ワイルドカード | MyCryptoSmash を遊ぶ |
 |  | `cross.welcome` | Epic | 流星のホーキ | シューティング・スター | マインの話を聞く |
 |  | `cross.login` | Epic | クレイジーMCHメダル | クレイジーMaster Nobの御加護 | Google でログインする |

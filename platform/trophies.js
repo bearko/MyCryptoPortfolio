@@ -159,6 +159,14 @@ export const TROPHIES = [
   { id: 'cross.allclear', game: 'cross', no: 98, name: '征服王の偉業', nameFrom: 'アレキサンダーのパッシブスキル', avatar: 'hero:5017', avatarName: 'アレキサンダー', description: '対応しているすべてのタイトルでゲームクリア', allClear: true },
   { id: 'cross.allext', game: 'cross', no: 99, name: '富嶽三十六景', nameFrom: '葛飾北斎のパッシブスキル', avatar: 'hero:5024', avatarName: '葛飾北斎', description: 'エクステンションのアチーブメントをすべて集める', allExt: true },
   { id: 'cross.book99', game: 'cross', no: 100, name: '中国統一', nameFrom: '始皇帝のパッシブスキル', avatar: 'hero:5018', avatarName: '始皇帝', description: 'ヒーロー名鑑のほかの 99 枚をすべて埋める', book: 99, trueClear: true },
+  // ---- 第 2 章（SPEC-008 5.2。第 1 章の 100 枚のあとに足したタイトルのヒーロー。no は 101 から）
+  // football
+  { id: 'football.club', game: 'football', chapter: 2, no: 101, name: 'ローリングドライバー', nameFrom: 'ヘルクレスオオカブトのパッシブスキル', avatar: 'hero:1009', avatarName: 'ヘルクレスオオカブト', description: '同好会になる' },
+  { id: 'football.district', game: 'football', chapter: 2, no: 102, name: '大一大万大吉', nameFrom: '石田三成のパッシブスキル', avatar: 'hero:2012', avatarName: '石田三成', description: '地区大会で優勝する（春か秋の決勝に勝つ）' },
+  { id: 'football.eleven', game: 'football', chapter: 2, no: 103, name: '遮二無二', nameFrom: 'UKAのパッシブスキル', avatar: 'hero:2052', avatarName: 'UKA', description: '11 人制の試合に勝つ' },
+  { id: 'football.meimon', game: 'football', chapter: 2, no: 104, name: '地雷火', nameFrom: '猿飛佐助のパッシブスキル', avatar: 'hero:3038', avatarName: '猿飛佐助', description: '名門になる' },
+  { id: 'football.nation', game: 'football', chapter: 2, no: 105, name: '緑衣の義賊', nameFrom: 'ロビンフッドのパッシブスキル', avatar: 'hero:3026', avatarName: 'ロビンフッド', description: '全国大会で優勝する' },
+  { id: 'football.summit', game: 'football', chapter: 2, no: 106, name: '花実兼備', nameFrom: '本多忠勝のパッシブスキル', avatar: 'hero:4055', avatarName: '本多忠勝', description: '頂上決戦で社会人王者に勝つ', clear: true },
 
   // ---- エクステンション（すべて Epic 以上。SPEC-008 2.3）
   { id: 'tactics.visit', game: 'tactics', name: '五事七計', nameFrom: 'エクステンション「兵法書」のスキル', avatar: 'ext:4016', avatarName: '兵法書', description: 'MyCryptoTactics を遊ぶ', visit: true },
@@ -198,6 +206,10 @@ export const TROPHIES = [
   { id: 'successor.visit', game: 'successor', name: '金瘡治療の計', nameFrom: 'エクステンション「義士の采配」のスキル', avatar: 'ext:4095', avatarName: '義士の采配', description: 'MyCryptoSuccessor を遊ぶ', visit: true },
   { id: 'triathlon.visit', game: 'triathlon', name: '衝角', nameFrom: 'エクステンション「チャリオット」のスキル', avatar: 'ext:4090', avatarName: 'チャリオット', description: 'MyCryptoTriathlon を遊ぶ', visit: true },
   { id: 'football.visit', game: 'football', name: 'レイドブル', nameFrom: 'エクステンション「バイソン」のスキル', avatar: 'ext:4023', avatarName: 'バイソン', description: 'MyCryptoFootball を遊ぶ', visit: true },
+  { id: 'football.first_win', game: 'football', name: '戦の矜持', nameFrom: 'エクステンション「武将陣羽織」のスキル', avatar: 'ext:4141', avatarName: '武将陣羽織', description: 'はじめて試合に勝つ（練習試合をふくむ）' },
+  { id: 'football.special_td', game: 'football', name: '黄金の炎', nameFrom: 'エクステンション「太陽のオリフラム」のスキル', avatar: 'ext:4140', avatarName: '太陽のオリフラム', description: '特別作戦のカードでタッチダウンを決める' },
+  { id: 'football.graduate', game: 'football', name: '不撓不屈', nameFrom: 'エクステンション「バッタ野武士」のスキル', avatar: 'ext:4131', avatarName: 'バッタ野武士', description: '卒業生をはじめて送り出す' },
+  { id: 'football.onside', game: 'football', name: '死神は最後に笑う', nameFrom: 'エクステンション「ジョーカー」のスキル', avatar: 'ext:5063', avatarName: 'ジョーカー', description: 'オンサイドキックを成功させる' },
   { id: 'smash.visit', game: 'smash', name: 'ワイルドカード', nameFrom: 'エクステンション「アルルカン」のスキル', avatar: 'ext:4063', avatarName: 'アルルカン', description: 'MyCryptoSmash を遊ぶ', visit: true },
   { id: 'cross.welcome', game: 'cross', name: 'シューティング・スター', nameFrom: 'エクステンション「流星のホーキ」のスキル', avatar: 'ext:4080', avatarName: '流星のホーキ', description: 'マインの話を聞く', judge: 'welcome' },
   { id: 'cross.login', game: 'cross', name: 'クレイジーMaster Nobの御加護', nameFrom: 'エクステンション「クレイジーMCHメダル」のスキル', avatar: 'ext:4033', avatarName: 'クレイジーMCHメダル', description: 'Google でログインする', judge: 'login' },

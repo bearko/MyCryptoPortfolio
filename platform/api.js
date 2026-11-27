@@ -77,7 +77,7 @@ export const GUEST_COOKIE = '__Host-bg_guest';
 export const TESTER_COOKIE = '__Host-bg_tester';
 const TESTER_TTL = 400 * 24 * 3600e3;   // ブラウザが許す最長
 const LEGACY_COOKIE = { [SESSION_COOKIE]: 'bg_session', [GUEST_COOKIE]: 'bg_guest' };
-const IGT_MAX = { ms: 1e10, turns: 1e6, weeks: 1e4 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
+const IGT_MAX = { ms: 1e10, turns: 1e6, weeks: 1e4, days: 1e6 }; // IGT の上限（表示が壊れない程度に。RTA の判定には使わない）
 
 /** 回数の上限を超えたとき（呼ぶ側の fetch が 429 にする） */
 class RateLimited extends Error {}

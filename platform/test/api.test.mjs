@@ -170,7 +170,7 @@ test('Google の ID トークン：署名・aud・iss・期限を確かめる', 
   assert.equal(await verify('not.a.token'), null);
 });
 
-import { crossTrophiesFor, TROPHIES, GAME_HOSTS, RARITIES, kindOf, rarityOf } from '../trophies.js';
+import { crossTrophiesFor, TROPHIES, GAME_HOSTS, RARITIES, chapterOf, kindOf, rarityOf } from '../trophies.js';
 
 test('トロフィー：未ログインなら仮アカウントに貯まり、ログインでまとめて本アカウントへ', async () => {
   const { db, api } = setup();
@@ -231,20 +231,24 @@ test('横断トロフィー：2 タイトルで「シリーズの入り口」、
 });
 
 test('アチーブメント（SPEC-008）：名鑑は 100 枚、エクステンションは Epic 以上、横断の判定', async () => {
-  const heroes = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero');
+  const all = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero');
+  const heroes = all.filter((t) => chapterOf(t) === 1);
   const exts = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext');
-  assert.equal(heroes.length, 100, 'ヒーロー名鑑は 100 枚');
-  assert.deepEqual(heroes.map((t) => t.no), Array.from({ length: 100 }, (_, i) => i + 1), '番号は 1〜100 で重ならない');
+  assert.equal(heroes.length, 100, 'ヒーロー名鑑の第 1 章は 100 枚');
+  assert.deepEqual(heroes.map((t) => t.no), Array.from({ length: 100 }, (_, i) => i + 1), '第 1 章の番号は 1〜100 で重ならない');
+  // 第 2 章（5.2）：101 から続けて、重ならない
+  const later = all.filter((t) => chapterOf(t) > 1);
+  assert.deepEqual(later.map((t) => t.no), Array.from({ length: later.length }, (_, i) => i + 101), '第 2 章の番号は 101 から続く');
   assert.ok(TROPHIES.filter((t) => t.clear).every((t) => kindOf(t.avatar) === 'hero'), 'ゲームクリアはヒーロー');
   assert.ok(TROPHIES.filter((t) => t.clear).every((t) => rarityOf(t.avatar) === 'Epic'), 'ゲームクリアは Epic');
   for (const t of exts) assert.ok(['Epic', 'Legendary'].includes(rarityOf(t.avatar)), `${t.id} は Epic 以上（Rare 以下は TCG だけ）`);
   for (const t of heroes) assert.ok(RARITIES.includes(rarityOf(t.avatar)), `${t.id} は図鑑に出るヒーロー`);
   const avatars = TROPHIES.map((t) => t.avatar);
   assert.equal(new Set(avatars).size, avatars.length, '絵は重ならない');
-  // trading・successor・triathlon・football・smash は来訪だけ先に登録した（アチーブメントの中身はまだ決めていない）
+  // trading・successor・triathlon・smash は来訪だけ先に登録した（アチーブメントの中身はまだ決めていない）
   for (const g of Object.keys(GAME_HOSTS).filter((g) => g !== 'tcg')) {
     assert.ok(TROPHIES.some((t) => t.game === g && t.visit), `${g} の来訪`);
-    if (!['trading', 'successor', 'triathlon', 'football', 'smash'].includes(g)) assert.ok(TROPHIES.some((t) => t.game === g && t.clear), `${g} のクリア`);
+    if (!['trading', 'successor', 'triathlon', 'smash'].includes(g)) assert.ok(TROPHIES.some((t) => t.game === g && t.clear), `${g} のクリア`);
   }
   // 名鑑の最後の 1 枚は「ほかの 99 枚」。すべてのエクステンションのヒーローも要る
   const allButLast = heroes.filter((t) => t.id !== 'cross.book99' && t.id !== 'cross.allext').map((t) => t.id);
@@ -574,6 +578,34 @@ test('RTA：Tactics のレギュレーション（IGT はターン数）', async
   assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 42, 'ターン数をそのまま残す');
 });
 
+test('RTA：Football 地区大会制覇（IGT はカレンダーの日数・順位は実時間。SPEC-001 6.19）', async () => {
+  const res = await browser(setup().api).call('GET', '/api/rta/regulations');
+  const reg = res.body.regulations.find((r) => r.id === 'football-district');
+  assert.deepEqual([reg.game, reg.igt, reg.rank, reg.checkpoints.map((c) => c.id), reg.checkpoints.at(-1).kind], ['football', 'days', 'time', ['first_win', 'club', 'district'], 'clear']);
+
+  const { mk, tick } = rtaSetup();
+  const opt = { origin: 'https://football.bearko.games' };
+  const b = mk();
+  const runId = (await b.call('POST', '/api/rta/start', { regulation: 'football-district' }, opt)).body.runId;
+  tick(10 * MIN);
+  // 練習試合に負けて 1 回戦に勝つと、最初の勝利と同好会が同じ日に来る（SDK は順に送る）
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'first_win', igtMs: 15, idleMs: 1000 }, opt)).status, 200);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'club', igtMs: 15, idleMs: 1000 }, opt)).status, 200);
+  tick(5 * MIN);
+  const end = (await b.call('POST', '/api/rta/checkpoint', { runId, checkpoint: 'district', igtMs: 28, idleMs: 1000 }, opt)).body;
+  assert.equal(end.finished, true);
+  assert.equal(end.rejected, undefined);
+  assert.equal((await b.call('GET', '/api/me/rta')).body.runs[0].igtMs, 28, '日数をそのまま残す（1 年目の春の決勝＝28 日目）');
+
+  // 最短時間より速い区切りは、計測ごと無効
+  const [, , district] = REGULATION_BY_ID['football-district'].checkpoints;
+  const fast = (await b.call('POST', '/api/rta/start', { regulation: 'football-district' }, opt)).body.runId;
+  tick(district.minMs - 1000);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId: fast, checkpoint: 'first_win', igtMs: 8, idleMs: 1000 }, opt)).body.rejected, undefined);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId: fast, checkpoint: 'club', igtMs: 15, idleMs: 1000 }, opt)).body.rejected, undefined);
+  assert.equal((await b.call('POST', '/api/rta/checkpoint', { runId: fast, checkpoint: 'district', igtMs: 28, idleMs: 1000 }, opt)).body.rejected, true);
+});
+
 test('RTA：10 buy year ステージ 5（ゲーム内の週で並べる。SPEC-001 6.18）', async () => {
   const res = await browser(setup().api).call('GET', '/api/rta/regulations');
   const reg = res.body.regulations.find((r) => r.id === '10buy-stage5');
@@ -859,7 +891,7 @@ test('アチーブメント（SPEC-008 5.2）：名鑑の章。枚数はその�
     { id: 'cross.ch2book', game: 'cross', no: 102, chapter: 2, avatar: 'hero:5019', book: 1, trueClear: true, description: '' },
   ];
   const list = [...TROPHIES, ...ch2];
-  const ch1 = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero' && t.id !== 'cross.book99').map((t) => t.id);
+  const ch1 = TROPHIES.filter((t) => kindOf(t.avatar) === 'hero' && chapterOf(t) === 1 && t.id !== 'cross.book99').map((t) => t.id);
   const exts = TROPHIES.filter((t) => kindOf(t.avatar) === 'ext').map((t) => t.id);
   const got = crossTrophiesFor([...ch1, ...exts], list);
   assert.ok(got.includes('cross.book99'), '第 1 章の 99 枚で第 1 章の最後の 1 枚（第 2 章は数えない）');
