@@ -47,6 +47,10 @@ const api = createApi({
   // 管理画面（SPEC-003）：ADMIN_SUBS=admin で起動し、credential "ok:admin" でログインすると管理者
   adminSubs: (process.env.ADMIN_SUBS || '').split(',').filter(Boolean),
   presence,
+  // ポチゲー通知（SPEC-011）：POCHI_FAKE=queued|none で、偽の共通ハブ（202 を返す）につなぐ。本物のハブには送らない
+  pochi: process.env.POCHI_FAKE
+    ? { hub: 'https://hub.invalid/', gameKey: 'mycryptgames', apiKey: 'fake', fetch: async () => new Response(JSON.stringify({ queued: process.env.POCHI_FAKE === 'queued' }), { status: 202 }) }
+    : null,
 });
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml' };

@@ -35,6 +35,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | `platform/api.js` | API 全部（ログイン・仮アカウント・トロフィー・RTA・総合スコア）。上のコメントに一覧 |
 | `platform/admin.js` | 管理画面の API（`/api/admin/*`。SPEC-003）。締め出しの効き目は `api.js` の側 |
 | `platform/portal-stats.js` | ポータルの計測（SPEC-009）。トップで起きたことを日ごとの回数で数える。管理画面の「ポータル」タブで見る |
+| `platform/pochi-notify.js` | ポチゲーポータルのプッシュ通知（SPEC-011）。フィード `GET /api/game-events/` と、管理画面の「ポチゲー通知」から共通ハブへ知らせる |
 | `platform/trophies.js` | トロフィーの定義と、タイトル ID → サブドメイン（`GAME_HOSTS`） |
 | `platform/rta.js` | RTA のレギュレーションと区切り・最短時間 |
 | `platform/scoring/<タイトル>.v1.js` | 総合スコアの計算式（1 タイトル 1 ファイル）。一覧は `scoring/index.js` |
@@ -120,6 +121,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 - これまでの 0001〜0009 は、Cloudflare の連携（D1 にクエリを送るツール）で SQL を直接流して適用した。そのため `wrangler d1 migrations apply` の記録の表はない。どの SQL も `IF NOT EXISTS` なので、wrangler で適用し直しても壊れない
 - `0008_achievements.sql`（SPEC-008。行を足すだけ）は 2026-10-18 に作者の確認のうえ同じ方法で適用した（足した行 17：来訪 13・`deckbattle.firstwin` 2・`cross.visit2` 2。`ON CONFLICT DO NOTHING` なので流し直しても増えない）
 - `0011_kpi.sql`（SPEC-010。表を 2 つ足し、遊んだ日をアチーブメントと成績の時刻から埋める）は 2026-10-24 に同じ方法で適用した。`INSERT OR IGNORE` なので流し直しても増えない
+- `0013_pochi_events.sql`（SPEC-011。ポチゲーのプッシュ通知に載せる出来事の表を足すだけ）は 2026-11-27 に同じ方法で適用した
 - `0012_bots.sql`（SPEC-010 7 章。`users` に `bot` の列を足すだけ）は 2026-11-24 に同じ方法で適用し、同じ日に 10 buy year! の bot の仮アカウント 162 個に `bot = 1` を付けた（作者の決定）
 - `0010_testers.sql`（SPEC-009 3.2。`users` に `tester` の列を足すだけ）は 2026-10-21 に同じ方法で適用した。`ALTER TABLE ... ADD COLUMN` は流し直すと「列がもうある」で失敗する（壊れはしない）
 - 本番のデータを消す・書き換える SQL は、作者に確認してから（個別の記録の削除・締め出しは管理画面から。SPEC-003）

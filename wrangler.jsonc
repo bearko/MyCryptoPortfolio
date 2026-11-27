@@ -16,7 +16,9 @@
     // ポチゲーポータルへの同時接続数の送り先と、このゲーム集の札（公開してよい値。SPEC-007）。
     // API キーはシークレット POCHI_API_KEY（ダッシュボードで登録。ここには書かない）
     "POCHI_ENDPOINT": "https://games-alchemist.com/api/portal/online-count/",
-    "POCHI_GAME_KEY": "mycryptgames"
+    "POCHI_GAME_KEY": "mycryptgames",
+    // プッシュ通知の共通ハブ（全ゲーム共通の固定 URL。SPEC-011）。フィードは https://bearko.games/api/game-events/
+    "POCHI_HUB": "https://games-alchemist.com/api/portal/notifications/hub/"
   },
   // 仮アカウントを作る回数の上限：IP ごとに 1 分 10 件（D1 の無料枠を使い切られないように）
   "ratelimits": [

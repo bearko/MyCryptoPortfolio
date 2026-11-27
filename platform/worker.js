@@ -38,6 +38,10 @@ function apiFor(env) {
         ? async (req) => (await env.PRESENCE_LIMIT.limit({ key: req.headers.get('cf-connecting-ip') || 'unknown' })).success
         : null,
       // ポータルの計測（SPEC-009）。IP ごとの回数の上限（1 分 60 回）。IP は判定に使うだけで残さない
+      // ポチゲーポータルのプッシュ通知（SPEC-011）。共通ハブへ知らせるのに同時接続数と同じ API キー（シークレット）を使う。無ければ送れない
+      pochi: env.POCHI_API_KEY && env.POCHI_HUB && env.POCHI_GAME_KEY
+        ? { hub: env.POCHI_HUB, gameKey: env.POCHI_GAME_KEY, apiKey: env.POCHI_API_KEY }
+        : null,
       portalLimit: env.PORTAL_LIMIT
         ? async (req) => (await env.PORTAL_LIMIT.limit({ key: req.headers.get('cf-connecting-ip') || 'unknown' })).success
         : null,

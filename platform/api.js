@@ -32,6 +32,7 @@
 //   GET    /api/score/ranking  総合ランキング（?game= でタイトル別）
 //   GET    /api/me/scores      自分のタイトルスコアと総合スコア
 //   /api/admin/*               管理画面（SPEC-003。platform/admin.js）
+//   GET    /api/game-events/   ポチゲーポータルのプッシュ通知のフィード（SPEC-011。ログイン不要・公開してよい中身だけ）
 //   GET    /api/chat/ws        全体チャットの接続（WebSocket。SPEC-004。platform/chat.js）
 //   GET    /api/chat/messages  直近の親 50 件と返信（?after= で新しいもの、?before= で遡る、?order=likes でいいね順。SPEC-005）
 //   GET    /api/chat/stats     タイトルごとの直近 24 時間の件数（にぎわい。SPEC-005 5.5）
@@ -49,6 +50,7 @@ import { TROPHIES, TROPHY_BY_ID, GAME_HOSTS, GAME_NAMES, GAME_URLS, crossTrophie
 import { REGULATION_BY_ID, CROSS_BY_ID, publicRegulations, judgeCheckpoint, judgeActivity, judgeCrossSegment, igtRejected, RANKING_LIMIT } from './rta.js';
 import { SCORERS, PLANNED } from './scoring/index.js';
 import { createAdmin } from './admin.js';
+import { feed as pochiFeed, FEED_LIMIT } from './pochi-notify.js';
 import { portalEvent, jstDay, PORTAL_KEEP_DAYS } from './portal-stats.js';
 import { cleanGame, cleanAvatar } from './chat.js';
 
@@ -112,7 +114,7 @@ function parseCookies(header) {
 }
 
 // cookieDomain：古い Cookie（Domain=.bearko.games）を消すときだけ使う。guestLimit(req)：仮アカウントを作ってよいか（回数の上限）
-export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, presence = null, presenceLimit = null, portalLimit = null, log }) {
+export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, cookieDomain = null, extraOrigins = [], adminSubs = [], chat = null, guestLimit = null, presence = null, presenceLimit = null, portalLimit = null, pochi = null, log }) {
   const allowed = (origin) => !!origin && (API_ORIGINS.has(origin) || extraOrigins.includes(origin));
 
   const cookie = (name, value, maxAgeMs) =>
@@ -636,7 +638,7 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
   const login = (req) => sessionOf(req, SESSION_COOKIE, 'login', LOGIN_TTL);
   const guest = (req) => sessionOf(req, GUEST_COOKIE, 'guest', GUEST_TTL);
   const publicUser = (s) => ({ id: s.userId, name: s.name ?? null, avatar: s.avatar ?? null });
-  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: [...PORTAL_ORIGINS, ...extraOrigins], chat: chatRoom, testerDevice, testerCookie, markTester, ...(log ? { log } : {}) });
+  const admin = createAdmin({ db, now, login, reply, adminSubs, portalOrigins: [...PORTAL_ORIGINS, ...extraOrigins], chat: chatRoom, testerDevice, testerCookie, markTester, pochi, ...(log ? { log } : {}) });
 
   async function handle(req) {
     const url = new URL(req.url);
@@ -656,6 +658,12 @@ export function createApi({ db, now = Date.now, verifyGoogle, clientId = null, c
     const body = method === 'POST' ? await req.json().catch(() => ({})) : {};
 
     if (method === 'GET' && path === '/api/config') return reply(req, 200, { googleClientId: clientId });
+
+    // ---- ポチゲーポータルのプッシュ通知のフィード（SPEC-011）。ハブが取りに来る。新しい順
+    if (method === 'GET' && path === '/api/game-events') {
+      const { results } = await db.prepare('SELECT id, channel, title, body, url, published_at, expires_at FROM pochi_events ORDER BY published_at DESC LIMIT ?1').bind(FEED_LIMIT).all();
+      return reply(req, 200, pochiFeed(results));
+    }
 
     if (path.startsWith('/api/admin/')) return admin(req, method, path, url, body);
 
