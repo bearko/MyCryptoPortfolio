@@ -236,8 +236,7 @@ export const GAMES = [
     genre: '育成カードゲーム（スポーツ）',
     play: '横持ち。練習カードで鍛えて、作戦カードで勝つ',
     moods: ['think'],
-    status: '開発中',
-    stage: 'dev',      // 最後まで遊べる。難しさとアチーブメントは調整中
+    status: '公開中',
     url: 'https://football.bearko.games/',
     repo: 'https://github.com/bearko/mycryptofootball',
     accent: '#ffe14a',

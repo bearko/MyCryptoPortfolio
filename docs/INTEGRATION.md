@@ -22,7 +22,7 @@ bearko.games 共通基盤（共通ログイン・トロフィー・RTA・総合�
 | Trading | bearko/MyCryptoTrading（`main`） | trading.bearko.games | 来訪だけ（ほかは案。ゲーム側に口はある） | 未対応（案：`trading-deed`） | 未対応（案あり） | `src/ui/platform.ts`（チュートリアルの段 18 個・チャットは `float`） |
 | Successor | bearko/MyCryptoSuccessor（`main`） | successor.bearko.games | 来訪だけ（ほかは案。ゲーム側は取ると送る） | 未対応（案：`successor-lime`・`successor-c1`） | 未対応（案あり。`progress`） | `docs/PLATFORM.md`（チュートリアルの段 16 個・チャットは `float`） |
 | Triathlon | bearko/mycryptotriathlon（`main`） | triathlon.bearko.games | 来訪だけ（ほかは案 10 個。ゲーム側は取ると送る） | 未対応（案あり） | 未対応（案：`run`） | `docs/PLATFORM.md`（はじめての人の歩み 9 段・チャットは `float`） |
-| Football | bearko/mycryptofootball（`main`） | football.bearko.games | 来訪だけ（ほかは案。ゲーム側に口はある） | 未対応（案：`football-district`） | 未対応（案：`progress`） | `docs/PLATFORM.md`（チュートリアルの段 13 個・チャットは `float`） |
+| Football | bearko/mycryptofootball（`main`。2026-11-27 公開） | football.bearko.games | 来訪だけ（ほかは案。ゲーム側に口はある） | 未対応（案：`football-district`） | 未対応（案：`progress`） | `docs/PLATFORM.md`（チュートリアルの段 13 個・チャットは `float`） |
 | Smash | bearko/MyCryptoSmash（`main`） | smash.bearko.games | 来訪だけ（ほかは案） | 未対応（案あり） | 未対応（案あり） | `docs/PLATFORM.md`（チュートリアルの段 9 個・チャットは `float`） |
 
 本番のブランチにマージすると、Cloudflare の Workers Builds が自動で本番に公開する（どのリポジトリも同じ）。
