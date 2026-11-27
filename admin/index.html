@@ -464,7 +464,7 @@
 
   // ---------------------------------------------------------------- ポータルの計測（SPEC-009）
   var PORTAL_NAMES = { tactics: 'Tactics', factory: 'Factory', survivor: 'Survivor', tcg: 'TCG', education: 'Education', workshop: 'Workshop',
-    fortress: 'Fortress', tenbuy: '10 buy year', deckbattle: 'DeckBattle', trading: 'Trading', successor: 'Successor', triathlon: 'Triathlon', football: 'Football', heroes: 'mycryptoheroes' };
+    fortress: 'Fortress', tenbuy: '10 buy year', deckbattle: 'DeckBattle', trading: 'Trading', successor: 'Successor', triathlon: 'Triathlon', football: 'Football', smash: 'Smash', heroes: 'mycryptoheroes' };
   var MOOD_NAMES = { '': 'すべて', quick: 'サクッと遊ぶ', action: 'アクション', think: 'じっくり考える', idle: '経営・放置', learn: '学べる' };
   function renderPortal() {
     api('GET', '/api/admin/portal?days=' + $('pdays').value).then(function (r) {
