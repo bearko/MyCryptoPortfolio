@@ -193,6 +193,10 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 @keyframes flip-c { 0% { opacity: 0; } 5%, 33% { opacity: 1; } 38%, 100% { opacity: 0; } }
 .card.peeking .peek { opacity: 1; }
 /* 横長の画面写真は、カードの枠いっぱいに流す */
+/* 紹介動画（games.js の video）は縦 9:16。カードでは画面写真と同じく真ん中に流す */
+.peek video { position: absolute; top: 0; left: 50%; height: 100%; width: auto; aspect-ratio: 9 / 16; transform: translateX(-50%); object-fit: cover;
+  border-inline: 2px solid rgba(255, 255, 255, .12); background: #000; }
+.phone video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .peek.wide img, .peek.wide img.base { left: 0; width: 100%; aspect-ratio: auto; border-inline: 0; object-position: center; transform: none; }
 .card .meta { display: flex; align-items: center; gap: 6px; padding: 7px 8px 2px; }
 .card .no { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px;
@@ -353,6 +357,8 @@ h1 { margin: 0; font-size: 19px; font-weight: 900; letter-spacing: .01em; line-h
 .shots .wide img { aspect-ratio: 1200 / 630; }
 .shots .tall img { aspect-ratio: 9 / 16; object-fit: cover; object-position: top; }
 /* 横長の画面写真（wide のゲーム）は幅でそろえる。サムネイルも同じ幅にして、行の高さを縦長のぶんに引っぱらない */
+.shots .vid { flex: none; scroll-snap-align: start; }
+.shots .vid video { display: block; height: min(40dvh, 380px); aspect-ratio: 9 / 16; border-radius: 12px; border: 1px solid var(--line); background: #000; }
 .shots .land img { height: auto; width: min(86vw, 640px); aspect-ratio: 16 / 9; object-fit: cover; }
 .shots .wide.land img { aspect-ratio: 1200 / 630; }
 
