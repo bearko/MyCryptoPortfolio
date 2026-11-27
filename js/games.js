@@ -250,6 +250,24 @@ export const GAMES = [
     support: 'スマホ横 / PC',
     video: true,       // 縦の紹介動画（24 秒）。カード・はじめての人に・詳細シートで流す
   },
+  {
+    id: 'smash',
+    no: 14,
+    title: 'MyCryptoSmash',
+    genre: 'ピンボール × ローグライト',
+    play: '台を引っぱって打ち出し、傾けて・振って GUM を稼ぐ',
+    moods: ['action', 'think'],
+    status: 'β版',
+    stage: 'dev',      // 最後まで遊べる。数値とアチーブメントは調整中
+    url: 'https://smash.bearko.games/',
+    repo: 'https://github.com/bearko/MyCryptoSmash',
+    accent: '#ffd21f',
+    icon: MCH + 'Image/Extensions/5063.png',   // ジョーカー（台に宿るピエロの最後の姿）
+    lead: '呪われた台を育てて、脱出せよ',
+    body: '古いゲームコーナーに閉じこめられた。呪われたピンボールで GUM を稼ぎ、3 プレイ以内に入金口へノルマを納めろ。部品と仕掛けを買い足して台を育て、エクステンションを重ねて倍率を伸ばす。台が直るほどピエロは姿を変え、ジョーカーに戻せば真の脱出へ。スマホを傾けて・振って・はじいて遊ぶ。',
+    tags: ['ピンボール', 'ローグライト', 'ビルド', 'スマホ'],
+    shots: 0,          // 画面写真（プレイ中・ショップ・RESULT。PC 1280×720）は作者があとで渡す。届いたら 3 にして wide を付ける
+  },
 ];
 
 // ⓪ 全作品の土台。ゲームではないので一覧の最後に別枠で出す
